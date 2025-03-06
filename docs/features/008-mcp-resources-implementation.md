@@ -2,46 +2,69 @@
 
 ## Context
 
-Implement comprehensive MCP resources for exposing files, configurations, and logs across all Coolify entities.
+Implement MCP resources for managing Coolify entities through the available API endpoints.
 
 ## API Endpoints Used
 
-- GET `/files/{resource_type}/{uuid}` (Line ~3000)
+- Database Management:
+  - GET `/databases` - List databases
+  - GET `/databases/{uuid}` - Get database details
+  - POST `/databases/{type}` - Create database
+  - PATCH `/databases/{uuid}` - Update database
+  - DELETE `/databases/{uuid}` - Delete database
 
-  - Get resource files
-  - Response: Array of FileInfo objects
-  - Auth: Bearer token required
+- Deployment Management:
+  - GET `/deployments` - List deployments
+  - GET `/deployments/{uuid}` - Get deployment details
+  - GET `/deploy` - Deploy by tag or uuid
 
-- GET `/configurations/{resource_type}/{uuid}` (Line ~3050)
-  - Get resource configuration
-  - Response: Configuration object
-  - Auth: Bearer token required
+- Application Management:
+  - GET `/applications` - List applications
+  - GET `/applications/{uuid}` - Get application details
+  - POST `/applications/public` - Create public application
+  - DELETE `/applications/{uuid}` - Delete application
+
+- Service Management:
+  - GET `/services` - List services
+  - GET `/services/{uuid}` - Get service details
+  - POST `/services` - Create service
+  - DELETE `/services/{uuid}` - Delete service
 
 ## Implementation Checklist
 
-- [ ] File Resources
+- [ ] Database Resources
+  - [ ] resources://coolify/databases/list
+  - [ ] resources://coolify/databases/{id}
+  - [ ] resources://coolify/databases/create/{type}
+  - [ ] resources://coolify/databases/{id}/update
+  - [ ] resources://coolify/databases/{id}/delete
 
-  - [ ] resources://coolify/files/applications/{id}/\*
-  - [ ] resources://coolify/files/services/{id}/\*
-  - [ ] resources://coolify/files/databases/{id}/\*
+- [ ] Deployment Resources
+  - [ ] resources://coolify/deployments/list
+  - [ ] resources://coolify/deployments/{id}
+  - [ ] resources://coolify/deploy
+    - Support for tag-based deployment
+    - Support for UUID-based deployment
+    - Force rebuild option
 
-- [ ] Configuration Resources
+- [ ] Application Resources
+  - [ ] resources://coolify/applications/list
+  - [ ] resources://coolify/applications/{id}
+  - [ ] resources://coolify/applications/create
+  - [ ] resources://coolify/applications/{id}/delete
 
-  - [ ] resources://coolify/config/applications/{id}
-  - [ ] resources://coolify/config/services/{id}
-  - [ ] resources://coolify/config/databases/{id}
-  - [ ] resources://coolify/config/environments/{id}
-
-- [ ] Log Resources
-
-  - [ ] resources://coolify/logs/applications/{id}
-  - [ ] resources://coolify/logs/services/{id}
-  - [ ] resources://coolify/logs/databases/{id}
+- [ ] Service Resources
+  - [ ] resources://coolify/services/list
+  - [ ] resources://coolify/services/{id}
+  - [ ] resources://coolify/services/create
+  - [ ] resources://coolify/services/{id}/delete
 
 - [ ] Testing
-  - [ ] File access tests
-  - [ ] Configuration retrieval tests
-  - [ ] Log streaming tests
+  - [ ] Database operation tests
+  - [ ] Deployment operation tests
+  - [ ] Application operation tests
+  - [ ] Service operation tests
+  - [ ] Error handling tests
   - [ ] Permission validation tests
 
 ## Dependencies
