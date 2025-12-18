@@ -137,7 +137,20 @@ export class CoolifyClient {
   // ===========================================================================
 
   async getVersion(): Promise<Version> {
-    return this.request<Version>('/version');
+    // The /version endpoint returns plain text, not JSON
+    const url = `${this.baseUrl}/api/v1/version`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const version = await response.text();
+    return { version: version.trim() };
   }
 
   async validateConnection(): Promise<void> {

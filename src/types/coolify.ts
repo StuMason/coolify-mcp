@@ -429,7 +429,7 @@ export interface DatabaseLimits {
   cpu_shares?: number;
 }
 
-export interface DatabaseBase {
+export interface Database {
   id: number;
   uuid: string;
   name: string;
@@ -449,75 +449,41 @@ export interface DatabaseBase {
   limits?: DatabaseLimits;
   created_at: string;
   updated_at: string;
-}
-
-export interface PostgresDatabase extends DatabaseBase {
-  type: 'postgresql';
-  postgres_user: string;
-  postgres_password: string;
-  postgres_db: string;
+  // PostgreSQL fields
+  postgres_user?: string;
+  postgres_password?: string;
+  postgres_db?: string;
   postgres_initdb_args?: string;
   postgres_host_auth_method?: string;
   postgres_conf?: string;
-}
-
-export interface MySQLDatabase extends DatabaseBase {
-  type: 'mysql';
-  mysql_root_password: string;
+  // MySQL fields
+  mysql_root_password?: string;
   mysql_user?: string;
   mysql_password?: string;
   mysql_database?: string;
-}
-
-export interface MariaDBDatabase extends DatabaseBase {
-  type: 'mariadb';
-  mariadb_root_password: string;
+  // MariaDB fields
+  mariadb_root_password?: string;
   mariadb_user?: string;
   mariadb_password?: string;
   mariadb_database?: string;
   mariadb_conf?: string;
-}
-
-export interface MongoDBDatabase extends DatabaseBase {
-  type: 'mongodb';
-  mongo_initdb_root_username: string;
-  mongo_initdb_root_password: string;
+  // MongoDB fields
+  mongo_initdb_root_username?: string;
+  mongo_initdb_root_password?: string;
   mongo_initdb_database?: string;
   mongo_conf?: string;
-}
-
-export interface RedisDatabase extends DatabaseBase {
-  type: 'redis';
+  // Redis fields
   redis_password?: string;
   redis_conf?: string;
-}
-
-export interface KeyDBDatabase extends DatabaseBase {
-  type: 'keydb';
+  // KeyDB fields
   keydb_password?: string;
   keydb_conf?: string;
+  // Clickhouse fields
+  clickhouse_admin_user?: string;
+  clickhouse_admin_password?: string;
+  // Dragonfly fields
+  dragonfly_password?: string;
 }
-
-export interface ClickhouseDatabase extends DatabaseBase {
-  type: 'clickhouse';
-  clickhouse_admin_user: string;
-  clickhouse_admin_password: string;
-}
-
-export interface DragonflyDatabase extends DatabaseBase {
-  type: 'dragonfly';
-  dragonfly_password: string;
-}
-
-export type Database =
-  | PostgresDatabase
-  | MySQLDatabase
-  | MariaDBDatabase
-  | MongoDBDatabase
-  | RedisDatabase
-  | KeyDBDatabase
-  | ClickhouseDatabase
-  | DragonflyDatabase;
 
 export interface UpdateDatabaseRequest {
   name?: string;
@@ -606,96 +572,14 @@ export interface CreateDatabaseBackupRequest {
 // Service Types
 // =============================================================================
 
-export const SERVICE_TYPES = [
-  'activepieces',
-  'appsmith',
-  'appwrite',
-  'authentik',
-  'babybuddy',
-  'budge',
-  'changedetection',
-  'chatwoot',
-  'classicpress-with-mariadb',
-  'classicpress-with-mysql',
-  'classicpress-without-database',
-  'cloudflared',
-  'code-server',
-  'dashboard',
-  'directus',
-  'directus-with-postgresql',
-  'docker-registry',
-  'docuseal',
-  'docuseal-with-postgres',
-  'dokuwiki',
-  'duplicati',
-  'emby',
-  'embystat',
-  'fider',
-  'filebrowser',
-  'firefly',
-  'formbricks',
-  'ghost',
-  'gitea',
-  'gitea-with-mariadb',
-  'gitea-with-mysql',
-  'gitea-with-postgresql',
-  'glance',
-  'glances',
-  'glitchtip',
-  'grafana',
-  'grafana-with-postgresql',
-  'grocy',
-  'heimdall',
-  'homepage',
-  'jellyfin',
-  'kuzzle',
-  'listmonk',
-  'logto',
-  'mediawiki',
-  'meilisearch',
-  'metabase',
-  'metube',
-  'minio',
-  'moodle',
-  'n8n',
-  'n8n-with-postgresql',
-  'next-image-transformation',
-  'nextcloud',
-  'nocodb',
-  'odoo',
-  'openblocks',
-  'pairdrop',
-  'penpot',
-  'phpmyadmin',
-  'pocketbase',
-  'posthog',
-  'reactive-resume',
-  'rocketchat',
-  'shlink',
-  'slash',
-  'snapdrop',
-  'statusnook',
-  'stirling-pdf',
-  'supabase',
-  'syncthing',
-  'tolgee',
-  'trigger',
-  'trigger-with-external-database',
-  'twenty',
-  'umami',
-  'unleash-with-postgresql',
-  'unleash-without-database',
-  'uptime-kuma',
-  'vaultwarden',
-  'vikunja',
-  'weblate',
-  'whoogle',
-  'wordpress-with-mariadb',
-  'wordpress-with-mysql',
-  'wordpress-without-database',
-] as const;
-
-export type ServiceType = (typeof SERVICE_TYPES)[number];
+/**
+ * Available one-click service types in Coolify.
+ * This is a string type to avoid TypeScript memory issues with large const arrays.
+ * Common types include: activepieces, appsmith, appwrite, authentik, ghost, gitea,
+ * grafana, jellyfin, minio, n8n, nextcloud, pocketbase, supabase, uptime-kuma,
+ * vaultwarden, wordpress-with-mariadb, wordpress-with-mysql, etc.
+ */
+export type ServiceType = string;
 
 export interface Service {
   id: number;
