@@ -19,9 +19,7 @@ function wrapHandler<T>(
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   return fn()
     .then((result) => ({
-      content: [
-        { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-      ],
+      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
     }))
     .catch((error) => ({
       content: [
@@ -87,20 +85,12 @@ export class CoolifyMcpServer extends McpServer {
       {
         name: z.string().describe('Server name'),
         ip: z.string().describe('Server IP address'),
-        private_key_uuid: z
-          .string()
-          .describe('UUID of the private key to use'),
+        private_key_uuid: z.string().describe('UUID of the private key to use'),
         description: z.string().optional().describe('Server description'),
         port: z.number().optional().describe('SSH port (default: 22)'),
         user: z.string().optional().describe('SSH user (default: root)'),
-        is_build_server: z
-          .boolean()
-          .optional()
-          .describe('Is this a build server?'),
-        instant_validate: z
-          .boolean()
-          .optional()
-          .describe('Validate server immediately?'),
+        is_build_server: z.boolean().optional().describe('Is this a build server?'),
+        instant_validate: z.boolean().optional().describe('Validate server immediately?'),
       },
       async (args) => wrapHandler(() => this.client.createServer(args)),
     );
@@ -116,8 +106,7 @@ export class CoolifyMcpServer extends McpServer {
         port: z.number().optional().describe('SSH port'),
         user: z.string().optional().describe('SSH user'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateServer(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateServer(uuid, data)),
     );
 
     this.tool(
@@ -131,16 +120,14 @@ export class CoolifyMcpServer extends McpServer {
       'get_server_resources',
       'Get resources running on a Coolify server',
       { uuid: z.string().describe('Server UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.getServerResources(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.getServerResources(uuid)),
     );
 
     this.tool(
       'get_server_domains',
       'Get domains configured on a Coolify server',
       { uuid: z.string().describe('Server UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.getServerDomains(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.getServerDomains(uuid)),
     );
 
     this.tool(
@@ -183,8 +170,7 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional().describe('Project name'),
         description: z.string().optional().describe('Project description'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateProject(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateProject(uuid, data)),
     );
 
     this.tool(
@@ -214,9 +200,7 @@ export class CoolifyMcpServer extends McpServer {
         environment: z.string().describe('Environment name or UUID'),
       },
       async ({ project_uuid, environment }) =>
-        wrapHandler(() =>
-          this.client.getProjectEnvironment(project_uuid, environment),
-        ),
+        wrapHandler(() => this.client.getProjectEnvironment(project_uuid, environment)),
     );
 
     this.tool(
@@ -228,9 +212,7 @@ export class CoolifyMcpServer extends McpServer {
         description: z.string().optional().describe('Environment description'),
       },
       async ({ project_uuid, ...data }) =>
-        wrapHandler(() =>
-          this.client.createProjectEnvironment(project_uuid, data),
-        ),
+        wrapHandler(() => this.client.createProjectEnvironment(project_uuid, data)),
     );
 
     this.tool(
@@ -238,20 +220,15 @@ export class CoolifyMcpServer extends McpServer {
       'Delete an environment from a Coolify project',
       { environment_uuid: z.string().describe('Environment UUID') },
       async ({ environment_uuid }) =>
-        wrapHandler(() =>
-          this.client.deleteProjectEnvironment(environment_uuid),
-        ),
+        wrapHandler(() => this.client.deleteProjectEnvironment(environment_uuid)),
     );
 
     // =========================================================================
     // Application Tools
     // =========================================================================
 
-    this.tool(
-      'list_applications',
-      'List all Coolify applications',
-      {},
-      async () => wrapHandler(() => this.client.listApplications()),
+    this.tool('list_applications', 'List all Coolify applications', {}, async () =>
+      wrapHandler(() => this.client.listApplications()),
     );
 
     this.tool(
@@ -272,8 +249,7 @@ export class CoolifyMcpServer extends McpServer {
         git_repository: z.string().optional().describe('Git repository URL'),
         git_branch: z.string().optional().describe('Git branch'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateApplication(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateApplication(uuid, data)),
     );
 
     this.tool(
@@ -302,13 +278,9 @@ export class CoolifyMcpServer extends McpServer {
       'Get logs from a Coolify application',
       {
         uuid: z.string().describe('Application UUID'),
-        lines: z
-          .number()
-          .optional()
-          .describe('Number of log lines (default: 100)'),
+        lines: z.number().optional().describe('Number of log lines (default: 100)'),
       },
-      async ({ uuid, lines }) =>
-        wrapHandler(() => this.client.getApplicationLogs(uuid, lines)),
+      async ({ uuid, lines }) => wrapHandler(() => this.client.getApplicationLogs(uuid, lines)),
     );
 
     this.tool(
@@ -320,9 +292,7 @@ export class CoolifyMcpServer extends McpServer {
         instant_deploy: z.boolean().optional().describe('Deploy instantly'),
       },
       async ({ uuid, force, instant_deploy }) =>
-        wrapHandler(() =>
-          this.client.startApplication(uuid, { force, instant_deploy }),
-        ),
+        wrapHandler(() => this.client.startApplication(uuid, { force, instant_deploy })),
     );
 
     this.tool(
@@ -336,8 +306,7 @@ export class CoolifyMcpServer extends McpServer {
       'restart_application',
       'Restart a Coolify application',
       { uuid: z.string().describe('Application UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.restartApplication(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.restartApplication(uuid)),
     );
 
     // =========================================================================
@@ -348,8 +317,7 @@ export class CoolifyMcpServer extends McpServer {
       'list_application_envs',
       'List environment variables for a Coolify application',
       { uuid: z.string().describe('Application UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.listApplicationEnvVars(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.listApplicationEnvVars(uuid)),
     );
 
     this.tool(
@@ -419,8 +387,7 @@ export class CoolifyMcpServer extends McpServer {
         is_public: z.boolean().optional().describe('Is publicly accessible'),
         public_port: z.number().optional().describe('Public port'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateDatabase(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateDatabase(uuid, data)),
     );
 
     this.tool(
@@ -473,8 +440,7 @@ export class CoolifyMcpServer extends McpServer {
       'list_database_backups',
       'List backups for a Coolify database',
       { uuid: z.string().describe('Database UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.listDatabaseBackups(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.listDatabaseBackups(uuid)),
     );
 
     this.tool(
@@ -486,15 +452,11 @@ export class CoolifyMcpServer extends McpServer {
         enabled: z.boolean().optional().describe('Is backup enabled'),
         save_s3: z.boolean().optional().describe('Save to S3'),
         s3_storage_uuid: z.string().optional().describe('S3 storage UUID'),
-        databases_to_backup: z
-          .string()
-          .optional()
-          .describe('Databases to backup'),
+        databases_to_backup: z.string().optional().describe('Databases to backup'),
         dump_all: z.boolean().optional().describe('Dump all databases'),
         backup_now: z.boolean().optional().describe('Run backup immediately'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.createDatabaseBackup(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.createDatabaseBackup(uuid, data)),
     );
 
     // =========================================================================
@@ -537,8 +499,7 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional().describe('Service name'),
         description: z.string().optional().describe('Service description'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateService(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateService(uuid, data)),
     );
 
     this.tool(
@@ -591,8 +552,7 @@ export class CoolifyMcpServer extends McpServer {
       'list_service_envs',
       'List environment variables for a Coolify service',
       { uuid: z.string().describe('Service UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.listServiceEnvVars(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.listServiceEnvVars(uuid)),
     );
 
     this.tool(
@@ -605,8 +565,7 @@ export class CoolifyMcpServer extends McpServer {
         is_preview: z.boolean().optional(),
         is_literal: z.boolean().optional(),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.createServiceEnvVar(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.createServiceEnvVar(uuid, data)),
     );
 
     this.tool(
@@ -624,11 +583,8 @@ export class CoolifyMcpServer extends McpServer {
     // Deployment Tools
     // =========================================================================
 
-    this.tool(
-      'list_deployments',
-      'List all running Coolify deployments',
-      {},
-      async () => wrapHandler(() => this.client.listDeployments()),
+    this.tool('list_deployments', 'List all running Coolify deployments', {}, async () =>
+      wrapHandler(() => this.client.listDeployments()),
     );
 
     this.tool(
@@ -653,8 +609,7 @@ export class CoolifyMcpServer extends McpServer {
       'list_application_deployments',
       'List all deployments for a specific application',
       { uuid: z.string().describe('Application UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.listApplicationDeployments(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.listApplicationDeployments(uuid)),
     );
 
     // =========================================================================
@@ -679,11 +634,8 @@ export class CoolifyMcpServer extends McpServer {
       async ({ id }) => wrapHandler(() => this.client.getTeamMembers(id)),
     );
 
-    this.tool(
-      'get_current_team',
-      'Get the current authenticated team',
-      {},
-      async () => wrapHandler(() => this.client.getCurrentTeam()),
+    this.tool('get_current_team', 'Get the current authenticated team', {}, async () =>
+      wrapHandler(() => this.client.getCurrentTeam()),
     );
 
     this.tool(
@@ -728,16 +680,14 @@ export class CoolifyMcpServer extends McpServer {
         description: z.string().optional().describe('Key description'),
         private_key: z.string().optional().describe('Private key content'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updatePrivateKey(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updatePrivateKey(uuid, data)),
     );
 
     this.tool(
       'delete_private_key',
       'Delete a private key',
       { uuid: z.string().describe('Private key UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.deletePrivateKey(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.deletePrivateKey(uuid)),
     );
 
     // =========================================================================
@@ -762,9 +712,7 @@ export class CoolifyMcpServer extends McpServer {
       'create_cloud_token',
       'Create a new cloud provider token',
       {
-        provider: z
-          .enum(['hetzner', 'digitalocean'])
-          .describe('Cloud provider'),
+        provider: z.enum(['hetzner', 'digitalocean']).describe('Cloud provider'),
         token: z.string().describe('API token'),
         name: z.string().describe('Token name'),
       },
@@ -778,24 +726,21 @@ export class CoolifyMcpServer extends McpServer {
         uuid: z.string().describe('Cloud token UUID'),
         name: z.string().optional().describe('Token name'),
       },
-      async ({ uuid, ...data }) =>
-        wrapHandler(() => this.client.updateCloudToken(uuid, data)),
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateCloudToken(uuid, data)),
     );
 
     this.tool(
       'delete_cloud_token',
       'Delete a cloud provider token',
       { uuid: z.string().describe('Cloud token UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.deleteCloudToken(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.deleteCloudToken(uuid)),
     );
 
     this.tool(
       'validate_cloud_token',
       'Validate a cloud provider token',
       { uuid: z.string().describe('Cloud token UUID') },
-      async ({ uuid }) =>
-        wrapHandler(() => this.client.validateCloudToken(uuid)),
+      async ({ uuid }) => wrapHandler(() => this.client.validateCloudToken(uuid)),
     );
   }
 }

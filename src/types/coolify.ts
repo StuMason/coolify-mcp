@@ -184,12 +184,7 @@ export interface CreateEnvironmentRequest {
 // Application Types
 // =============================================================================
 
-export type BuildPack =
-  | 'nixpacks'
-  | 'static'
-  | 'dockerfile'
-  | 'dockercompose'
-  | 'dockerimage';
+export type BuildPack = 'nixpacks' | 'static' | 'dockerfile' | 'dockercompose' | 'dockerimage';
 
 export interface Application {
   id: number;
@@ -273,13 +268,11 @@ export interface CreateApplicationPublicRequest {
   instant_deploy?: boolean;
 }
 
-export interface CreateApplicationPrivateGHRequest
-  extends CreateApplicationPublicRequest {
+export interface CreateApplicationPrivateGHRequest extends CreateApplicationPublicRequest {
   github_app_uuid: string;
 }
 
-export interface CreateApplicationPrivateKeyRequest
-  extends CreateApplicationPublicRequest {
+export interface CreateApplicationPrivateKeyRequest extends CreateApplicationPublicRequest {
   private_key_uuid: string;
 }
 

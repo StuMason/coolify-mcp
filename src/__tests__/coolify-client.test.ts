@@ -78,17 +78,15 @@ describe('CoolifyClient', () => {
 
   describe('constructor', () => {
     it('should throw error if baseUrl is missing', () => {
-      expect(
-        () =>
-          new CoolifyClient({ baseUrl: '', accessToken: 'test' }),
-      ).toThrow('Coolify base URL is required');
+      expect(() => new CoolifyClient({ baseUrl: '', accessToken: 'test' })).toThrow(
+        'Coolify base URL is required',
+      );
     });
 
     it('should throw error if accessToken is missing', () => {
-      expect(
-        () =>
-          new CoolifyClient({ baseUrl: 'http://localhost', accessToken: '' }),
-      ).toThrow('Coolify access token is required');
+      expect(() => new CoolifyClient({ baseUrl: 'http://localhost', accessToken: '' })).toThrow(
+        'Coolify access token is required',
+      );
     });
 
     it('should strip trailing slash from baseUrl', () => {
@@ -145,9 +143,7 @@ describe('CoolifyClient', () => {
     it('should handle errors', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(errorResponse, false, 404));
 
-      await expect(client.getServer('test-uuid')).rejects.toThrow(
-        'Resource not found',
-      );
+      await expect(client.getServer('test-uuid')).rejects.toThrow('Resource not found');
     });
   });
 
@@ -167,9 +163,7 @@ describe('CoolifyClient', () => {
     it('should handle errors', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(errorResponse, false, 404));
 
-      await expect(client.getServerResources('test-uuid')).rejects.toThrow(
-        'Resource not found',
-      );
+      await expect(client.getServerResources('test-uuid')).rejects.toThrow('Resource not found');
     });
   });
 
@@ -232,9 +226,7 @@ describe('CoolifyClient', () => {
 
   describe('deleteService', () => {
     it('should delete a service', async () => {
-      mockFetch.mockResolvedValueOnce(
-        mockResponse({ message: 'Service deleted' }),
-      );
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Service deleted' }));
 
       const result = await client.deleteService('test-uuid');
 
@@ -248,9 +240,7 @@ describe('CoolifyClient', () => {
     });
 
     it('should delete a service with options', async () => {
-      mockFetch.mockResolvedValueOnce(
-        mockResponse({ message: 'Service deleted' }),
-      );
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Service deleted' }));
 
       await client.deleteService('test-uuid', {
         deleteVolumes: true,
@@ -393,13 +383,9 @@ describe('CoolifyClient', () => {
 
   describe('error handling', () => {
     it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(
-        new TypeError('fetch failed'),
-      );
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
 
-      await expect(client.listServers()).rejects.toThrow(
-        'Failed to connect to Coolify server',
-      );
+      await expect(client.listServers()).rejects.toThrow('Failed to connect to Coolify server');
     });
 
     it('should handle empty responses', async () => {
