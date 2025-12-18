@@ -8,7 +8,7 @@
  * - Environments: CRUD
  * - Applications: list, get, update, delete, start/stop/restart, logs, env vars, deploy (private-gh, private-key)
  * - Databases: list, get, start/stop/restart
- * - Services: list, get, start/stop/restart, env vars
+ * - Services: list, get, update, start/stop/restart, env vars
  * - Deployments: list, get, deploy
  *
  * Note: @ts-nocheck is required because the MCP SDK's tool() method causes
@@ -380,7 +380,7 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Services (8 tools)
+    // Services (9 tools)
     // =========================================================================
     this.tool('list_services', 'List all services', {}, async () =>
       wrapHandler(() => this.client.listServices()),
@@ -391,6 +391,23 @@ export class CoolifyMcpServer extends McpServer {
       'Get service details',
       { uuid: z.string().describe('Service UUID') },
       async ({ uuid }) => wrapHandler(() => this.client.getService(uuid)),
+    );
+
+    this.tool(
+      'update_service',
+      'Update a service (IMPORTANT: See UpdateServiceRequest type docs for Traefik basic auth requirements)',
+      {
+        uuid: z.string().describe('Service UUID'),
+        name: z.string().optional().describe('Service name'),
+        description: z.string().optional().describe('Description'),
+        docker_compose_raw: z
+          .string()
+          .optional()
+          .describe(
+            'Base64 encoded docker-compose YAML. CRITICAL FOR BASIC AUTH: (1) Manually disable label escaping in Coolify UI first (no API). (2) Use $$ in htpasswd hashes even with escaping disabled (Traefik requirement). (3) Generate: htpasswd -nb user pass, then replace $ with $$.',
+          ),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateService(uuid, data)),
     );
 
     this.tool(

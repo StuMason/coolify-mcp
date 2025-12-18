@@ -612,9 +612,32 @@ export interface CreateServiceRequest {
   instant_deploy?: boolean;
 }
 
+/**
+ * CRITICAL: When updating services with Traefik basic auth labels
+ *
+ * 1. MANUAL STEP REQUIRED: You MUST disable "Escape characters in labels" in Coolify UI
+ *    - Navigate to: Service Settings > Advanced > Container Label Character Escaping
+ *    - This setting CANNOT be changed via API
+ *    - Without this, Coolify will double-escape $ signs, breaking htpasswd
+ *
+ * 2. Even with escaping disabled, Traefik still requires $$ in htpasswd hashes
+ *    - Correct: "user:$$apr1$$hash$$here"
+ *    - Wrong: "user:$apr1$hash$here"
+ *    - Docker Compose processes $$ → $ for Traefik
+ *
+ * 3. docker_compose_raw must be base64 encoded when sent to API
+ *    - Example: Buffer.from(yamlString).toString('base64')
+ *
+ * Summary for htpasswd with basic auth:
+ *   - Generate hash: htpasswd -nb username password
+ *   - Replace $ with $$ in the hash
+ *   - Disable label escaping in Coolify UI (manual step!)
+ *   - Base64 encode the entire docker-compose YAML
+ */
 export interface UpdateServiceRequest {
   name?: string;
   description?: string;
+  docker_compose_raw?: string; // Base64 encoded docker-compose YAML
 }
 
 export interface ServiceCreateResponse {
