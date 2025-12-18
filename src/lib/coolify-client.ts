@@ -67,6 +67,20 @@ import type {
 } from '../types/coolify.js';
 
 /**
+ * Remove undefined values and false booleans from an object.
+ * Coolify API rejects requests with explicit false values for optional booleans.
+ */
+function cleanRequestData<T extends object>(data: T): Partial<T> {
+  const cleaned: Partial<T> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && value !== false) {
+      (cleaned as Record<string, unknown>)[key] = value;
+    }
+  }
+  return cleaned;
+}
+
+/**
  * HTTP client for the Coolify API
  */
 export class CoolifyClient {
@@ -391,14 +405,14 @@ export class CoolifyClient {
   async createApplicationEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
     return this.request<UuidResponse>(`/applications/${uuid}/envs`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async updateApplicationEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/applications/${uuid}/envs`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
@@ -552,14 +566,14 @@ export class CoolifyClient {
   async createServiceEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
     return this.request<UuidResponse>(`/services/${uuid}/envs`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async updateServiceEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/services/${uuid}/envs`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(cleanRequestData(data)),
     });
   }
 

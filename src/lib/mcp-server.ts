@@ -248,6 +248,12 @@ export class CoolifyMcpServer extends McpServer {
         description: z.string().optional().describe('Description'),
         fqdn: z.string().optional().describe('Domain'),
         git_branch: z.string().optional().describe('Git branch'),
+        is_http_basic_auth_enabled: z
+          .boolean()
+          .optional()
+          .describe('Enable HTTP basic authentication'),
+        http_basic_auth_username: z.string().optional().describe('HTTP basic auth username'),
+        http_basic_auth_password: z.string().optional().describe('HTTP basic auth password'),
       },
       async ({ uuid, ...data }) => wrapHandler(() => this.client.updateApplication(uuid, data)),
     );
