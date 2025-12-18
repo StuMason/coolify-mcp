@@ -15,6 +15,7 @@
  * TypeScript type instantiation depth errors with 40+ zod-typed tools.
  * The client and types are still fully type-checked.
  */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
