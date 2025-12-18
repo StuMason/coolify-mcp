@@ -1,36 +1,107 @@
+/**
+ * Coolify MCP Server Type Definitions
+ * Complete type definitions for the Coolify API v1
+ */
+
+// =============================================================================
+// Configuration
+// =============================================================================
+
 export interface CoolifyConfig {
   baseUrl: string;
   accessToken: string;
 }
 
-export interface ServerInfo {
-  uuid: string;
-  name: string;
-  status: 'running' | 'stopped' | 'error';
-  version: string;
-  resources: {
-    cpu: number;
-    memory: number;
-    disk: number;
-  };
+// =============================================================================
+// Common Types
+// =============================================================================
+
+export interface ErrorResponse {
+  error?: string;
+  message: string;
+  status?: number;
 }
 
-export interface ResourceStatus {
+export interface DeleteOptions {
+  deleteConfigurations?: boolean;
+  deleteVolumes?: boolean;
+  dockerCleanup?: boolean;
+  deleteConnectedNetworks?: boolean;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface UuidResponse {
+  uuid: string;
+}
+
+// =============================================================================
+// Server Types
+// =============================================================================
+
+export interface Server {
   id: number;
   uuid: string;
   name: string;
-  type: string;
+  description?: string;
+  ip: string;
+  user: string;
+  port: number;
+  status?: 'running' | 'stopped' | 'error' | 'unknown';
+  is_reachable?: boolean;
+  is_usable?: boolean;
+  is_swarm_manager?: boolean;
+  is_swarm_worker?: boolean;
+  is_build_server?: boolean;
+  validation_logs?: string;
+  log_drain_notification_sent?: boolean;
+  high_disk_usage_notification_sent?: boolean;
+  unreachable_notification_sent?: boolean;
+  unreachable_count?: number;
+  proxy_type?: 'traefik' | 'caddy' | 'none';
+  proxy_status?: string;
+  settings?: ServerSettings;
+  team_id?: number;
   created_at: string;
   updated_at: string;
-  status: string;
 }
 
-export type ServerResources = ResourceStatus[];
+export interface ServerSettings {
+  id: number;
+  server_id: number;
+  concurrent_builds: number;
+  dynamic_timeout: number;
+  force_disabled: boolean;
+  force_docker_cleanup: boolean;
+  docker_cleanup_frequency: string;
+  docker_cleanup_threshold: number;
+  is_cloudflare_tunnel: boolean;
+  is_jump_server: boolean;
+  is_logdrain_axiom_enabled: boolean;
+  is_logdrain_highlight_enabled: boolean;
+  is_logdrain_custom_enabled: boolean;
+  is_logdrain_newrelic_enabled: boolean;
+  is_metrics_enabled: boolean;
+  is_reachable: boolean;
+  is_sentinel_enabled: boolean;
+  is_swarm_manager: boolean;
+  is_swarm_worker: boolean;
+  is_usable: boolean;
+  wildcard_domain?: string;
+  created_at: string;
+  updated_at: string;
+}
 
-export interface ErrorResponse {
-  error: string;
-  status: number;
-  message: string;
+export interface ServerResource {
+  id: number;
+  uuid: string;
+  name: string;
+  type: 'application' | 'database' | 'service';
+  status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ServerDomain {
@@ -38,26 +109,45 @@ export interface ServerDomain {
   domains: string[];
 }
 
-export interface ValidationResponse {
+export interface ServerValidation {
   message: string;
+  validation_logs?: string;
 }
 
-export interface Environment {
-  id: number;
-  uuid: string;
+export interface CreateServerRequest {
   name: string;
-  project_uuid: string;
-  variables?: Record<string, string>;
-  created_at: string;
-  updated_at: string;
+  description?: string;
+  ip: string;
+  port?: number;
+  user?: string;
+  private_key_uuid: string;
+  is_build_server?: boolean;
+  instant_validate?: boolean;
 }
+
+export interface UpdateServerRequest {
+  name?: string;
+  description?: string;
+  ip?: string;
+  port?: number;
+  user?: string;
+  private_key_uuid?: string;
+  is_build_server?: boolean;
+}
+
+// =============================================================================
+// Project Types
+// =============================================================================
 
 export interface Project {
   id: number;
   uuid: string;
   name: string;
   description?: string;
+  team_id?: number;
   environments?: Environment[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateProjectRequest {
@@ -70,19 +160,280 @@ export interface UpdateProjectRequest {
   description?: string;
 }
 
-export interface LogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-}
+// =============================================================================
+// Environment Types
+// =============================================================================
 
-export interface Deployment {
+export interface Environment {
   id: number;
   uuid: string;
-  application_uuid: string;
-  status: string;
+  name: string;
+  description?: string;
+  project_id?: number;
+  project_uuid?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreateEnvironmentRequest {
+  name: string;
+  description?: string;
+}
+
+// =============================================================================
+// Application Types
+// =============================================================================
+
+export type BuildPack =
+  | 'nixpacks'
+  | 'static'
+  | 'dockerfile'
+  | 'dockercompose'
+  | 'dockerimage';
+
+export interface Application {
+  id: number;
+  uuid: string;
+  name: string;
+  description?: string;
+  fqdn?: string;
+  git_repository?: string;
+  git_branch?: string;
+  git_commit_sha?: string;
+  build_pack?: BuildPack;
+  ports_exposes?: string;
+  ports_mappings?: string;
+  dockerfile?: string;
+  dockerfile_location?: string;
+  docker_registry_image_name?: string;
+  docker_registry_image_tag?: string;
+  docker_compose_location?: string;
+  docker_compose_raw?: string;
+  docker_compose_custom_start_command?: string;
+  docker_compose_custom_build_command?: string;
+  base_directory?: string;
+  publish_directory?: string;
+  install_command?: string;
+  build_command?: string;
+  start_command?: string;
+  health_check_enabled?: boolean;
+  health_check_path?: string;
+  health_check_port?: number;
+  health_check_host?: string;
+  health_check_method?: string;
+  health_check_return_code?: number;
+  health_check_scheme?: string;
+  health_check_response_text?: string;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  health_check_retries?: number;
+  health_check_start_period?: number;
+  limits_memory?: string;
+  limits_memory_swap?: string;
+  limits_memory_swappiness?: number;
+  limits_memory_reservation?: string;
+  limits_cpus?: string;
+  limits_cpuset?: string;
+  limits_cpu_shares?: number;
+  status?: 'running' | 'stopped' | 'error' | 'building' | 'deploying';
+  preview_url_template?: string;
+  destination_type?: string;
+  destination_id?: number;
+  source_type?: string;
+  source_id?: number;
+  private_key_id?: number;
+  environment_id?: number;
+  project_uuid?: string;
+  environment_uuid?: string;
+  server_uuid?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateApplicationPublicRequest {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  destination_uuid?: string;
+  name?: string;
+  description?: string;
+  fqdn?: string;
+  git_repository: string;
+  git_branch: string;
+  git_commit_sha?: string;
+  build_pack: BuildPack;
+  ports_exposes: string;
+  ports_mappings?: string;
+  base_directory?: string;
+  publish_directory?: string;
+  install_command?: string;
+  build_command?: string;
+  start_command?: string;
+  instant_deploy?: boolean;
+}
+
+export interface CreateApplicationPrivateGHRequest
+  extends CreateApplicationPublicRequest {
+  github_app_uuid: string;
+}
+
+export interface CreateApplicationPrivateKeyRequest
+  extends CreateApplicationPublicRequest {
+  private_key_uuid: string;
+}
+
+export interface CreateApplicationDockerfileRequest {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  destination_uuid?: string;
+  name?: string;
+  description?: string;
+  fqdn?: string;
+  dockerfile: string;
+  dockerfile_location?: string;
+  ports_exposes?: string;
+  ports_mappings?: string;
+  base_directory?: string;
+  instant_deploy?: boolean;
+}
+
+export interface CreateApplicationDockerImageRequest {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  destination_uuid?: string;
+  name?: string;
+  description?: string;
+  fqdn?: string;
+  docker_registry_image_name: string;
+  docker_registry_image_tag?: string;
+  ports_exposes: string;
+  ports_mappings?: string;
+  instant_deploy?: boolean;
+}
+
+export interface CreateApplicationDockerComposeRequest {
+  project_uuid: string;
+  server_uuid: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  destination_uuid?: string;
+  name?: string;
+  description?: string;
+  docker_compose_raw: string;
+  docker_compose_location?: string;
+  docker_compose_custom_start_command?: string;
+  docker_compose_custom_build_command?: string;
+  instant_deploy?: boolean;
+}
+
+export interface UpdateApplicationRequest {
+  name?: string;
+  description?: string;
+  fqdn?: string;
+  git_repository?: string;
+  git_branch?: string;
+  git_commit_sha?: string;
+  ports_exposes?: string;
+  ports_mappings?: string;
+  dockerfile?: string;
+  dockerfile_location?: string;
+  docker_registry_image_name?: string;
+  docker_registry_image_tag?: string;
+  docker_compose_raw?: string;
+  docker_compose_location?: string;
+  base_directory?: string;
+  publish_directory?: string;
+  install_command?: string;
+  build_command?: string;
+  start_command?: string;
+  health_check_enabled?: boolean;
+  health_check_path?: string;
+  health_check_port?: number;
+  limits_memory?: string;
+  limits_memory_swap?: string;
+  limits_cpus?: string;
+}
+
+export interface ApplicationActionResponse {
+  message: string;
+  deployment_uuid?: string;
+}
+
+// =============================================================================
+// Environment Variable Types
+// =============================================================================
+
+export interface EnvironmentVariable {
+  id: number;
+  uuid: string;
+  key: string;
+  value: string;
+  is_build_time: boolean;
+  is_literal: boolean;
+  is_multiline: boolean;
+  is_preview: boolean;
+  is_shared: boolean;
+  is_shown_once: boolean;
+  real_value?: string;
+  version?: string;
+  application_id?: number;
+  service_id?: number;
+  database_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateEnvVarRequest {
+  key: string;
+  value: string;
+  is_preview?: boolean;
+  is_literal?: boolean;
+  is_multiline?: boolean;
+  is_shown_once?: boolean;
+  is_build_time?: boolean;
+}
+
+export interface UpdateEnvVarRequest {
+  key: string;
+  value: string;
+  is_preview?: boolean;
+  is_literal?: boolean;
+  is_multiline?: boolean;
+  is_shown_once?: boolean;
+  is_build_time?: boolean;
+}
+
+export interface BulkUpdateEnvVarsRequest {
+  data: CreateEnvVarRequest[];
+}
+
+// =============================================================================
+// Database Types
+// =============================================================================
+
+export type DatabaseType =
+  | 'postgresql'
+  | 'mysql'
+  | 'mariadb'
+  | 'mongodb'
+  | 'redis'
+  | 'keydb'
+  | 'clickhouse'
+  | 'dragonfly';
+
+export interface DatabaseLimits {
+  memory?: string;
+  memory_swap?: string;
+  memory_swappiness?: number;
+  memory_reservation?: string;
+  cpus?: string;
+  cpuset?: string;
+  cpu_shares?: number;
 }
 
 export interface DatabaseBase {
@@ -90,30 +441,21 @@ export interface DatabaseBase {
   uuid: string;
   name: string;
   description?: string;
-  type:
-    | 'postgresql'
-    | 'mysql'
-    | 'mariadb'
-    | 'mongodb'
-    | 'redis'
-    | 'keydb'
-    | 'clickhouse'
-    | 'dragonfly';
-  status: 'running' | 'stopped' | 'error';
-  created_at: string;
-  updated_at: string;
+  type: DatabaseType;
+  status: 'running' | 'stopped' | 'error' | 'restarting';
   is_public: boolean;
   public_port?: number;
   image: string;
-  limits?: {
-    memory?: string;
-    memory_swap?: string;
-    memory_swappiness?: number;
-    memory_reservation?: string;
-    cpus?: string;
-    cpuset?: string;
-    cpu_shares?: number;
-  };
+  started_at?: string;
+  internal_db_url?: string;
+  external_db_url?: string;
+  project_uuid?: string;
+  environment_uuid?: string;
+  environment_name?: string;
+  server_uuid?: string;
+  limits?: DatabaseLimits;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PostgresDatabase extends DatabaseBase {
@@ -184,7 +526,7 @@ export type Database =
   | ClickhouseDatabase
   | DragonflyDatabase;
 
-export interface DatabaseUpdateRequest {
+export interface UpdateDatabaseRequest {
   name?: string;
   description?: string;
   image?: string;
@@ -197,121 +539,170 @@ export interface DatabaseUpdateRequest {
   limits_cpus?: string;
   limits_cpuset?: string;
   limits_cpu_shares?: number;
+  // PostgreSQL specific
   postgres_user?: string;
   postgres_password?: string;
   postgres_db?: string;
   postgres_initdb_args?: string;
   postgres_host_auth_method?: string;
   postgres_conf?: string;
-  clickhouse_admin_user?: string;
-  clickhouse_admin_password?: string;
-  dragonfly_password?: string;
-  redis_password?: string;
-  redis_conf?: string;
-  keydb_password?: string;
-  keydb_conf?: string;
-  mariadb_conf?: string;
+  // MySQL specific
+  mysql_root_password?: string;
+  mysql_user?: string;
+  mysql_password?: string;
+  mysql_database?: string;
+  // MariaDB specific
   mariadb_root_password?: string;
   mariadb_user?: string;
   mariadb_password?: string;
   mariadb_database?: string;
-  mongo_conf?: string;
+  mariadb_conf?: string;
+  // MongoDB specific
   mongo_initdb_root_username?: string;
   mongo_initdb_root_password?: string;
   mongo_initdb_database?: string;
-  mysql_root_password?: string;
-  mysql_password?: string;
-  mysql_user?: string;
-  mysql_database?: string;
+  mongo_conf?: string;
+  // Redis specific
+  redis_password?: string;
+  redis_conf?: string;
+  // KeyDB specific
+  keydb_password?: string;
+  keydb_conf?: string;
+  // Clickhouse specific
+  clickhouse_admin_user?: string;
+  clickhouse_admin_password?: string;
+  // Dragonfly specific
+  dragonfly_password?: string;
 }
 
-export type ServiceType =
-  | 'activepieces'
-  | 'appsmith'
-  | 'appwrite'
-  | 'authentik'
-  | 'babybuddy'
-  | 'budge'
-  | 'changedetection'
-  | 'chatwoot'
-  | 'classicpress-with-mariadb'
-  | 'classicpress-with-mysql'
-  | 'classicpress-without-database'
-  | 'cloudflared'
-  | 'code-server'
-  | 'dashboard'
-  | 'directus'
-  | 'directus-with-postgresql'
-  | 'docker-registry'
-  | 'docuseal'
-  | 'docuseal-with-postgres'
-  | 'dokuwiki'
-  | 'duplicati'
-  | 'emby'
-  | 'embystat'
-  | 'fider'
-  | 'filebrowser'
-  | 'firefly'
-  | 'formbricks'
-  | 'ghost'
-  | 'gitea'
-  | 'gitea-with-mariadb'
-  | 'gitea-with-mysql'
-  | 'gitea-with-postgresql'
-  | 'glance'
-  | 'glances'
-  | 'glitchtip'
-  | 'grafana'
-  | 'grafana-with-postgresql'
-  | 'grocy'
-  | 'heimdall'
-  | 'homepage'
-  | 'jellyfin'
-  | 'kuzzle'
-  | 'listmonk'
-  | 'logto'
-  | 'mediawiki'
-  | 'meilisearch'
-  | 'metabase'
-  | 'metube'
-  | 'minio'
-  | 'moodle'
-  | 'n8n'
-  | 'n8n-with-postgresql'
-  | 'next-image-transformation'
-  | 'nextcloud'
-  | 'nocodb'
-  | 'odoo'
-  | 'openblocks'
-  | 'pairdrop'
-  | 'penpot'
-  | 'phpmyadmin'
-  | 'pocketbase'
-  | 'posthog'
-  | 'reactive-resume'
-  | 'rocketchat'
-  | 'shlink'
-  | 'slash'
-  | 'snapdrop'
-  | 'statusnook'
-  | 'stirling-pdf'
-  | 'supabase'
-  | 'syncthing'
-  | 'tolgee'
-  | 'trigger'
-  | 'trigger-with-external-database'
-  | 'twenty'
-  | 'umami'
-  | 'unleash-with-postgresql'
-  | 'unleash-without-database'
-  | 'uptime-kuma'
-  | 'vaultwarden'
-  | 'vikunja'
-  | 'weblate'
-  | 'whoogle'
-  | 'wordpress-with-mariadb'
-  | 'wordpress-with-mysql'
-  | 'wordpress-without-database';
+// =============================================================================
+// Database Backup Types
+// =============================================================================
+
+export interface DatabaseBackup {
+  id: number;
+  uuid: string;
+  database_id: number;
+  database_type: DatabaseType;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  filename?: string;
+  size?: number;
+  frequency: string;
+  enabled: boolean;
+  save_s3: boolean;
+  s3_storage_id?: number;
+  databases_to_backup?: string;
+  dump_all: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDatabaseBackupRequest {
+  frequency: string;
+  enabled?: boolean;
+  save_s3?: boolean;
+  s3_storage_uuid?: string;
+  databases_to_backup?: string;
+  dump_all?: boolean;
+  backup_now?: boolean;
+  backup_retention?: number;
+  backup_retention_days?: number;
+}
+
+// =============================================================================
+// Service Types
+// =============================================================================
+
+export const SERVICE_TYPES = [
+  'activepieces',
+  'appsmith',
+  'appwrite',
+  'authentik',
+  'babybuddy',
+  'budge',
+  'changedetection',
+  'chatwoot',
+  'classicpress-with-mariadb',
+  'classicpress-with-mysql',
+  'classicpress-without-database',
+  'cloudflared',
+  'code-server',
+  'dashboard',
+  'directus',
+  'directus-with-postgresql',
+  'docker-registry',
+  'docuseal',
+  'docuseal-with-postgres',
+  'dokuwiki',
+  'duplicati',
+  'emby',
+  'embystat',
+  'fider',
+  'filebrowser',
+  'firefly',
+  'formbricks',
+  'ghost',
+  'gitea',
+  'gitea-with-mariadb',
+  'gitea-with-mysql',
+  'gitea-with-postgresql',
+  'glance',
+  'glances',
+  'glitchtip',
+  'grafana',
+  'grafana-with-postgresql',
+  'grocy',
+  'heimdall',
+  'homepage',
+  'jellyfin',
+  'kuzzle',
+  'listmonk',
+  'logto',
+  'mediawiki',
+  'meilisearch',
+  'metabase',
+  'metube',
+  'minio',
+  'moodle',
+  'n8n',
+  'n8n-with-postgresql',
+  'next-image-transformation',
+  'nextcloud',
+  'nocodb',
+  'odoo',
+  'openblocks',
+  'pairdrop',
+  'penpot',
+  'phpmyadmin',
+  'pocketbase',
+  'posthog',
+  'reactive-resume',
+  'rocketchat',
+  'shlink',
+  'slash',
+  'snapdrop',
+  'statusnook',
+  'stirling-pdf',
+  'supabase',
+  'syncthing',
+  'tolgee',
+  'trigger',
+  'trigger-with-external-database',
+  'twenty',
+  'umami',
+  'unleash-with-postgresql',
+  'unleash-without-database',
+  'uptime-kuma',
+  'vaultwarden',
+  'vikunja',
+  'weblate',
+  'whoogle',
+  'wordpress-with-mariadb',
+  'wordpress-with-mysql',
+  'wordpress-without-database',
+] as const;
+
+export type ServiceType = (typeof SERVICE_TYPES)[number];
 
 export interface Service {
   id: number;
@@ -319,15 +710,17 @@ export interface Service {
   name: string;
   description?: string;
   type: ServiceType;
-  status: 'running' | 'stopped' | 'error';
-  created_at: string;
-  updated_at: string;
-  project_uuid: string;
-  environment_name: string;
-  environment_uuid: string;
-  server_uuid: string;
+  status: 'running' | 'stopped' | 'error' | 'restarting';
+  project_uuid?: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  server_uuid?: string;
   destination_uuid?: string;
   domains?: string[];
+  config_hash?: string;
+  connect_to_docker_network?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateServiceRequest {
@@ -342,20 +735,146 @@ export interface CreateServiceRequest {
   instant_deploy?: boolean;
 }
 
-export interface DeleteServiceOptions {
-  deleteConfigurations?: boolean;
-  deleteVolumes?: boolean;
-  dockerCleanup?: boolean;
-  deleteConnectedNetworks?: boolean;
+export interface UpdateServiceRequest {
+  name?: string;
+  description?: string;
 }
 
-export interface Application {
+export interface ServiceCreateResponse {
+  uuid: string;
+  domains: string[];
+}
+
+// =============================================================================
+// Deployment Types
+// =============================================================================
+
+export interface Deployment {
+  id: number;
+  uuid: string;
+  application_id?: number;
+  application_uuid?: string;
+  application_name?: string;
+  deployment_uuid: string;
+  pull_request_id?: number;
+  force_rebuild: boolean;
+  commit?: string;
+  status: 'queued' | 'in_progress' | 'finished' | 'failed' | 'cancelled';
+  is_webhook: boolean;
+  is_api: boolean;
+  logs?: string;
+  current_process_id?: string;
+  restart_only: boolean;
+  git_type?: string;
+  server_id?: number;
+  server_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeployByTagRequest {
+  tag?: string;
+  uuid?: string;
+  force?: boolean;
+}
+
+// =============================================================================
+// Team Types
+// =============================================================================
+
+export interface Team {
+  id: number;
+  uuid?: string;
+  name: string;
+  description?: string;
+  personal_team: boolean;
+  show_boarding?: boolean;
+  custom_server_limit?: number;
+  members?: TeamMember[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamMember {
+  id: number;
+  name: string;
+  email: string;
+  role?: 'owner' | 'admin' | 'member' | 'readonly';
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================================================
+// Private Key Types
+// =============================================================================
+
+export interface PrivateKey {
+  id: number;
   uuid: string;
   name: string;
-  // Add other application properties as needed
+  description?: string;
+  private_key: string;
+  public_key?: string;
+  fingerprint?: string;
+  is_git_related: boolean;
+  team_id: number;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface CreateApplicationRequest {
+export interface CreatePrivateKeyRequest {
   name: string;
-  // Add other required fields for application creation
+  description?: string;
+  private_key: string;
+}
+
+export interface UpdatePrivateKeyRequest {
+  name?: string;
+  description?: string;
+  private_key?: string;
+}
+
+// =============================================================================
+// Cloud Token Types (Hetzner, DigitalOcean)
+// =============================================================================
+
+export type CloudProvider = 'hetzner' | 'digitalocean';
+
+export interface CloudToken {
+  id: number;
+  uuid: string;
+  name: string;
+  provider: CloudProvider;
+  team_id: number;
+  servers_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCloudTokenRequest {
+  provider: CloudProvider;
+  token: string;
+  name: string;
+}
+
+export interface UpdateCloudTokenRequest {
+  name?: string;
+}
+
+export interface CloudTokenValidation {
+  valid: boolean;
+  message: string;
+}
+
+// =============================================================================
+// Version/Health Types
+// =============================================================================
+
+export interface Version {
+  version: string;
+}
+
+export interface HealthCheck {
+  status: 'healthy' | 'unhealthy';
+  version?: string;
 }
