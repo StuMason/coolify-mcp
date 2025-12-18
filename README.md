@@ -49,10 +49,12 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ```bash
 claude mcp add coolify \
-  --env COOLIFY_BASE_URL="https://your-coolify-instance.com" \
-  --env COOLIFY_ACCESS_TOKEN="your-api-token" \
-  -- npx -y @masonator/coolify-mcp
+  -e COOLIFY_BASE_URL="https://your-coolify-instance.com" \
+  -e COOLIFY_ACCESS_TOKEN="your-api-token" \
+  -- npx @masonator/coolify-mcp@latest
 ```
+
+> **Note:** Use `@latest` tag (not `-y` flag) for reliable startup in Claude Code CLI.
 
 ### Cursor
 
