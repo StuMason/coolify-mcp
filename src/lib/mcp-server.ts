@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { CoolifyClient } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -62,7 +62,6 @@ export class CoolifyMcpServer extends McpServer {
   }
 
   async connect(transport: Transport): Promise<void> {
-    await this.client.validateConnection();
     await super.connect(transport);
   }
 
