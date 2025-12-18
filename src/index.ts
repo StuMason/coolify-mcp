@@ -2,9 +2,7 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CoolifyMcpServer } from './lib/mcp-server.js';
-import { CoolifyConfig } from './types/coolify.js';
-
-declare const process: NodeJS.Process;
+import type { CoolifyConfig } from './types/coolify.js';
 
 async function main(): Promise<void> {
   const config: CoolifyConfig = {

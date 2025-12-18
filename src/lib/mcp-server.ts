@@ -1,433 +1,496 @@
+/**
+ * Coolify MCP Server
+ * Model Context Protocol server for Coolify API
+ *
+ * Tools focused on debugging, management, and deployment:
+ * - Servers: list, get, validate, resources, domains
+ * - Projects: CRUD
+ * - Environments: CRUD
+ * - Applications: list, get, update, delete, start/stop/restart, logs, env vars, deploy (private-gh, private-key)
+ * - Databases: list, get, start/stop/restart
+ * - Services: list, get, update, start/stop/restart, env vars
+ * - Deployments: list, get, deploy
+ *
+ * Note: @ts-nocheck is required because the MCP SDK's tool() method causes
+ * TypeScript type instantiation depth errors with 40+ zod-typed tools.
+ * The client and types are still fully type-checked.
+ */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { CoolifyClient } from './coolify-client.js';
-import debug from 'debug';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import type {
-  ServerInfo,
-  ServerResources,
-  ServerDomain,
-  ValidationResponse,
-  Project,
-  CreateProjectRequest,
-  UpdateProjectRequest,
-  Environment,
-  Deployment,
-  Database,
-  DatabaseUpdateRequest,
-  Service,
-  CreateServiceRequest,
-  DeleteServiceOptions,
-} from '../types/coolify.js';
+import { CoolifyClient } from './coolify-client.js';
+import type { CoolifyConfig } from '../types/coolify.js';
 
-const log = debug('coolify:mcp');
+const VERSION = '0.3.0';
 
-// Define valid service types
-const serviceTypes = [
-  'activepieces',
-  'appsmith',
-  'appwrite',
-  'authentik',
-  'babybuddy',
-  'budge',
-  'changedetection',
-  'chatwoot',
-  'classicpress-with-mariadb',
-  'classicpress-with-mysql',
-  'classicpress-without-database',
-  'cloudflared',
-  'code-server',
-  'dashboard',
-  'directus',
-  'directus-with-postgresql',
-  'docker-registry',
-  'docuseal',
-  'docuseal-with-postgres',
-  'dokuwiki',
-  'duplicati',
-  'emby',
-  'embystat',
-  'fider',
-  'filebrowser',
-  'firefly',
-  'formbricks',
-  'ghost',
-  'gitea',
-  'gitea-with-mariadb',
-  'gitea-with-mysql',
-  'gitea-with-postgresql',
-  'glance',
-  'glances',
-  'glitchtip',
-  'grafana',
-  'grafana-with-postgresql',
-  'grocy',
-  'heimdall',
-  'homepage',
-  'jellyfin',
-  'kuzzle',
-  'listmonk',
-  'logto',
-  'mediawiki',
-  'meilisearch',
-  'metabase',
-  'metube',
-  'minio',
-  'moodle',
-  'n8n',
-  'n8n-with-postgresql',
-  'next-image-transformation',
-  'nextcloud',
-  'nocodb',
-  'odoo',
-  'openblocks',
-  'pairdrop',
-  'penpot',
-  'phpmyadmin',
-  'pocketbase',
-  'posthog',
-  'reactive-resume',
-  'rocketchat',
-  'shlink',
-  'slash',
-  'snapdrop',
-  'statusnook',
-  'stirling-pdf',
-  'supabase',
-  'syncthing',
-  'tolgee',
-  'trigger',
-  'trigger-with-external-database',
-  'twenty',
-  'umami',
-  'unleash-with-postgresql',
-  'unleash-without-database',
-  'uptime-kuma',
-  'vaultwarden',
-  'vikunja',
-  'weblate',
-  'whoogle',
-  'wordpress-with-mariadb',
-  'wordpress-with-mysql',
-  'wordpress-without-database'
-] as const;
+/** Wrap tool handler with consistent error handling */
+function wrapHandler<T>(
+  fn: () => Promise<T>,
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  return fn()
+    .then((result) => ({
+      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+    }))
+    .catch((error) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    }));
+}
 
+/**
+ * Coolify MCP Server
+ */
 export class CoolifyMcpServer extends McpServer {
-  private client: CoolifyClient;
+  private readonly client: CoolifyClient;
 
-  constructor(config: { baseUrl: string; accessToken: string }) {
+  constructor(config: CoolifyConfig) {
     super({
       name: 'coolify',
-      version: '0.1.18'
+      version: VERSION,
+      capabilities: { tools: {} },
     });
-    
-    log('Initializing server with config: %o', config);
+
     this.client = new CoolifyClient(config);
-  }
-
-  async initialize(): Promise<void> {
-    // Register capabilities first
-    await this.server.registerCapabilities({
-      tools: {}
-    });
-
-    // Then register all tools
-    this.tool('list_servers', 'List all Coolify servers', {}, async () => {
-      const servers = await this.client.listServers();
-      return {
-        content: [{ type: 'text', text: JSON.stringify(servers, null, 2) }]
-      };
-    });
-
-    this.tool('get_server', 'Get details about a specific Coolify server', {
-      uuid: z.string().describe('UUID of the server to get details for')
-    }, async (args) => {
-      const server = await this.client.getServer(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(server, null, 2) }]
-      };
-    });
-
-    this.tool('get_server_resources', 'Get the current resources running on a specific Coolify server', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const resources = await this.client.getServerResources(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(resources, null, 2) }]
-      };
-    });
-
-    this.tool('get_server_domains', 'Get domains for a specific Coolify server', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const domains = await this.client.getServerDomains(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(domains, null, 2) }]
-      };
-    });
-
-    this.tool('validate_server', 'Validate a specific Coolify server', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const validation = await this.client.validateServer(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(validation, null, 2) }]
-      };
-    });
-
-    this.tool('list_projects', 'List all Coolify projects', {}, async (_args, _extra) => {
-      const projects = await this.client.listProjects();
-      return {
-        content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }]
-      };
-    });
-
-    this.tool('get_project', 'Get details about a specific Coolify project', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const project = await this.client.getProject(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(project, null, 2) }]
-      };
-    });
-
-    this.tool('create_project', 'Create a new Coolify project', {
-      name: z.string(),
-      description: z.string().optional()
-    }, async (args, _extra) => {
-      const result = await this.client.createProject({
-        name: args.name,
-        description: args.description
-      });
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('update_project', 'Update an existing Coolify project', {
-      uuid: z.string(),
-      name: z.string(),
-      description: z.string().optional()
-    }, async (args, _extra) => {
-      const { uuid, ...updateData } = args;
-      const result = await this.client.updateProject(uuid, updateData);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('delete_project', 'Delete a Coolify project', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const result = await this.client.deleteProject(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('get_project_environment', 'Get environment details for a Coolify project', {
-      project_uuid: z.string(),
-      environment_name_or_uuid: z.string()
-    }, async (args, _extra) => {
-      const environment = await this.client.getProjectEnvironment(args.project_uuid, args.environment_name_or_uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(environment, null, 2) }]
-      };
-    });
-
-    this.tool('list_databases', 'List all Coolify databases', {}, async (_args, _extra) => {
-      const databases = await this.client.listDatabases();
-      return {
-        content: [{ type: 'text', text: JSON.stringify(databases, null, 2) }]
-      };
-    });
-
-    this.tool('get_database', 'Get details about a specific Coolify database', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const database = await this.client.getDatabase(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(database, null, 2) }]
-      };
-    });
-
-    this.tool('update_database', 'Update a Coolify database', {
-      uuid: z.string(),
-      data: z.record(z.unknown())
-    }, async (args, _extra) => {
-      const result = await this.client.updateDatabase(args.uuid, args.data);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    const deleteOptionsSchema = {
-      deleteConfigurations: z.boolean().optional(),
-      deleteVolumes: z.boolean().optional(),
-      dockerCleanup: z.boolean().optional(),
-      deleteConnectedNetworks: z.boolean().optional()
-    };
-
-    this.tool('delete_database', 'Delete a Coolify database', {
-      uuid: z.string(),
-      options: z.object(deleteOptionsSchema).optional()
-    }, async (args, _extra) => {
-      const result = await this.client.deleteDatabase(args.uuid, args.options);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('deploy_application', 'Deploy a Coolify application', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const result = await this.client.deployApplication(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('list_services', 'List all Coolify services', {}, async (_args, _extra) => {
-      const services = await this.client.listServices();
-      return {
-        content: [{ type: 'text', text: JSON.stringify(services, null, 2) }]
-      };
-    });
-
-    this.tool('get_service', 'Get details about a specific Coolify service', {
-      uuid: z.string()
-    }, async (args, _extra) => {
-      const service = await this.client.getService(args.uuid);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(service, null, 2) }]
-      };
-    });
-
-    this.tool('create_service', 'Create a new Coolify service', {
-      type: z.enum(serviceTypes),
-      project_uuid: z.string(),
-      server_uuid: z.string(),
-      name: z.string().optional(),
-      description: z.string().optional(),
-      environment_name: z.string().optional(),
-      environment_uuid: z.string().optional(),
-      destination_uuid: z.string().optional(),
-      instant_deploy: z.boolean().optional()
-    }, async (args, _extra) => {
-      const result = await this.client.createService(args);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
-
-    this.tool('delete_service', 'Delete a Coolify service', {
-      uuid: z.string(),
-      options: z.object(deleteOptionsSchema).optional()
-    }, async (args, _extra) => {
-      const result = await this.client.deleteService(args.uuid, args.options);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
-      };
-    });
+    this.registerTools();
   }
 
   async connect(transport: Transport): Promise<void> {
-    log('Starting server...');
-    log('Validating connection...');
     await this.client.validateConnection();
-    await this.initialize();
     await super.connect(transport);
-    log('Server started successfully');
   }
 
-  async list_servers(): Promise<ServerInfo[]> {
-    return this.client.listServers();
-  }
+  private registerTools(): void {
+    // Version
+    this.tool('get_version', 'Get Coolify API version', {}, async () =>
+      wrapHandler(() => this.client.getVersion()),
+    );
 
-  async get_server(uuid: string): Promise<ServerInfo> {
-    return this.client.getServer(uuid);
-  }
+    // =========================================================================
+    // Servers (5 tools)
+    // =========================================================================
+    this.tool('list_servers', 'List all servers', {}, async () =>
+      wrapHandler(() => this.client.listServers()),
+    );
 
-  async get_server_resources(uuid: string): Promise<ServerResources> {
-    return this.client.getServerResources(uuid);
-  }
+    this.tool(
+      'get_server',
+      'Get server details',
+      { uuid: z.string().describe('Server UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getServer(uuid)),
+    );
 
-  async get_server_domains(uuid: string): Promise<ServerDomain[]> {
-    return this.client.getServerDomains(uuid);
-  }
+    this.tool(
+      'get_server_resources',
+      'Get resources running on a server',
+      { uuid: z.string().describe('Server UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getServerResources(uuid)),
+    );
 
-  async validate_server(uuid: string): Promise<ValidationResponse> {
-    return this.client.validateServer(uuid);
-  }
+    this.tool(
+      'get_server_domains',
+      'Get domains configured on a server',
+      { uuid: z.string().describe('Server UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getServerDomains(uuid)),
+    );
 
-  async list_projects(): Promise<Project[]> {
-    return this.client.listProjects();
-  }
+    this.tool(
+      'validate_server',
+      'Validate server connection',
+      { uuid: z.string().describe('Server UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.validateServer(uuid)),
+    );
 
-  async get_project(uuid: string): Promise<Project> {
-    return this.client.getProject(uuid);
-  }
+    // =========================================================================
+    // Projects (5 tools)
+    // =========================================================================
+    this.tool('list_projects', 'List all projects', {}, async () =>
+      wrapHandler(() => this.client.listProjects()),
+    );
 
-  async create_project(project: CreateProjectRequest): Promise<{ uuid: string }> {
-    return this.client.createProject(project);
-  }
+    this.tool(
+      'get_project',
+      'Get project details',
+      { uuid: z.string().describe('Project UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getProject(uuid)),
+    );
 
-  async update_project(uuid: string, project: UpdateProjectRequest): Promise<Project> {
-    return this.client.updateProject(uuid, project);
-  }
+    this.tool(
+      'create_project',
+      'Create a new project',
+      {
+        name: z.string().describe('Project name'),
+        description: z.string().optional().describe('Description'),
+      },
+      async (args) => wrapHandler(() => this.client.createProject(args)),
+    );
 
-  async delete_project(uuid: string): Promise<{ message: string }> {
-    return this.client.deleteProject(uuid);
-  }
+    this.tool(
+      'update_project',
+      'Update a project',
+      {
+        uuid: z.string().describe('Project UUID'),
+        name: z.string().optional().describe('Project name'),
+        description: z.string().optional().describe('Description'),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateProject(uuid, data)),
+    );
 
-  async get_project_environment(
-    projectUuid: string,
-    environmentNameOrUuid: string,
-  ): Promise<Environment> {
-    return this.client.getProjectEnvironment(projectUuid, environmentNameOrUuid);
-  }
+    this.tool(
+      'delete_project',
+      'Delete a project',
+      { uuid: z.string().describe('Project UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.deleteProject(uuid)),
+    );
 
-  async deploy_application(params: { uuid: string }): Promise<Deployment> {
-    return this.client.deployApplication(params.uuid);
-  }
+    // =========================================================================
+    // Environments (4 tools)
+    // =========================================================================
+    this.tool(
+      'list_environments',
+      'List environments in a project',
+      { project_uuid: z.string().describe('Project UUID') },
+      async ({ project_uuid }) =>
+        wrapHandler(() => this.client.listProjectEnvironments(project_uuid)),
+    );
 
-  async list_databases(): Promise<Database[]> {
-    return this.client.listDatabases();
-  }
+    this.tool(
+      'get_environment',
+      'Get environment details',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        environment: z.string().describe('Environment name or UUID'),
+      },
+      async ({ project_uuid, environment }) =>
+        wrapHandler(() => this.client.getProjectEnvironment(project_uuid, environment)),
+    );
 
-  async get_database(uuid: string): Promise<Database> {
-    return this.client.getDatabase(uuid);
-  }
+    this.tool(
+      'create_environment',
+      'Create environment in a project',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        name: z.string().describe('Environment name'),
+        description: z.string().optional().describe('Description'),
+      },
+      async ({ project_uuid, ...data }) =>
+        wrapHandler(() => this.client.createProjectEnvironment(project_uuid, data)),
+    );
 
-  async update_database(uuid: string, data: DatabaseUpdateRequest): Promise<Database> {
-    return this.client.updateDatabase(uuid, data);
-  }
+    this.tool(
+      'delete_environment',
+      'Delete an environment',
+      { environment_uuid: z.string().describe('Environment UUID') },
+      async ({ environment_uuid }) =>
+        wrapHandler(() => this.client.deleteProjectEnvironment(environment_uuid)),
+    );
 
-  async delete_database(
-    uuid: string,
-    options?: {
-      deleteConfigurations?: boolean;
-      deleteVolumes?: boolean;
-      dockerCleanup?: boolean;
-      deleteConnectedNetworks?: boolean;
-    },
-  ): Promise<{ message: string }> {
-    return this.client.deleteDatabase(uuid, options);
-  }
+    // =========================================================================
+    // Applications (15 tools)
+    // =========================================================================
+    this.tool('list_applications', 'List all applications', {}, async () =>
+      wrapHandler(() => this.client.listApplications()),
+    );
 
-  async list_services(): Promise<Service[]> {
-    return this.client.listServices();
-  }
+    this.tool(
+      'get_application',
+      'Get application details',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getApplication(uuid)),
+    );
 
-  async get_service(uuid: string): Promise<Service> {
-    return this.client.getService(uuid);
-  }
+    this.tool(
+      'create_application_private_gh',
+      'Create app from private GitHub repo (GitHub App)',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        server_uuid: z.string().describe('Server UUID'),
+        github_app_uuid: z.string().describe('GitHub App UUID'),
+        git_repository: z.string().describe('Repository (org/repo)'),
+        git_branch: z.string().describe('Branch'),
+        environment_name: z.string().optional().describe('Environment name'),
+        destination_uuid: z.string().optional().describe('Destination UUID'),
+        build_pack: z.string().optional().describe('Build pack'),
+        ports_exposes: z.string().optional().describe('Ports to expose'),
+      },
+      async (args) => wrapHandler(() => this.client.createApplicationPrivateGH(args)),
+    );
 
-  async create_service(data: CreateServiceRequest): Promise<{ uuid: string; domains: string[] }> {
-    return this.client.createService(data);
-  }
+    this.tool(
+      'create_application_private_key',
+      'Create app from private repo using deploy key',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        server_uuid: z.string().describe('Server UUID'),
+        private_key_uuid: z.string().describe('Private key UUID'),
+        git_repository: z.string().describe('Repository URL'),
+        git_branch: z.string().describe('Branch'),
+        environment_name: z.string().optional().describe('Environment name'),
+        destination_uuid: z.string().optional().describe('Destination UUID'),
+        build_pack: z.string().optional().describe('Build pack'),
+        ports_exposes: z.string().optional().describe('Ports to expose'),
+      },
+      async (args) => wrapHandler(() => this.client.createApplicationPrivateKey(args)),
+    );
 
-  async delete_service(uuid: string, options?: DeleteServiceOptions): Promise<{ message: string }> {
-    return this.client.deleteService(uuid, options);
+    this.tool(
+      'update_application',
+      'Update an application',
+      {
+        uuid: z.string().describe('Application UUID'),
+        name: z.string().optional().describe('Name'),
+        description: z.string().optional().describe('Description'),
+        fqdn: z.string().optional().describe('Domain'),
+        git_branch: z.string().optional().describe('Git branch'),
+        is_http_basic_auth_enabled: z
+          .boolean()
+          .optional()
+          .describe('Enable HTTP basic authentication'),
+        http_basic_auth_username: z.string().optional().describe('HTTP basic auth username'),
+        http_basic_auth_password: z.string().optional().describe('HTTP basic auth password'),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateApplication(uuid, data)),
+    );
+
+    this.tool(
+      'delete_application',
+      'Delete an application',
+      {
+        uuid: z.string().describe('Application UUID'),
+        delete_volumes: z.boolean().optional().describe('Delete volumes'),
+      },
+      async ({ uuid, delete_volumes }) =>
+        wrapHandler(() => this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes })),
+    );
+
+    this.tool(
+      'start_application',
+      'Start an application',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.startApplication(uuid)),
+    );
+
+    this.tool(
+      'stop_application',
+      'Stop an application',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.stopApplication(uuid)),
+    );
+
+    this.tool(
+      'restart_application',
+      'Restart an application',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.restartApplication(uuid)),
+    );
+
+    this.tool(
+      'get_application_logs',
+      'Get application logs',
+      {
+        uuid: z.string().describe('Application UUID'),
+        lines: z.number().optional().describe('Number of lines'),
+      },
+      async ({ uuid, lines }) => wrapHandler(() => this.client.getApplicationLogs(uuid, lines)),
+    );
+
+    // Application env vars
+    this.tool(
+      'list_application_envs',
+      'List application environment variables',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.listApplicationEnvVars(uuid)),
+    );
+
+    this.tool(
+      'create_application_env',
+      'Create application environment variable',
+      {
+        uuid: z.string().describe('Application UUID'),
+        key: z.string().describe('Variable key'),
+        value: z.string().describe('Variable value'),
+        is_build_time: z.boolean().optional().describe('Build time variable'),
+      },
+      async ({ uuid, ...data }) =>
+        wrapHandler(() => this.client.createApplicationEnvVar(uuid, data)),
+    );
+
+    this.tool(
+      'update_application_env',
+      'Update application environment variable',
+      {
+        uuid: z.string().describe('Application UUID'),
+        key: z.string().describe('Variable key'),
+        value: z.string().describe('Variable value'),
+      },
+      async ({ uuid, ...data }) =>
+        wrapHandler(() => this.client.updateApplicationEnvVar(uuid, data)),
+    );
+
+    this.tool(
+      'delete_application_env',
+      'Delete application environment variable',
+      {
+        uuid: z.string().describe('Application UUID'),
+        env_uuid: z.string().describe('Env variable UUID'),
+      },
+      async ({ uuid, env_uuid }) =>
+        wrapHandler(() => this.client.deleteApplicationEnvVar(uuid, env_uuid)),
+    );
+
+    // =========================================================================
+    // Databases (5 tools)
+    // =========================================================================
+    this.tool('list_databases', 'List all databases', {}, async () =>
+      wrapHandler(() => this.client.listDatabases()),
+    );
+
+    this.tool(
+      'get_database',
+      'Get database details',
+      { uuid: z.string().describe('Database UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getDatabase(uuid)),
+    );
+
+    this.tool(
+      'start_database',
+      'Start a database',
+      { uuid: z.string().describe('Database UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.startDatabase(uuid)),
+    );
+
+    this.tool(
+      'stop_database',
+      'Stop a database',
+      { uuid: z.string().describe('Database UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.stopDatabase(uuid)),
+    );
+
+    this.tool(
+      'restart_database',
+      'Restart a database',
+      { uuid: z.string().describe('Database UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.restartDatabase(uuid)),
+    );
+
+    // =========================================================================
+    // Services (9 tools)
+    // =========================================================================
+    this.tool('list_services', 'List all services', {}, async () =>
+      wrapHandler(() => this.client.listServices()),
+    );
+
+    this.tool(
+      'get_service',
+      'Get service details',
+      { uuid: z.string().describe('Service UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getService(uuid)),
+    );
+
+    this.tool(
+      'update_service',
+      'Update a service (IMPORTANT: See UpdateServiceRequest type docs for Traefik basic auth requirements)',
+      {
+        uuid: z.string().describe('Service UUID'),
+        name: z.string().optional().describe('Service name'),
+        description: z.string().optional().describe('Description'),
+        docker_compose_raw: z
+          .string()
+          .optional()
+          .describe(
+            'Base64 encoded docker-compose YAML. CRITICAL FOR BASIC AUTH: (1) Manually disable label escaping in Coolify UI first (no API). (2) Use $$ in htpasswd hashes even with escaping disabled (Traefik requirement). (3) Generate: htpasswd -nb user pass, then replace $ with $$.',
+          ),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updateService(uuid, data)),
+    );
+
+    this.tool(
+      'start_service',
+      'Start a service',
+      { uuid: z.string().describe('Service UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.startService(uuid)),
+    );
+
+    this.tool(
+      'stop_service',
+      'Stop a service',
+      { uuid: z.string().describe('Service UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.stopService(uuid)),
+    );
+
+    this.tool(
+      'restart_service',
+      'Restart a service',
+      { uuid: z.string().describe('Service UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.restartService(uuid)),
+    );
+
+    // Service env vars
+    this.tool(
+      'list_service_envs',
+      'List service environment variables',
+      { uuid: z.string().describe('Service UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.listServiceEnvVars(uuid)),
+    );
+
+    this.tool(
+      'create_service_env',
+      'Create service environment variable',
+      {
+        uuid: z.string().describe('Service UUID'),
+        key: z.string().describe('Variable key'),
+        value: z.string().describe('Variable value'),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.createServiceEnvVar(uuid, data)),
+    );
+
+    this.tool(
+      'delete_service_env',
+      'Delete service environment variable',
+      {
+        uuid: z.string().describe('Service UUID'),
+        env_uuid: z.string().describe('Env variable UUID'),
+      },
+      async ({ uuid, env_uuid }) =>
+        wrapHandler(() => this.client.deleteServiceEnvVar(uuid, env_uuid)),
+    );
+
+    // =========================================================================
+    // Deployments (4 tools)
+    // =========================================================================
+    this.tool('list_deployments', 'List running deployments', {}, async () =>
+      wrapHandler(() => this.client.listDeployments()),
+    );
+
+    this.tool(
+      'get_deployment',
+      'Get deployment details',
+      { uuid: z.string().describe('Deployment UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getDeployment(uuid)),
+    );
+
+    this.tool(
+      'deploy',
+      'Deploy by tag or UUID',
+      {
+        tag_or_uuid: z.string().describe('Tag or UUID'),
+        force: z.boolean().optional().describe('Force rebuild'),
+      },
+      async ({ tag_or_uuid, force }) =>
+        wrapHandler(() => this.client.deployByTagOrUuid(tag_or_uuid, force)),
+    );
+
+    this.tool(
+      'list_application_deployments',
+      'List deployments for an application',
+      { uuid: z.string().describe('Application UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.listApplicationDeployments(uuid)),
+    );
   }
 }

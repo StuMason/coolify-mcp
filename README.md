@@ -2,93 +2,21 @@
 
 # Coolify MCP Server
 
-A Model Context Protocol (MCP) server implementation for [Coolify](https://coolify.io/), enabling AI assistants to interact with your Coolify instances through natural language.
+A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
-## Example Prompts
+## Features
 
-Here are example prompts you can use with MCP-compatible AI assistants to interact with your Coolify instance:
+This MCP server provides 46 tools focused on **debugging, management, and deployment**:
 
-### Server Management
-
-```
-# List and Inspect Servers
-- Show me all Coolify servers in my instance
-- What's the status of server {uuid}?
-- Show me the resources running on server {uuid}
-- What domains are configured for server {uuid}?
-- Can you validate the connection to server {uuid}?
-
-# Resource Monitoring
-- How much CPU and memory is server {uuid} using?
-- List all resources running on server {uuid}
-- Show me the current status of all servers
-```
-
-### Project Management
-
-```
-# Project Operations
-- List all my Coolify projects
-- Create a new project called "my-webapp" with description "My web application"
-- Show me the details of project {uuid}
-- Update project {uuid} to change its name to "new-name"
-- Delete project {uuid}
-
-# Environment Management
-- Show me the environments in project {uuid}
-- Get details of the production environment in project {uuid}
-- What variables are set in the staging environment of project {uuid}?
-```
-
-### Application and Service Management
-
-```
-# Application Management
-- List all applications
-- Show me details of application {uuid}
-- Create a new application called "my-nodejs-app"
-- Delete application {uuid}
-
-# Service Operations
-- Show me all running services
-- Create a new WordPress service:
-  - Name: my-blog
-  - Project UUID: {project_uuid}
-  - Server UUID: {server_uuid}
-  - Type: wordpress-with-mysql
-- What's the status of service {uuid}?
-- Delete service {uuid} and clean up its resources
-```
-
-### Database Management
-
-```
-# Database Operations
-- List all databases
-- Show me the configuration of database {uuid}
-- Update database {uuid}:
-  - Increase memory limit to 1GB
-  - Change public port to 5432
-  - Update password
-- Delete database {uuid} and clean up volumes
-
-# Database Types
-- Create a PostgreSQL database
-- Set up a Redis instance
-- Configure a MongoDB database
-- Initialize a MySQL database
-```
-
-### Deployment Management
-
-```
-# Deployment Operations
-- Show me all active deployments
-- What's the status of deployment {uuid}?
-- Deploy application {uuid}
-- Force rebuild and deploy application {uuid}
-- List recent deployments for application {uuid}
-```
+| Category         | Tools                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| **Servers**      | list, get, validate, resources, domains                                                                  |
+| **Projects**     | list, get, create, update, delete                                                                        |
+| **Environments** | list, get, create, delete                                                                                |
+| **Applications** | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
+| **Databases**    | list, get, start, stop, restart                                                                          |
+| **Services**     | list, get, start, stop, restart, env vars (list, create, delete)                                         |
+| **Deployments**  | list, get, deploy, list by application                                                                   |
 
 ## Installation
 
@@ -96,121 +24,171 @@ Here are example prompts you can use with MCP-compatible AI assistants to intera
 
 - Node.js >= 18
 - A running Coolify instance
-- Coolify API access token
+- Coolify API access token (generate in Coolify Settings > API)
 
-### Setup in AI Tools
+### Claude Desktop
 
-#### Claude Desktop
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
-"coolify": {
-    "command": "npx",
-    "args": [
-        "-y", "@masonator/coolify-mcp"
-    ],
-    "env": {
-        "COOLIFY_ACCESS_TOKEN": "0|your-secret-token",
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@masonator/coolify-mcp"],
+      "env": {
+        "COOLIFY_ACCESS_TOKEN": "your-api-token",
         "COOLIFY_BASE_URL": "https://your-coolify-instance.com"
+      }
     }
+  }
 }
 ```
 
-#### Cursor
+### Claude Code
 
 ```bash
-env COOLIFY_ACCESS_TOKEN:0|your-secret-token COOLIFY_BASE_URL:https://your-coolify-instance.com npx -y @stumason/coolify-mcp
+claude mcp add coolify \
+  --env COOLIFY_BASE_URL="https://your-coolify-instance.com" \
+  --env COOLIFY_ACCESS_TOKEN="your-api-token" \
+  -- npx -y @masonator/coolify-mcp
 ```
+
+### Cursor
+
+```bash
+env COOLIFY_ACCESS_TOKEN=your-api-token COOLIFY_BASE_URL=https://your-coolify-instance.com npx -y @masonator/coolify-mcp
+```
+
+## Example Prompts
+
+### Debugging & Monitoring
+
+```
+Show me all servers and their status
+What resources are running on server {uuid}?
+Get the logs for application {uuid}
+What environment variables are set for application {uuid}?
+Show me recent deployments for application {uuid}
+```
+
+### Application Management
+
+```
+Restart application {uuid}
+Stop the database {uuid}
+Start service {uuid}
+Deploy application {uuid} with force rebuild
+Update the DATABASE_URL env var for application {uuid}
+```
+
+### Project Setup
+
+```
+Create a new project called "my-app"
+Create a staging environment in project {uuid}
+Deploy my app from private GitHub repo org/repo on branch main
+```
+
+## Environment Variables
+
+| Variable               | Required | Default                 | Description               |
+| ---------------------- | -------- | ----------------------- | ------------------------- |
+| `COOLIFY_ACCESS_TOKEN` | Yes      | -                       | Your Coolify API token    |
+| `COOLIFY_BASE_URL`     | No       | `http://localhost:3000` | Your Coolify instance URL |
 
 ## Development
 
-### Local Setup
-
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/stumason/coolify-mcp.git
 cd coolify-mcp
-
-# Install dependencies
 npm install
 
-# Build the project
+# Build
 npm run build
 
-# Run tests
+# Test
 npm test
+
+# Run locally
+COOLIFY_BASE_URL="https://your-coolify.com" \
+COOLIFY_ACCESS_TOKEN="your-token" \
+node dist/index.js
 ```
 
-### Environment Variables
+## Available Tools
 
-```bash
-# Required
-COOLIFY_ACCESS_TOKEN=your_access_token_here
+### Servers
 
-# Optional (defaults to http://localhost:3000)
-COOLIFY_BASE_URL=https://your.coolify.instance
-```
+- `get_version` - Get Coolify API version
+- `list_servers` - List all servers
+- `get_server` - Get server details
+- `get_server_resources` - Get resources running on a server
+- `get_server_domains` - Get domains configured on a server
+- `validate_server` - Validate server connection
 
-## API Reference
+### Projects
 
-### Resource Types
+- `list_projects` - List all projects
+- `get_project` - Get project details
+- `create_project` - Create a new project
+- `update_project` - Update a project
+- `delete_project` - Delete a project
 
-#### Application
+### Environments
 
-```typescript
-interface Application {
-  uuid: string;
-  name: string;
-  // Additional properties based on your Coolify instance
-}
-```
+- `list_environments` - List environments in a project
+- `get_environment` - Get environment details
+- `create_environment` - Create environment in a project
+- `delete_environment` - Delete an environment
 
-#### Service
+### Applications
 
-```typescript
-interface Service {
-  id: number;
-  uuid: string;
-  name: string;
-  type: ServiceType; // Various types like 'wordpress', 'mysql', etc.
-  status: 'running' | 'stopped' | 'error';
-  project_uuid: string;
-  environment_uuid: string;
-  server_uuid: string;
-  domains?: string[];
-}
-```
+- `list_applications` - List all applications
+- `get_application` - Get application details
+- `create_application_private_gh` - Create app from private GitHub repo (GitHub App)
+- `create_application_private_key` - Create app from private repo using deploy key
+- `update_application` - Update an application
+- `delete_application` - Delete an application
+- `start_application` - Start an application
+- `stop_application` - Stop an application
+- `restart_application` - Restart an application
+- `get_application_logs` - Get application logs
+- `list_application_envs` - List application environment variables
+- `create_application_env` - Create application environment variable
+- `update_application_env` - Update application environment variable
+- `delete_application_env` - Delete application environment variable
 
-#### Database
+### Databases
 
-```typescript
-interface Database {
-  id: number;
-  uuid: string;
-  name: string;
-  type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | /* other types */;
-  status: 'running' | 'stopped' | 'error';
-  is_public: boolean;
-  public_port?: number;
-  // Additional configuration based on database type
-}
-```
+- `list_databases` - List all databases
+- `get_database` - Get database details
+- `start_database` - Start a database
+- `stop_database` - Stop a database
+- `restart_database` - Restart a database
 
-#### Deployment
+### Services
 
-```typescript
-interface Deployment {
-  id: number;
-  uuid: string;
-  application_uuid: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-```
+- `list_services` - List all services
+- `get_service` - Get service details
+- `start_service` - Start a service
+- `stop_service` - Stop a service
+- `restart_service` - Restart a service
+- `list_service_envs` - List service environment variables
+- `create_service_env` - Create service environment variable
+- `delete_service_env` - Delete service environment variable
+
+### Deployments
+
+- `list_deployments` - List running deployments
+- `get_deployment` - Get deployment details
+- `deploy` - Deploy by tag or UUID
+- `list_application_deployments` - List deployments for an application
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+Contributions welcome! Please open an issue first to discuss major changes.
 
 ## License
 
@@ -218,8 +196,5 @@ MIT
 
 ## Support
 
-For support, please:
-
-1. Check the [issues](https://github.com/stumason/coolify-mcp/issues) page
-2. Create a new issue if needed
-3. Join the Coolify community
+- [GitHub Issues](https://github.com/stumason/coolify-mcp/issues)
+- [Coolify Community](https://coolify.io/docs/contact)
