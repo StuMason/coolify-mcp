@@ -451,9 +451,9 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'create_service',
-      'Create a one-click service (e.g., pocketbase, mysql, redis, wordpress, etc.)',
+      'Create a one-click service (e.g., pocketbase, mysql, redis, wordpress, etc.). Use type OR docker_compose_raw, not both.',
       {
-        type: z.string().describe('Service type (e.g., pocketbase, mysql, redis, postgresql, mongodb, wordpress, etc.)'),
+        type: z.string().optional().describe('Service type (e.g., pocketbase, mysql, redis, postgresql, mongodb, wordpress, etc.)'),
         server_uuid: z.string().describe('Server UUID'),
         project_uuid: z.string().describe('Project UUID'),
         environment_name: z.string().optional().describe('Environment name (e.g., production)'),
@@ -462,6 +462,7 @@ export class CoolifyMcpServer extends McpServer {
         description: z.string().optional().describe('Service description'),
         destination_uuid: z.string().optional().describe('Destination UUID'),
         instant_deploy: z.boolean().optional().describe('Deploy immediately after creation'),
+        docker_compose_raw: z.string().optional().describe('Base64 encoded docker-compose YAML with SERVICE_FQDN_* env var for custom domain (alternative to type)'),
       },
       async (args) => wrapHandler(() => this.client.createService(args)),
     );
