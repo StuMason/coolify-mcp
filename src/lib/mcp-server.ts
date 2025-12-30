@@ -425,7 +425,7 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Services (9 tools)
+    // Services (11 tools)
     // =========================================================================
     this.tool(
       'list_services',
@@ -447,6 +447,44 @@ export class CoolifyMcpServer extends McpServer {
       'Get service details',
       { uuid: z.string().describe('Service UUID') },
       async ({ uuid }) => wrapHandler(() => this.client.getService(uuid)),
+    );
+
+    this.tool(
+      'create_service',
+      'Create a one-click service (e.g., pocketbase, mysql, redis, wordpress, etc.)',
+      {
+        type: z.string().describe('Service type (e.g., pocketbase, mysql, redis, postgresql, mongodb, wordpress, etc.)'),
+        server_uuid: z.string().describe('Server UUID'),
+        project_uuid: z.string().describe('Project UUID'),
+        environment_name: z.string().optional().describe('Environment name (e.g., production)'),
+        environment_uuid: z.string().optional().describe('Environment UUID (alternative to environment_name)'),
+        name: z.string().optional().describe('Service name'),
+        description: z.string().optional().describe('Service description'),
+        destination_uuid: z.string().optional().describe('Destination UUID'),
+        instant_deploy: z.boolean().optional().describe('Deploy immediately after creation'),
+      },
+      async (args) => wrapHandler(() => this.client.createService(args)),
+    );
+
+    this.tool(
+      'delete_service',
+      'Delete a service',
+      {
+        uuid: z.string().describe('Service UUID'),
+        delete_configurations: z.boolean().optional().describe('Delete configurations (default: true)'),
+        delete_volumes: z.boolean().optional().describe('Delete volumes (default: true)'),
+        docker_cleanup: z.boolean().optional().describe('Clean up Docker resources (default: true)'),
+        delete_connected_networks: z.boolean().optional().describe('Delete connected networks (default: true)'),
+      },
+      async ({ uuid, delete_configurations, delete_volumes, docker_cleanup, delete_connected_networks }) =>
+        wrapHandler(() =>
+          this.client.deleteService(uuid, {
+            deleteConfigurations: delete_configurations,
+            deleteVolumes: delete_volumes,
+            dockerCleanup: docker_cleanup,
+            deleteConnectedNetworks: delete_connected_networks,
+          }),
+        ),
     );
 
     this.tool(
