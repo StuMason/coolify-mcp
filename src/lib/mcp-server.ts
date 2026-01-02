@@ -21,10 +21,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { CoolifyClient } from './coolify-client.js';
+import {
+  CoolifyClient,
+  type ServerSummary,
+  type ProjectSummary,
+  type ApplicationSummary,
+  type DatabaseSummary,
+  type ServiceSummary,
+} from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.5.1';
+const VERSION = '0.6.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -78,26 +85,47 @@ export class CoolifyMcpServer extends McpServer {
       {},
       async () =>
         wrapHandler(async () => {
-          const [servers, projects, applications, databases, services] = await Promise.all([
+          const results = await Promise.allSettled([
             this.client.listServers({ summary: true }),
             this.client.listProjects({ summary: true }),
             this.client.listApplications({ summary: true }),
             this.client.listDatabases({ summary: true }),
             this.client.listServices({ summary: true }),
           ]);
+
+          const extract = <T>(result: PromiseSettledResult<T>): T | [] =>
+            result.status === 'fulfilled' ? result.value : [];
+
+          const servers = extract(results[0]) as ServerSummary[];
+          const projects = extract(results[1]) as ProjectSummary[];
+          const applications = extract(results[2]) as ApplicationSummary[];
+          const databases = extract(results[3]) as DatabaseSummary[];
+          const services = extract(results[4]) as ServiceSummary[];
+
+          const errors = results
+            .map((r, i) => {
+              if (r.status === 'rejected') {
+                const names = ['servers', 'projects', 'applications', 'databases', 'services'];
+                return `${names[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`;
+              }
+              return null;
+            })
+            .filter(Boolean);
+
           return {
             summary: {
-              servers: (servers as unknown[]).length,
-              projects: (projects as unknown[]).length,
-              applications: (applications as unknown[]).length,
-              databases: (databases as unknown[]).length,
-              services: (services as unknown[]).length,
+              servers: servers.length,
+              projects: projects.length,
+              applications: applications.length,
+              databases: databases.length,
+              services: services.length,
             },
             servers,
             projects,
             applications,
             databases,
             services,
+            ...(errors.length > 0 && { errors }),
           };
         }),
     );
