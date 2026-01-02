@@ -848,19 +848,11 @@ export class CoolifyClient {
     return this.request<DatabaseBackup[]>(`/databases/${databaseUuid}/backups`);
   }
 
-  async getDatabaseBackup(
-    databaseUuid: string,
-    backupUuid: string,
-  ): Promise<DatabaseBackup> {
-    return this.request<DatabaseBackup>(
-      `/databases/${databaseUuid}/backups/${backupUuid}`,
-    );
+  async getDatabaseBackup(databaseUuid: string, backupUuid: string): Promise<DatabaseBackup> {
+    return this.request<DatabaseBackup>(`/databases/${databaseUuid}/backups/${backupUuid}`);
   }
 
-  async listBackupExecutions(
-    databaseUuid: string,
-    backupUuid: string,
-  ): Promise<BackupExecution[]> {
+  async listBackupExecutions(databaseUuid: string, backupUuid: string): Promise<BackupExecution[]> {
     return this.request<BackupExecution[]>(
       `/databases/${databaseUuid}/backups/${backupUuid}/executions`,
     );

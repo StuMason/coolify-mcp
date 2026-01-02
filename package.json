@@ -61,5 +61,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "lint-staged": {
+    "*.{ts,js,json,md,yaml,yml}": "prettier --write",
+    "*.ts": "eslint --fix"
   }
 }

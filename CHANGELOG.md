@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Private Keys CRUD** - Full management of SSH deploy keys:
+
   - `list_private_keys` - List all private keys
   - `get_private_key` - Get private key details
   - `create_private_key` - Create a new private key for deployments
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `delete_private_key` - Delete a private key
 
 - **Database Backups** - Monitor and manage database backup schedules and executions:
+
   - `list_database_backups` - List scheduled backups for a database
   - `get_database_backup` - Get details of a scheduled backup
   - `list_backup_executions` - List execution history for a scheduled backup

@@ -3,8 +3,7 @@ info:
   title: Coolify
   version: '0.1'
 servers:
-  -
-    url: 'https://app.coolify.io/api/v1'
+  - url: 'https://app.coolify.io/api/v1'
     description: 'Coolify Cloud API. Change the host to your own instance if you are self-hosting.'
 paths:
   /applications:
@@ -28,8 +27,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/public:
     post:
       tags:
@@ -289,13 +287,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/private-github-app:
     post:
       tags:
@@ -559,13 +589,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/private-deploy-key:
     post:
       tags:
@@ -829,13 +891,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/dockerfile:
     post:
       tags:
@@ -1046,13 +1140,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/dockerimage:
     post:
       tags:
@@ -1254,13 +1380,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /applications/dockercompose:
     post:
       tags:
@@ -1338,13 +1496,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}':
     get:
       tags:
@@ -1353,8 +1543,7 @@ paths:
       description: 'Get application by UUID.'
       operationId: get-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1375,8 +1564,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - Applications
@@ -1384,40 +1572,35 @@ paths:
       description: 'Delete application by UUID.'
       operationId: delete-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: delete_configurations
+        - name: delete_configurations
           in: query
           description: 'Delete configurations.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_volumes
+        - name: delete_volumes
           in: query
           description: 'Delete volumes.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: docker_cleanup
+        - name: docker_cleanup
           in: query
           description: 'Run docker cleanup.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_connected_networks
+        - name: delete_connected_networks
           in: query
           description: 'Delete connected networks.'
           required: false
@@ -1440,8 +1623,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Applications
@@ -1449,8 +1631,7 @@ paths:
       description: 'Update application by UUID.'
       operationId: update-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1683,13 +1864,45 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Domain conflicts detected. Use force_domain_override=true to proceed.' }
-                  warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
-                  conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
+                  message:
+                    {
+                      type: string,
+                      example: 'Domain conflicts detected. Use force_domain_override=true to proceed.',
+                    }
+                  warning:
+                    {
+                      type: string,
+                      example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.',
+                    }
+                  conflicts:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              domain: { type: string, example: example.com },
+                              resource_name: { type: string, example: 'My Application' },
+                              resource_uuid:
+                                { type: string, nullable: true, example: abc123-def456 },
+                              resource_type:
+                                {
+                                  type: string,
+                                  enum: [application, service, instance],
+                                  example: application,
+                                },
+                              message:
+                                {
+                                  type: string,
+                                  example: "Domain example.com is already in use by application 'My Application'",
+                                },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/logs':
     get:
       tags:
@@ -1698,16 +1911,14 @@ paths:
       description: 'Get application logs by UUID.'
       operationId: get-application-logs-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: lines
+        - name: lines
           in: query
           description: 'Number of lines to show from the end of the logs.'
           required: false
@@ -1731,8 +1942,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/envs':
     get:
       tags:
@@ -1741,8 +1951,7 @@ paths:
       description: 'List all envs by application UUID.'
       operationId: list-envs-by-application-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1765,8 +1974,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Applications
@@ -1774,8 +1982,7 @@ paths:
       description: 'Create env by application UUID.'
       operationId: create-env-by-application-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1824,8 +2031,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Applications
@@ -1833,8 +2039,7 @@ paths:
       description: 'Update env by application UUID.'
       operationId: update-env-by-application-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1886,8 +2091,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/envs/bulk':
     patch:
       tags:
@@ -1896,8 +2100,7 @@ paths:
       description: 'Update multiple envs by application UUID.'
       operationId: update-envs-by-application-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -1915,7 +2118,37 @@ paths:
               properties:
                 data:
                   type: array
-                  items: { properties: { key: { type: string, description: 'The key of the environment variable.' }, value: { type: string, description: 'The value of the environment variable.' }, is_preview: { type: boolean, description: 'The flag to indicate if the environment variable is used in preview deployments.' }, is_literal: { type: boolean, description: 'The flag to indicate if the environment variable is a literal, nothing espaced.' }, is_multiline: { type: boolean, description: 'The flag to indicate if the environment variable is multiline.' }, is_shown_once: { type: boolean, description: "The flag to indicate if the environment variable's value is shown on the UI." } }, type: object }
+                  items:
+                    {
+                      properties:
+                        {
+                          key:
+                            { type: string, description: 'The key of the environment variable.' },
+                          value:
+                            { type: string, description: 'The value of the environment variable.' },
+                          is_preview:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is used in preview deployments.',
+                            },
+                          is_literal:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is a literal, nothing espaced.',
+                            },
+                          is_multiline:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is multiline.',
+                            },
+                          is_shown_once:
+                            {
+                              type: boolean,
+                              description: "The flag to indicate if the environment variable's value is shown on the UI.",
+                            },
+                        },
+                      type: object,
+                    }
               type: object
       responses:
         '201':
@@ -1933,8 +2166,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/envs/{env_uuid}':
     delete:
       tags:
@@ -1943,16 +2175,14 @@ paths:
       description: 'Delete env by UUID.'
       operationId: delete-env-by-application-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: env_uuid
+        - name: env_uuid
           in: path
           description: 'UUID of the environment variable.'
           required: true
@@ -1975,8 +2205,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/start':
     get:
       tags:
@@ -1985,23 +2214,20 @@ paths:
       description: 'Start application. `Post` request is also accepted.'
       operationId: start-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: force
+        - name: force
           in: query
           description: 'Force rebuild.'
           schema:
             type: boolean
             default: false
-        -
-          name: instant_deploy
+        - name: instant_deploy
           in: query
           description: 'Instant deploy (skip queuing).'
           schema:
@@ -2014,8 +2240,10 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Deployment request queued.', description: Message. }
-                  deployment_uuid: { type: string, example: doogksw, description: 'UUID of the deployment.' }
+                  message:
+                    { type: string, example: 'Deployment request queued.', description: Message. }
+                  deployment_uuid:
+                    { type: string, example: doogksw, description: 'UUID of the deployment.' }
                 type: object
         '401':
           $ref: '#/components/responses/401'
@@ -2024,8 +2252,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/stop':
     get:
       tags:
@@ -2034,8 +2261,7 @@ paths:
       description: 'Stop application. `Post` request is also accepted.'
       operationId: stop-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -2058,8 +2284,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/applications/{uuid}/restart':
     get:
       tags:
@@ -2068,8 +2293,7 @@ paths:
       description: 'Restart application. `Post` request is also accepted.'
       operationId: restart-application-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -2084,7 +2308,8 @@ paths:
               schema:
                 properties:
                   message: { type: string, example: 'Restart request queued.' }
-                  deployment_uuid: { type: string, example: doogksw, description: 'UUID of the deployment.' }
+                  deployment_uuid:
+                    { type: string, example: doogksw, description: 'UUID of the deployment.' }
                 type: object
         '401':
           $ref: '#/components/responses/401'
@@ -2093,8 +2318,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /cloud-tokens:
     get:
       tags:
@@ -2110,15 +2334,23 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { uuid: { type: string }, name: { type: string }, provider: { type: string, enum: [hetzner, digitalocean] }, team_id: { type: integer }, servers_count: { type: integer }, created_at: { type: string }, updated_at: { type: string } }
+                  properties:
+                    {
+                      uuid: { type: string },
+                      name: { type: string },
+                      provider: { type: string, enum: [hetzner, digitalocean] },
+                      team_id: { type: integer },
+                      servers_count: { type: integer },
+                      created_at: { type: string },
+                      updated_at: { type: string },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - 'Cloud Tokens'
@@ -2166,8 +2398,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/cloud-tokens/{uuid}':
     get:
       tags:
@@ -2176,8 +2407,7 @@ paths:
       description: 'Get cloud provider token by UUID.'
       operationId: get-cloud-token-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Token UUID'
           required: true
@@ -2203,8 +2433,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - 'Cloud Tokens'
@@ -2212,8 +2441,7 @@ paths:
       description: 'Delete cloud provider token by UUID. Cannot delete if token is used by any servers.'
       operationId: delete-cloud-token-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the cloud provider token.'
           required: true
@@ -2236,8 +2464,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - 'Cloud Tokens'
@@ -2245,8 +2472,7 @@ paths:
       description: 'Update cloud provider token name.'
       operationId: update-cloud-token-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Token UUID'
           required: true
@@ -2279,8 +2505,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/cloud-tokens/{uuid}/validate':
     post:
       tags:
@@ -2289,8 +2514,7 @@ paths:
       description: 'Validate a cloud provider token against the provider API.'
       operationId: validate-cloud-token-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Token UUID'
           required: true
@@ -2311,8 +2535,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases:
     get:
       tags:
@@ -2333,8 +2556,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/backups':
     get:
       tags:
@@ -2343,8 +2565,7 @@ paths:
       description: 'Get backups details by database UUID.'
       operationId: get-database-backups-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -2366,8 +2587,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Databases
@@ -2375,8 +2595,7 @@ paths:
       description: 'Create a new scheduled backup configuration for a database'
       operationId: create-database-backup
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -2442,7 +2661,8 @@ paths:
             application/json:
               schema:
                 properties:
-                  uuid: { type: string, format: uuid, example: 550e8400-e29b-41d4-a716-446655440000 }
+                  uuid:
+                    { type: string, format: uuid, example: 550e8400-e29b-41d4-a716-446655440000 }
                   message: { type: string, example: 'Backup configuration created successfully.' }
                 type: object
         '401':
@@ -2454,8 +2674,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}':
     get:
       tags:
@@ -2464,8 +2683,7 @@ paths:
       description: 'Get database by UUID.'
       operationId: get-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -2487,8 +2705,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - Databases
@@ -2496,40 +2713,35 @@ paths:
       description: 'Delete database by UUID.'
       operationId: delete-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: delete_configurations
+        - name: delete_configurations
           in: query
           description: 'Delete configurations.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_volumes
+        - name: delete_volumes
           in: query
           description: 'Delete volumes.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: docker_cleanup
+        - name: docker_cleanup
           in: query
           description: 'Run docker cleanup.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_connected_networks
+        - name: delete_connected_networks
           in: query
           description: 'Delete connected networks.'
           required: false
@@ -2552,8 +2764,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Databases
@@ -2561,8 +2772,7 @@ paths:
       description: 'Update database by UUID.'
       operationId: update-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -2706,8 +2916,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/backups/{scheduled_backup_uuid}':
     delete:
       tags:
@@ -2716,23 +2925,20 @@ paths:
       description: 'Deletes a backup configuration and all its executions.'
       operationId: delete-backup-configuration-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database'
           required: true
           schema:
             type: string
-        -
-          name: scheduled_backup_uuid
+        - name: scheduled_backup_uuid
           in: path
           description: 'UUID of the backup configuration to delete'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: delete_s3
+        - name: delete_s3
           in: query
           description: 'Whether to delete all backup files from S3'
           required: false
@@ -2746,7 +2952,8 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Backup configuration and all executions deleted.' }
+                  message:
+                    { type: string, example: 'Backup configuration and all executions deleted.' }
                 type: object
         '404':
           description: 'Backup configuration not found.'
@@ -2757,8 +2964,7 @@ paths:
                   message: { type: string, example: 'Backup configuration not found.' }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Databases
@@ -2766,16 +2972,14 @@ paths:
       description: 'Update a specific backup configuration for a given database, identified by its UUID and the backup ID'
       operationId: update-database-backup
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: scheduled_backup_uuid
+        - name: scheduled_backup_uuid
           in: path
           description: 'UUID of the backup configuration.'
           required: true
@@ -2841,8 +3045,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/postgresql:
     post:
       tags:
@@ -2945,8 +3148,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/clickhouse:
     post:
       tags:
@@ -3037,8 +3239,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/dragonfly:
     post:
       tags:
@@ -3126,8 +3327,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/redis:
     post:
       tags:
@@ -3218,8 +3418,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/keydb:
     post:
       tags:
@@ -3310,8 +3509,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/mariadb:
     post:
       tags:
@@ -3411,8 +3609,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/mysql:
     post:
       tags:
@@ -3512,8 +3709,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /databases/mongodb:
     post:
       tags:
@@ -3604,8 +3800,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/backups/{scheduled_backup_uuid}/executions/{execution_uuid}':
     delete:
       tags:
@@ -3614,31 +3809,27 @@ paths:
       description: 'Deletes a specific backup execution.'
       operationId: delete-backup-execution-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database'
           required: true
           schema:
             type: string
-        -
-          name: scheduled_backup_uuid
+        - name: scheduled_backup_uuid
           in: path
           description: 'UUID of the backup configuration'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: execution_uuid
+        - name: execution_uuid
           in: path
           description: 'UUID of the backup execution to delete'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: delete_s3
+        - name: delete_s3
           in: query
           description: 'Whether to delete the backup from S3'
           required: false
@@ -3663,8 +3854,7 @@ paths:
                   message: { type: string, example: 'Backup execution not found.' }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/backups/{scheduled_backup_uuid}/executions':
     get:
       tags:
@@ -3673,15 +3863,13 @@ paths:
       description: 'Get all executions for a specific backup configuration.'
       operationId: list-backup-executions
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database'
           required: true
           schema:
             type: string
-        -
-          name: scheduled_backup_uuid
+        - name: scheduled_backup_uuid
           in: path
           description: 'UUID of the backup configuration'
           required: true
@@ -3695,13 +3883,28 @@ paths:
             application/json:
               schema:
                 properties:
-                  executions: { type: array, items: { properties: { uuid: { type: string }, filename: { type: string }, size: { type: integer }, created_at: { type: string }, message: { type: string }, status: { type: string } }, type: object } }
+                  executions:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              uuid: { type: string },
+                              filename: { type: string },
+                              size: { type: integer },
+                              created_at: { type: string },
+                              message: { type: string },
+                              status: { type: string },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
         '404':
           description: 'Backup configuration not found.'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/start':
     get:
       tags:
@@ -3710,8 +3913,7 @@ paths:
       description: 'Start database. `Post` request is also accepted.'
       operationId: start-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -3734,8 +3936,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/stop':
     get:
       tags:
@@ -3744,8 +3945,7 @@ paths:
       description: 'Stop database. `Post` request is also accepted.'
       operationId: stop-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -3768,8 +3968,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/databases/{uuid}/restart':
     get:
       tags:
@@ -3778,8 +3977,7 @@ paths:
       description: 'Restart database. `Post` request is also accepted.'
       operationId: restart-database-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the database.'
           required: true
@@ -3802,8 +4000,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /deployments:
     get:
       tags:
@@ -3825,8 +4022,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/deployments/{uuid}':
     get:
       tags:
@@ -3835,8 +4031,7 @@ paths:
       description: 'Get deployment by UUID.'
       operationId: get-deployment-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Deployment UUID'
           required: true
@@ -3856,8 +4051,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/deployments/{uuid}/cancel':
     post:
       tags:
@@ -3866,8 +4060,7 @@ paths:
       description: 'Cancel a deployment by UUID.'
       operationId: cancel-deployment-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Deployment UUID'
           required: true
@@ -3890,7 +4083,11 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'Deployment cannot be cancelled. Current status: finished' }
+                  message:
+                    {
+                      type: string,
+                      example: 'Deployment cannot be cancelled. Current status: finished',
+                    }
                 type: object
         '401':
           $ref: '#/components/responses/401'
@@ -3900,13 +4097,16 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'You do not have permission to cancel this deployment.' }
+                  message:
+                    {
+                      type: string,
+                      example: 'You do not have permission to cancel this deployment.',
+                    }
                 type: object
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /deploy:
     get:
       tags:
@@ -3915,26 +4115,22 @@ paths:
       description: 'Deploy by tag or uuid. `Post` request also accepted with `uuid` and `tag` json body.'
       operationId: deploy-by-tag-or-uuid
       parameters:
-        -
-          name: tag
+        - name: tag
           in: query
           description: 'Tag name(s). Comma separated list is also accepted.'
           schema:
             type: string
-        -
-          name: uuid
+        - name: uuid
           in: query
           description: 'Resource UUID(s). Comma separated list is also accepted.'
           schema:
             type: string
-        -
-          name: force
+        - name: force
           in: query
           description: 'Force rebuild (without cache)'
           schema:
             type: boolean
-        -
-          name: pr
+        - name: pr
           in: query
           description: 'Pull Request Id for deploying specific PR builds. Cannot be used with tag parameter.'
           schema:
@@ -3946,15 +4142,27 @@ paths:
             application/json:
               schema:
                 properties:
-                  deployments: { type: array, items: { properties: { message: { type: string }, resource_uuid: { type: string }, deployment_uuid: { type: string } }, type: object } }
+                  deployments:
+                    {
+                      type: array,
+                      items:
+                        {
+                          properties:
+                            {
+                              message: { type: string },
+                              resource_uuid: { type: string },
+                              deployment_uuid: { type: string },
+                            },
+                          type: object,
+                        },
+                    }
                 type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/deployments/applications/{uuid}':
     get:
       tags:
@@ -3963,16 +4171,14 @@ paths:
       description: 'List application deployments by using the app uuid'
       operationId: list-deployments-by-app-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: skip
+        - name: skip
           in: query
           description: 'Number of records to skip.'
           required: false
@@ -3980,8 +4186,7 @@ paths:
             type: integer
             default: 0
             minimum: 0
-        -
-          name: take
+        - name: take
           in: query
           description: 'Number of records to take.'
           required: false
@@ -4003,8 +4208,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /github-apps:
     get:
       tags:
@@ -4020,15 +4224,32 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, organization: { type: string, nullable: true }, api_url: { type: string }, html_url: { type: string }, custom_user: { type: string }, custom_port: { type: integer }, app_id: { type: integer }, installation_id: { type: integer }, client_id: { type: string }, private_key_id: { type: integer }, is_system_wide: { type: boolean }, is_public: { type: boolean }, team_id: { type: integer }, type: { type: string } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      uuid: { type: string },
+                      name: { type: string },
+                      organization: { type: string, nullable: true },
+                      api_url: { type: string },
+                      html_url: { type: string },
+                      custom_user: { type: string },
+                      custom_port: { type: integer },
+                      app_id: { type: integer },
+                      installation_id: { type: integer },
+                      client_id: { type: string },
+                      private_key_id: { type: integer },
+                      is_system_wide: { type: boolean },
+                      is_public: { type: boolean },
+                      team_id: { type: integer },
+                      type: { type: string },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - 'GitHub Apps'
@@ -4121,8 +4342,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/github-apps/{github_app_id}/repositories':
     get:
       tags:
@@ -4131,8 +4351,7 @@ paths:
       description: 'Fetch repositories from GitHub for a given GitHub app.'
       operationId: load-repositories
       parameters:
-        -
-          name: github_app_id
+        - name: github_app_id
           in: path
           description: 'GitHub App ID'
           required: true
@@ -4154,8 +4373,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/github-apps/{github_app_id}/repositories/{owner}/{repo}/branches':
     get:
       tags:
@@ -4164,22 +4382,19 @@ paths:
       description: 'Fetch branches from GitHub for a given repository.'
       operationId: load-branches
       parameters:
-        -
-          name: github_app_id
+        - name: github_app_id
           in: path
           description: 'GitHub App ID'
           required: true
           schema:
             type: integer
-        -
-          name: owner
+        - name: owner
           in: path
           description: 'Repository owner'
           required: true
           schema:
             type: string
-        -
-          name: repo
+        - name: repo
           in: path
           description: 'Repository name'
           required: true
@@ -4201,8 +4416,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/github-apps/{github_app_id}':
     delete:
       tags:
@@ -4211,8 +4425,7 @@ paths:
       description: "Delete a GitHub app if it's not being used by any applications."
       operationId: deleteGithubApp
       parameters:
-        -
-          name: github_app_id
+        - name: github_app_id
           in: path
           description: 'GitHub App ID'
           required: true
@@ -4237,11 +4450,14 @@ paths:
             application/json:
               schema:
                 properties:
-                  message: { type: string, example: 'This GitHub app is being used by 5 application(s). Please delete all applications first.' }
+                  message:
+                    {
+                      type: string,
+                      example: 'This GitHub app is being used by 5 application(s). Please delete all applications first.',
+                    }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - 'GitHub Apps'
@@ -4249,8 +4465,7 @@ paths:
       description: 'Update an existing GitHub app.'
       operationId: updateGithubApp
       parameters:
-        -
-          name: github_app_id
+        - name: github_app_id
           in: path
           description: 'GitHub App ID'
           required: true
@@ -4320,8 +4535,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /hetzner/locations:
     get:
       tags:
@@ -4330,15 +4544,13 @@ paths:
       description: 'Get all available Hetzner datacenter locations.'
       operationId: get-hetzner-locations
       parameters:
-        -
-          name: cloud_provider_token_uuid
+        - name: cloud_provider_token_uuid
           in: query
           description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
           required: false
           schema:
             type: string
-        -
-          name: cloud_provider_token_id
+        - name: cloud_provider_token_id
           in: query
           description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
           required: false
@@ -4353,15 +4565,23 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, country: { type: string }, city: { type: string }, latitude: { type: number }, longitude: { type: number } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      name: { type: string },
+                      description: { type: string },
+                      country: { type: string },
+                      city: { type: string },
+                      latitude: { type: number },
+                      longitude: { type: number },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /hetzner/server-types:
     get:
       tags:
@@ -4370,15 +4590,13 @@ paths:
       description: 'Get all available Hetzner server types (instance sizes).'
       operationId: get-hetzner-server-types
       parameters:
-        -
-          name: cloud_provider_token_uuid
+        - name: cloud_provider_token_uuid
           in: query
           description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
           required: false
           schema:
             type: string
-        -
-          name: cloud_provider_token_id
+        - name: cloud_provider_token_id
           in: query
           description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
           required: false
@@ -4393,15 +4611,47 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, cores: { type: integer }, memory: { type: number }, disk: { type: integer }, prices: { type: array, items: { type: object, properties: { location: { type: string, description: 'Datacenter location name' }, price_hourly: { type: object, properties: { net: { type: string }, gross: { type: string } } }, price_monthly: { type: object, properties: { net: { type: string }, gross: { type: string } } } } } } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      name: { type: string },
+                      description: { type: string },
+                      cores: { type: integer },
+                      memory: { type: number },
+                      disk: { type: integer },
+                      prices:
+                        {
+                          type: array,
+                          items:
+                            {
+                              type: object,
+                              properties:
+                                {
+                                  location:
+                                    { type: string, description: 'Datacenter location name' },
+                                  price_hourly:
+                                    {
+                                      type: object,
+                                      properties:
+                                        { net: { type: string }, gross: { type: string } },
+                                    },
+                                  price_monthly:
+                                    {
+                                      type: object,
+                                      properties:
+                                        { net: { type: string }, gross: { type: string } },
+                                    },
+                                },
+                            },
+                        },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /hetzner/images:
     get:
       tags:
@@ -4410,15 +4660,13 @@ paths:
       description: 'Get all available Hetzner system images (operating systems).'
       operationId: get-hetzner-images
       parameters:
-        -
-          name: cloud_provider_token_uuid
+        - name: cloud_provider_token_uuid
           in: query
           description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
           required: false
           schema:
             type: string
-        -
-          name: cloud_provider_token_id
+        - name: cloud_provider_token_id
           in: query
           description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
           required: false
@@ -4433,15 +4681,23 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, type: { type: string }, os_flavor: { type: string }, os_version: { type: string }, architecture: { type: string } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      name: { type: string },
+                      description: { type: string },
+                      type: { type: string },
+                      os_flavor: { type: string },
+                      os_version: { type: string },
+                      architecture: { type: string },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /hetzner/ssh-keys:
     get:
       tags:
@@ -4450,15 +4706,13 @@ paths:
       description: 'Get all SSH keys stored in the Hetzner account.'
       operationId: get-hetzner-ssh-keys
       parameters:
-        -
-          name: cloud_provider_token_uuid
+        - name: cloud_provider_token_uuid
           in: query
           description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
           required: false
           schema:
             type: string
-        -
-          name: cloud_provider_token_id
+        - name: cloud_provider_token_id
           in: query
           description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
           required: false
@@ -4473,15 +4727,20 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, name: { type: string }, fingerprint: { type: string }, public_key: { type: string } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      name: { type: string },
+                      fingerprint: { type: string },
+                      public_key: { type: string },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /servers/hetzner:
     post:
       tags:
@@ -4572,8 +4831,7 @@ paths:
         '429':
           $ref: '#/components/responses/429'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /version:
     get:
       summary: Version
@@ -4592,8 +4850,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /enable:
     get:
       summary: 'Enable API'
@@ -4621,8 +4878,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /disable:
     get:
       summary: 'Disable API'
@@ -4650,8 +4906,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /health:
     get:
       summary: Healthcheck
@@ -4690,8 +4945,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Projects
@@ -4730,8 +4984,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/projects/{uuid}':
     get:
       tags:
@@ -4740,8 +4993,7 @@ paths:
       description: 'Get project by UUID.'
       operationId: get-project-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Project UUID'
           required: true
@@ -4761,8 +5013,7 @@ paths:
         '404':
           description: 'Project not found.'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - Projects
@@ -4770,8 +5021,7 @@ paths:
       description: 'Delete project by UUID.'
       operationId: delete-project-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the application.'
           required: true
@@ -4796,8 +5046,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Projects
@@ -4805,8 +5054,7 @@ paths:
       description: 'Update Project.'
       operationId: update-project-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the project.'
           required: true
@@ -4847,8 +5095,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/projects/{uuid}/{environment_name_or_uuid}':
     get:
       tags:
@@ -4857,15 +5104,13 @@ paths:
       description: 'Get environment by name or UUID.'
       operationId: get-environment-by-name-or-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Project UUID'
           required: true
           schema:
             type: string
-        -
-          name: environment_name_or_uuid
+        - name: environment_name_or_uuid
           in: path
           description: 'Environment name or UUID'
           required: true
@@ -4887,8 +5132,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/projects/{uuid}/environments':
     get:
       tags:
@@ -4897,8 +5141,7 @@ paths:
       description: 'List all environments in a project.'
       operationId: get-environments
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Project UUID'
           required: true
@@ -4922,8 +5165,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Projects
@@ -4931,8 +5173,7 @@ paths:
       description: 'Create environment in project.'
       operationId: create-environment
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Project UUID'
           required: true
@@ -4956,7 +5197,8 @@ paths:
             application/json:
               schema:
                 properties:
-                  uuid: { type: string, example: env123, description: 'The UUID of the environment.' }
+                  uuid:
+                    { type: string, example: env123, description: 'The UUID of the environment.' }
                 type: object
         '401':
           $ref: '#/components/responses/401'
@@ -4969,8 +5211,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/projects/{uuid}/environments/{environment_name_or_uuid}':
     delete:
       tags:
@@ -4979,15 +5220,13 @@ paths:
       description: 'Delete environment by name or UUID. Environment must be empty.'
       operationId: delete-environment
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Project UUID'
           required: true
           schema:
             type: string
-        -
-          name: environment_name_or_uuid
+        - name: environment_name_or_uuid
           in: path
           description: 'Environment name or UUID'
           required: true
@@ -5011,8 +5250,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /resources:
     get:
       tags:
@@ -5033,8 +5271,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /security/keys:
     get:
       tags:
@@ -5056,8 +5293,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - 'Private Keys'
@@ -5096,8 +5332,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - 'Private Keys'
@@ -5136,8 +5371,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/security/keys/{uuid}':
     get:
       tags:
@@ -5146,8 +5380,7 @@ paths:
       description: 'Get key by UUID.'
       operationId: get-private-key-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Private Key UUID'
           required: true
@@ -5167,8 +5400,7 @@ paths:
         '404':
           description: 'Private Key not found.'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - 'Private Keys'
@@ -5176,8 +5408,7 @@ paths:
       description: 'Delete a private key.'
       operationId: delete-private-key-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Private Key UUID'
           required: true
@@ -5207,8 +5438,7 @@ paths:
                   message: { type: string, example: 'Private Key is in use and cannot be deleted.' }
                 type: object
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /servers:
     get:
       tags:
@@ -5230,8 +5460,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Servers
@@ -5301,8 +5530,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/servers/{uuid}':
     get:
       tags:
@@ -5311,8 +5539,7 @@ paths:
       description: 'Get server by UUID.'
       operationId: get-server-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: "Server's UUID"
           required: true
@@ -5332,8 +5559,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - Servers
@@ -5341,8 +5567,7 @@ paths:
       description: 'Delete server by UUID.'
       operationId: delete-server-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the server.'
           required: true
@@ -5367,8 +5592,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Servers
@@ -5376,8 +5600,7 @@ paths:
       description: 'Update Server.'
       operationId: update-server-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Server UUID'
           required: true
@@ -5435,8 +5658,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/servers/{uuid}/resources':
     get:
       tags:
@@ -5445,8 +5667,7 @@ paths:
       description: 'Get resources by server.'
       operationId: get-resources-by-server-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: "Server's UUID"
           required: true
@@ -5460,15 +5681,23 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, type: { type: string }, created_at: { type: string }, updated_at: { type: string }, status: { type: string } }
+                  properties:
+                    {
+                      id: { type: integer },
+                      uuid: { type: string },
+                      name: { type: string },
+                      type: { type: string },
+                      created_at: { type: string },
+                      updated_at: { type: string },
+                      status: { type: string },
+                    }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/servers/{uuid}/domains':
     get:
       tags:
@@ -5477,8 +5706,7 @@ paths:
       description: 'Get domains by server.'
       operationId: get-domains-by-server-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: "Server's UUID"
           required: true
@@ -5492,15 +5720,15 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { ip: { type: string }, domains: { type: array, items: { type: string } } }
+                  properties:
+                    { ip: { type: string }, domains: { type: array, items: { type: string } } }
                   type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/servers/{uuid}/validate':
     get:
       tags:
@@ -5509,8 +5737,7 @@ paths:
       description: 'Validate server by UUID.'
       operationId: validate-server-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Server UUID'
           required: true
@@ -5534,8 +5761,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /services:
     get:
       tags:
@@ -5557,8 +5783,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Services
@@ -5579,7 +5804,95 @@ paths:
                 type:
                   description: 'The one-click service type'
                   type: string
-                  enum: [activepieces, appsmith, appwrite, authentik, babybuddy, budge, changedetection, chatwoot, classicpress-with-mariadb, classicpress-with-mysql, classicpress-without-database, cloudflared, code-server, dashboard, directus, directus-with-postgresql, docker-registry, docuseal, docuseal-with-postgres, dokuwiki, duplicati, emby, embystat, fider, filebrowser, firefly, formbricks, ghost, gitea, gitea-with-mariadb, gitea-with-mysql, gitea-with-postgresql, glance, glances, glitchtip, grafana, grafana-with-postgresql, grocy, heimdall, homepage, jellyfin, kuzzle, listmonk, logto, mediawiki, meilisearch, metabase, metube, minio, moodle, n8n, n8n-with-postgresql, next-image-transformation, nextcloud, nocodb, odoo, openblocks, pairdrop, penpot, phpmyadmin, pocketbase, posthog, reactive-resume, rocketchat, shlink, slash, snapdrop, statusnook, stirling-pdf, supabase, syncthing, tolgee, trigger, trigger-with-external-database, twenty, umami, unleash-with-postgresql, unleash-without-database, uptime-kuma, vaultwarden, vikunja, weblate, whoogle, wordpress-with-mariadb, wordpress-with-mysql, wordpress-without-database]
+                  enum:
+                    [
+                      activepieces,
+                      appsmith,
+                      appwrite,
+                      authentik,
+                      babybuddy,
+                      budge,
+                      changedetection,
+                      chatwoot,
+                      classicpress-with-mariadb,
+                      classicpress-with-mysql,
+                      classicpress-without-database,
+                      cloudflared,
+                      code-server,
+                      dashboard,
+                      directus,
+                      directus-with-postgresql,
+                      docker-registry,
+                      docuseal,
+                      docuseal-with-postgres,
+                      dokuwiki,
+                      duplicati,
+                      emby,
+                      embystat,
+                      fider,
+                      filebrowser,
+                      firefly,
+                      formbricks,
+                      ghost,
+                      gitea,
+                      gitea-with-mariadb,
+                      gitea-with-mysql,
+                      gitea-with-postgresql,
+                      glance,
+                      glances,
+                      glitchtip,
+                      grafana,
+                      grafana-with-postgresql,
+                      grocy,
+                      heimdall,
+                      homepage,
+                      jellyfin,
+                      kuzzle,
+                      listmonk,
+                      logto,
+                      mediawiki,
+                      meilisearch,
+                      metabase,
+                      metube,
+                      minio,
+                      moodle,
+                      n8n,
+                      n8n-with-postgresql,
+                      next-image-transformation,
+                      nextcloud,
+                      nocodb,
+                      odoo,
+                      openblocks,
+                      pairdrop,
+                      penpot,
+                      phpmyadmin,
+                      pocketbase,
+                      posthog,
+                      reactive-resume,
+                      rocketchat,
+                      shlink,
+                      slash,
+                      snapdrop,
+                      statusnook,
+                      stirling-pdf,
+                      supabase,
+                      syncthing,
+                      tolgee,
+                      trigger,
+                      trigger-with-external-database,
+                      twenty,
+                      umami,
+                      unleash-with-postgresql,
+                      unleash-without-database,
+                      uptime-kuma,
+                      vaultwarden,
+                      vikunja,
+                      weblate,
+                      whoogle,
+                      wordpress-with-mariadb,
+                      wordpress-with-mysql,
+                      wordpress-without-database,
+                    ]
                 name:
                   type: string
                   maxLength: 255
@@ -5628,8 +5941,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}':
     get:
       tags:
@@ -5638,8 +5950,7 @@ paths:
       description: 'Get service by UUID.'
       operationId: get-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Service UUID'
           required: true
@@ -5659,8 +5970,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     delete:
       tags:
         - Services
@@ -5668,39 +5978,34 @@ paths:
       description: 'Delete service by UUID.'
       operationId: delete-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'Service UUID'
           required: true
           schema:
             type: string
-        -
-          name: delete_configurations
+        - name: delete_configurations
           in: query
           description: 'Delete configurations.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_volumes
+        - name: delete_volumes
           in: query
           description: 'Delete volumes.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: docker_cleanup
+        - name: docker_cleanup
           in: query
           description: 'Run docker cleanup.'
           required: false
           schema:
             type: boolean
             default: true
-        -
-          name: delete_connected_networks
+        - name: delete_connected_networks
           in: query
           description: 'Delete connected networks.'
           required: false
@@ -5723,8 +6028,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Services
@@ -5732,8 +6036,7 @@ paths:
       description: 'Update service by UUID.'
       operationId: update-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -5798,8 +6101,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/envs':
     get:
       tags:
@@ -5808,8 +6110,7 @@ paths:
       description: 'List all envs by service UUID.'
       operationId: list-envs-by-service-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -5832,8 +6133,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     post:
       tags:
         - Services
@@ -5841,8 +6141,7 @@ paths:
       description: 'Create env by service UUID.'
       operationId: create-env-by-service-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -5893,8 +6192,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
     patch:
       tags:
         - Services
@@ -5902,8 +6200,7 @@ paths:
       description: 'Update env by service UUID.'
       operationId: update-env-by-service-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -5957,8 +6254,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/envs/bulk':
     patch:
       tags:
@@ -5967,8 +6263,7 @@ paths:
       description: 'Update multiple envs by service UUID.'
       operationId: update-envs-by-service-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -5986,7 +6281,37 @@ paths:
               properties:
                 data:
                   type: array
-                  items: { properties: { key: { type: string, description: 'The key of the environment variable.' }, value: { type: string, description: 'The value of the environment variable.' }, is_preview: { type: boolean, description: 'The flag to indicate if the environment variable is used in preview deployments.' }, is_literal: { type: boolean, description: 'The flag to indicate if the environment variable is a literal, nothing espaced.' }, is_multiline: { type: boolean, description: 'The flag to indicate if the environment variable is multiline.' }, is_shown_once: { type: boolean, description: "The flag to indicate if the environment variable's value is shown on the UI." } }, type: object }
+                  items:
+                    {
+                      properties:
+                        {
+                          key:
+                            { type: string, description: 'The key of the environment variable.' },
+                          value:
+                            { type: string, description: 'The value of the environment variable.' },
+                          is_preview:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is used in preview deployments.',
+                            },
+                          is_literal:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is a literal, nothing espaced.',
+                            },
+                          is_multiline:
+                            {
+                              type: boolean,
+                              description: 'The flag to indicate if the environment variable is multiline.',
+                            },
+                          is_shown_once:
+                            {
+                              type: boolean,
+                              description: "The flag to indicate if the environment variable's value is shown on the UI.",
+                            },
+                        },
+                      type: object,
+                    }
               type: object
       responses:
         '201':
@@ -6006,8 +6331,7 @@ paths:
         '422':
           $ref: '#/components/responses/422'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/envs/{env_uuid}':
     delete:
       tags:
@@ -6016,16 +6340,14 @@ paths:
       description: 'Delete env by UUID.'
       operationId: delete-env-by-service-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: env_uuid
+        - name: env_uuid
           in: path
           description: 'UUID of the environment variable.'
           required: true
@@ -6048,8 +6370,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/start':
     get:
       tags:
@@ -6058,8 +6379,7 @@ paths:
       description: 'Start service. `Post` request is also accepted.'
       operationId: start-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -6082,8 +6402,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/stop':
     get:
       tags:
@@ -6092,8 +6411,7 @@ paths:
       description: 'Stop service. `Post` request is also accepted.'
       operationId: stop-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
@@ -6116,8 +6434,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/services/{uuid}/restart':
     get:
       tags:
@@ -6126,16 +6443,14 @@ paths:
       description: 'Restart service. `Post` request is also accepted.'
       operationId: restart-service-by-uuid
       parameters:
-        -
-          name: uuid
+        - name: uuid
           in: path
           description: 'UUID of the service.'
           required: true
           schema:
             type: string
             format: uuid
-        -
-          name: latest
+        - name: latest
           in: query
           description: 'Pull latest images.'
           schema:
@@ -6157,8 +6472,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /teams:
     get:
       tags:
@@ -6180,8 +6494,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/teams/{id}':
     get:
       tags:
@@ -6190,8 +6503,7 @@ paths:
       description: 'Get team by TeamId.'
       operationId: get-team-by-id
       parameters:
-        -
-          name: id
+        - name: id
           in: path
           description: 'Team ID'
           required: true
@@ -6211,8 +6523,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   '/teams/{id}/members':
     get:
       tags:
@@ -6221,8 +6532,7 @@ paths:
       description: 'Get members by TeamId.'
       operationId: get-members-by-team-id
       parameters:
-        -
-          name: id
+        - name: id
           in: path
           description: 'Team ID'
           required: true
@@ -6244,8 +6554,7 @@ paths:
         '404':
           $ref: '#/components/responses/404'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /teams/current:
     get:
       tags:
@@ -6265,8 +6574,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
   /teams/current/members:
     get:
       tags:
@@ -6288,8 +6596,7 @@ paths:
         '400':
           $ref: '#/components/responses/400'
       security:
-        -
-          bearerAuth: []
+        - bearerAuth: []
 components:
   schemas:
     Application:
@@ -7070,39 +7377,27 @@ components:
       description: 'Go to `Keys & Tokens` / `API tokens` and create a new token. Use the token as the bearer token.'
       scheme: bearer
 tags:
-  -
-    name: Applications
+  - name: Applications
     description: Applications
-  -
-    name: 'Cloud Tokens'
+  - name: 'Cloud Tokens'
     description: 'Cloud Tokens'
-  -
-    name: Databases
+  - name: Databases
     description: Databases
-  -
-    name: Deployments
+  - name: Deployments
     description: Deployments
-  -
-    name: 'GitHub Apps'
+  - name: 'GitHub Apps'
     description: 'GitHub Apps'
-  -
-    name: Hetzner
+  - name: Hetzner
     description: Hetzner
-  -
-    name: Projects
+  - name: Projects
     description: Projects
-  -
-    name: Resources
+  - name: Resources
     description: Resources
-  -
-    name: 'Private Keys'
+  - name: 'Private Keys'
     description: 'Private Keys'
-  -
-    name: Servers
+  - name: Servers
     description: Servers
-  -
-    name: Services
+  - name: Services
     description: Services
-  -
-    name: Teams
+  - name: Teams
     description: Teams
