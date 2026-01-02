@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -658,6 +658,106 @@ export class CoolifyMcpServer extends McpServer {
       'List deployments for an application',
       { uuid: z.string().describe('Application UUID') },
       async ({ uuid }) => wrapHandler(() => this.client.listApplicationDeployments(uuid)),
+    );
+
+    this.tool(
+      'cancel_deployment',
+      'Cancel a running deployment',
+      { uuid: z.string().describe('Deployment UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.cancelDeployment(uuid)),
+    );
+
+    // =========================================================================
+    // Private Keys (5 tools)
+    // =========================================================================
+    this.tool(
+      'list_private_keys',
+      'List all private keys (SSH keys for deployments)',
+      {},
+      async () => wrapHandler(() => this.client.listPrivateKeys()),
+    );
+
+    this.tool(
+      'get_private_key',
+      'Get private key details',
+      { uuid: z.string().describe('Private key UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.getPrivateKey(uuid)),
+    );
+
+    this.tool(
+      'create_private_key',
+      'Create a new private key for deployments',
+      {
+        private_key: z.string().describe('The private key content (PEM format)'),
+        name: z.string().optional().describe('Name for the key'),
+        description: z.string().optional().describe('Description'),
+      },
+      async (args) => wrapHandler(() => this.client.createPrivateKey(args)),
+    );
+
+    this.tool(
+      'update_private_key',
+      'Update a private key',
+      {
+        uuid: z.string().describe('Private key UUID'),
+        name: z.string().optional().describe('Name for the key'),
+        description: z.string().optional().describe('Description'),
+        private_key: z.string().optional().describe('The private key content (PEM format)'),
+      },
+      async ({ uuid, ...data }) => wrapHandler(() => this.client.updatePrivateKey(uuid, data)),
+    );
+
+    this.tool(
+      'delete_private_key',
+      'Delete a private key',
+      { uuid: z.string().describe('Private key UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.deletePrivateKey(uuid)),
+    );
+
+    // =========================================================================
+    // Database Backups (4 tools)
+    // =========================================================================
+    this.tool(
+      'list_database_backups',
+      'List scheduled backups for a database',
+      { uuid: z.string().describe('Database UUID') },
+      async ({ uuid }) => wrapHandler(() => this.client.listDatabaseBackups(uuid)),
+    );
+
+    this.tool(
+      'get_database_backup',
+      'Get details of a scheduled backup',
+      {
+        database_uuid: z.string().describe('Database UUID'),
+        backup_uuid: z.string().describe('Scheduled backup UUID'),
+      },
+      async ({ database_uuid, backup_uuid }) =>
+        wrapHandler(() => this.client.getDatabaseBackup(database_uuid, backup_uuid)),
+    );
+
+    this.tool(
+      'list_backup_executions',
+      'List execution history for a scheduled backup',
+      {
+        database_uuid: z.string().describe('Database UUID'),
+        backup_uuid: z.string().describe('Scheduled backup UUID'),
+      },
+      async ({ database_uuid, backup_uuid }) =>
+        wrapHandler(() => this.client.listBackupExecutions(database_uuid, backup_uuid)),
+    );
+
+    this.tool(
+      'get_backup_execution',
+      'Get details of a specific backup execution',
+      {
+        database_uuid: z.string().describe('Database UUID'),
+        backup_uuid: z.string().describe('Scheduled backup UUID'),
+        execution_uuid: z.string().describe('Backup execution UUID'),
+      },
+      async ({ database_uuid, backup_uuid, execution_uuid }) =>
+        wrapHandler(() =>
+          this.client.getBackupExecution(database_uuid, backup_uuid, execution_uuid),
+        ),
     );
   }
 }

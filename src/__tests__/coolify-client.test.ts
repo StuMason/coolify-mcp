@@ -1108,20 +1108,42 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('should create a database backup', async () => {
-      mockFetch.mockResolvedValueOnce(
-        mockResponse({ uuid: 'new-backup-uuid', message: 'Backup created' }),
-      );
+    it('should get a database backup', async () => {
+      const mockBackup = { uuid: 'backup-uuid', enabled: true, frequency: '0 0 * * *' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockBackup));
 
-      const result = await client.createDatabaseBackup('db-uuid', {
-        frequency: 'daily',
-        backup_retention: 7,
-      });
+      const result = await client.getDatabaseBackup('db-uuid', 'backup-uuid');
 
-      expect(result).toEqual({ uuid: 'new-backup-uuid', message: 'Backup created' });
+      expect(result).toEqual(mockBackup);
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/v1/databases/db-uuid/backups',
-        expect.objectContaining({ method: 'POST' }),
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid',
+        expect.any(Object),
+      );
+    });
+
+    it('should list backup executions', async () => {
+      const mockExecutions = [{ uuid: 'exec-uuid', status: 'success' }];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockExecutions));
+
+      const result = await client.listBackupExecutions('db-uuid', 'backup-uuid');
+
+      expect(result).toEqual(mockExecutions);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid/executions',
+        expect.any(Object),
+      );
+    });
+
+    it('should get a backup execution', async () => {
+      const mockExecution = { uuid: 'exec-uuid', status: 'success', size: 1024 };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockExecution));
+
+      const result = await client.getBackupExecution('db-uuid', 'backup-uuid', 'exec-uuid');
+
+      expect(result).toEqual(mockExecution);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid/executions/exec-uuid',
+        expect.any(Object),
       );
     });
   });
@@ -1549,6 +1571,105 @@ describe('CoolifyClient', () => {
         'http://localhost:3000/api/v1/deploy?tag=my-tag&force=false',
         expect.any(Object),
       );
+    });
+  });
+
+  // ===========================================================================
+  // Database Backup Tests
+  // ===========================================================================
+  describe('Database Backups', () => {
+    const mockBackups = [
+      {
+        id: 1,
+        uuid: 'backup-uuid-1',
+        database_id: 1,
+        database_type: 'postgresql',
+        database_uuid: 'db-uuid',
+        enabled: true,
+        frequency: '0 0 * * *',
+        save_s3: false,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+    ];
+
+    const mockExecutions = [
+      {
+        id: 1,
+        uuid: 'exec-uuid-1',
+        scheduled_database_backup_id: 1,
+        status: 'success',
+        message: 'Backup completed',
+        size: 1024,
+        filename: 'backup-20240101.sql',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+    ];
+
+    it('should list database backups', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockBackups));
+
+      const result = await client.listDatabaseBackups('db-uuid');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups',
+        expect.any(Object),
+      );
+      expect(result).toEqual(mockBackups);
+    });
+
+    it('should get a specific database backup', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockBackups[0]));
+
+      const result = await client.getDatabaseBackup('db-uuid', 'backup-uuid-1');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid-1',
+        expect.any(Object),
+      );
+      expect(result).toEqual(mockBackups[0]);
+    });
+
+    it('should list backup executions', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockExecutions));
+
+      const result = await client.listBackupExecutions('db-uuid', 'backup-uuid-1');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid-1/executions',
+        expect.any(Object),
+      );
+      expect(result).toEqual(mockExecutions);
+    });
+
+    it('should get a specific backup execution', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockExecutions[0]));
+
+      const result = await client.getBackupExecution('db-uuid', 'backup-uuid-1', 'exec-uuid-1');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid-1/executions/exec-uuid-1',
+        expect.any(Object),
+      );
+      expect(result).toEqual(mockExecutions[0]);
+    });
+  });
+
+  // ===========================================================================
+  // Deployment Control Tests
+  // ===========================================================================
+  describe('Deployment Control', () => {
+    it('should cancel a deployment', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployment cancelled' }));
+
+      const result = await client.cancelDeployment('deploy-uuid');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deployments/deploy-uuid/cancel',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(result).toEqual({ message: 'Deployment cancelled' });
     });
   });
 });

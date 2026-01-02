@@ -6,7 +6,7 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides 47 tools focused on **debugging, management, and deployment**:
+This MCP server provides **58 tools** focused on **debugging, management, and deployment**:
 
 | Category           | Tools                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -15,9 +15,10 @@ This MCP server provides 47 tools focused on **debugging, management, and deploy
 | **Projects**       | list, get, create, update, delete                                                                        |
 | **Environments**   | list, get, create, delete                                                                                |
 | **Applications**   | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
-| **Databases**      | list, get, start, stop, restart                                                                          |
+| **Databases**      | list, get, start, stop, restart, backups (list, get), backup executions (list, get)                      |
 | **Services**       | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
-| **Deployments**    | list, get, deploy, list by application                                                                   |
+| **Deployments**    | list, get, deploy, cancel, list by application                                                           |
+| **Private Keys**   | list, get, create, update, delete                                                                        |
 
 ## Installation
 
@@ -222,6 +223,10 @@ node dist/index.js
 - `start_database` - Start a database
 - `stop_database` - Stop a database
 - `restart_database` - Restart a database
+- `list_database_backups` - List scheduled backups for a database
+- `get_database_backup` - Get details of a scheduled backup
+- `list_backup_executions` - List execution history for a scheduled backup
+- `get_backup_execution` - Get details of a specific backup execution
 
 ### Services
 
@@ -242,7 +247,16 @@ node dist/index.js
 - `list_deployments` - List running deployments (returns summary)
 - `get_deployment` - Get deployment details
 - `deploy` - Deploy by tag or UUID
+- `cancel_deployment` - Cancel a running deployment
 - `list_application_deployments` - List deployments for an application
+
+### Private Keys
+
+- `list_private_keys` - List all private keys (SSH keys for deployments)
+- `get_private_key` - Get private key details
+- `create_private_key` - Create a new private key for deployments
+- `update_private_key` - Update a private key
+- `delete_private_key` - Delete a private key
 
 ## Contributing
 

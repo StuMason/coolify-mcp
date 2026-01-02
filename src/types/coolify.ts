@@ -568,6 +568,18 @@ export interface CreateDatabaseBackupRequest {
   backup_retention_days?: number;
 }
 
+export interface BackupExecution {
+  id: number;
+  uuid: string;
+  scheduled_database_backup_id: number;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  message?: string;
+  size?: number;
+  filename?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // =============================================================================
 // Service Types
 // =============================================================================
@@ -766,6 +778,7 @@ export interface CloudTokenValidation {
   valid: boolean;
   message: string;
 }
+
 
 // =============================================================================
 // Version/Health Types
