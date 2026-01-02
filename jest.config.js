@@ -15,4 +15,20 @@ export default {
   },
   extensionsToTreatAsEsm: ['.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '\\.d\\.ts$'],
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/lib/**/*.ts',
+    '!src/lib/mcp-server.ts', // MCP SDK wrapper - tested via integration
+    '!src/**/*.d.ts',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'text-summary', 'lcov'],
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      branches: 80,
+      functions: 80,
+      lines: 80,
+    },
+  },
 };

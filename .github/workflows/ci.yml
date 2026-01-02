@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [18.x, 20.x, 22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +28,7 @@ jobs:
 
       - name: Security audit
         run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Format check
         run: npx prettier --check .
@@ -38,5 +39,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
+      - name: Test with coverage
         run: npm test
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false

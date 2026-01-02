@@ -1,0 +1,50 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            This is an MCP (Model Context Protocol) server for the Coolify API. Focus on:
+
+            **Critical Issues:**
+            - Security vulnerabilities (exposed tokens, injection attacks, unsafe data handling)
+            - Breaking changes to the MCP tool interface
+            - Bugs that would cause runtime errors
+
+            **Code Quality:**
+            - TypeScript type safety - ensure proper typing, avoid `any`
+            - Error handling - all API calls should have proper error handling
+            - Consistency with existing patterns in coolify-client.ts and mcp-server.ts
+
+            **Testing:**
+            - New functionality should have corresponding tests
+            - Tests should cover edge cases and error conditions
+
+            Keep feedback concise and actionable. Skip minor style issues that Prettier/ESLint will catch.
+
+            Use `gh pr comment` to post your review. If no critical issues, say "✅ LGTM - No critical issues found."
+
+          claude_args: '--allowed-tools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"'

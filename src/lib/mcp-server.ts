@@ -224,7 +224,9 @@ export class CoolifyMcpServer extends McpServer {
         summary: z
           .boolean()
           .optional()
-          .describe('Return summary (uuid, name, status, fqdn, git_repository) instead of full details'),
+          .describe(
+            'Return summary (uuid, name, status, fqdn, git_repository) instead of full details',
+          ),
       },
       async ({ page, per_page, summary }) =>
         wrapHandler(() => this.client.listApplications({ page, per_page, summary })),
@@ -527,7 +529,9 @@ export class CoolifyMcpServer extends McpServer {
         summary: z
           .boolean()
           .optional()
-          .describe('Return summary (uuid, deployment_uuid, application_name, status) instead of full details'),
+          .describe(
+            'Return summary (uuid, deployment_uuid, application_name, status) instead of full details',
+          ),
       },
       async ({ page, per_page, summary }) =>
         wrapHandler(() => this.client.listDeployments({ page, per_page, summary })),
