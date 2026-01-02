@@ -350,6 +350,9 @@ export interface UpdateApplicationRequest {
   limits_memory?: string;
   limits_memory_swap?: string;
   limits_cpus?: string;
+  is_http_basic_auth_enabled?: boolean;
+  http_basic_auth_username?: string;
+  http_basic_auth_password?: string;
 }
 
 export interface ApplicationActionResponse {
