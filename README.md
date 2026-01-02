@@ -6,17 +6,18 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides 46 tools focused on **debugging, management, and deployment**:
+This MCP server provides 47 tools focused on **debugging, management, and deployment**:
 
-| Category         | Tools                                                                                                    |
-| ---------------- | -------------------------------------------------------------------------------------------------------- |
-| **Servers**      | list, get, validate, resources, domains                                                                  |
-| **Projects**     | list, get, create, update, delete                                                                        |
-| **Environments** | list, get, create, delete                                                                                |
-| **Applications** | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
-| **Databases**    | list, get, start, stop, restart                                                                          |
-| **Services**     | list, get, start, stop, restart, env vars (list, create, delete)                                         |
-| **Deployments**  | list, get, deploy, list by application                                                                   |
+| Category           | Tools                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Infrastructure** | overview (all resources at once)                                                                         |
+| **Servers**        | list, get, validate, resources, domains                                                                  |
+| **Projects**       | list, get, create, update, delete                                                                        |
+| **Environments**   | list, get, create, delete                                                                                |
+| **Applications**   | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
+| **Databases**      | list, get, start, stop, restart                                                                          |
+| **Services**       | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
+| **Deployments**    | list, get, deploy, list by application                                                                   |
 
 ## Installation
 
@@ -62,34 +63,64 @@ claude mcp add coolify \
 env COOLIFY_ACCESS_TOKEN=your-api-token COOLIFY_BASE_URL=https://your-coolify-instance.com npx -y @masonator/coolify-mcp
 ```
 
-## Pagination & Summary Mode
+## Context-Optimized Responses
 
-All list endpoints support optional pagination and summary mode to reduce response size:
+### Why This Matters
+
+The Coolify API returns extremely verbose responses - a single application can contain 91 fields including embedded 3KB server objects and 47KB docker-compose files. When listing 20+ applications, responses can exceed 200KB, which quickly exhausts the context window of AI assistants like Claude Desktop.
+
+**This MCP server solves this by returning optimized summaries by default.**
+
+### How It Works
+
+| Tool Type                     | Returns                                  | Use Case                            |
+| ----------------------------- | ---------------------------------------- | ----------------------------------- |
+| `list_*`                      | Summaries only (uuid, name, status, etc) | Discovery, finding resources        |
+| `get_*`                       | Full details for a single resource       | Deep inspection, debugging          |
+| `get_infrastructure_overview` | All resources summarized in one call     | Start here to understand your setup |
+
+### Response Size Comparison
+
+| Endpoint          | Full Response | Summary Response | Reduction |
+| ----------------- | ------------- | ---------------- | --------- |
+| list_applications | ~170KB        | ~4.4KB           | **97%**   |
+| list_services     | ~367KB        | ~1.2KB           | **99%**   |
+| list_servers      | ~4KB          | ~0.4KB           | **90%**   |
+
+### Recommended Workflow
+
+1. **Start with overview**: `get_infrastructure_overview` - see everything at once
+2. **Find your target**: `list_applications` - get UUIDs of what you need
+3. **Dive deep**: `get_application(uuid)` - full details for one resource
+4. **Take action**: `restart_application(uuid)`, `get_application_logs(uuid)`, etc.
+
+### Pagination
+
+All list endpoints still support optional pagination for very large deployments:
 
 ```bash
-# Pagination - get page 2 with 10 items per page
+# Get page 2 with 10 items per page
 list_applications(page=2, per_page=10)
-
-# Summary mode - returns only essential fields (uuid, name, status, etc.)
-list_applications(summary=true)
-
-# Combine both for optimal performance
-list_servers(page=1, per_page=20, summary=true)
 ```
 
-**Summary mode reduces response size by ~90%** - perfect for getting an overview before requesting full details on specific items.
-
 ## Example Prompts
+
+### Getting Started
+
+```
+Give me an overview of my infrastructure
+Show me all my applications
+What's running on my servers?
+```
 
 ### Debugging & Monitoring
 
 ```
-Show me all servers and their status
-What resources are running on server {uuid}?
 Get the logs for application {uuid}
+What's the status of application {uuid}?
 What environment variables are set for application {uuid}?
 Show me recent deployments for application {uuid}
-List all applications in summary mode
+What resources are running on server {uuid}?
 ```
 
 ### Application Management
@@ -139,10 +170,14 @@ node dist/index.js
 
 ## Available Tools
 
-### Servers
+### Infrastructure
 
 - `get_version` - Get Coolify API version
-- `list_servers` - List all servers
+- `get_infrastructure_overview` - Get a high-level overview of all infrastructure (servers, projects, applications, databases, services)
+
+### Servers
+
+- `list_servers` - List all servers (returns summary)
 - `get_server` - Get server details
 - `get_server_resources` - Get resources running on a server
 - `get_server_domains` - Get domains configured on a server
@@ -150,7 +185,7 @@ node dist/index.js
 
 ### Projects
 
-- `list_projects` - List all projects
+- `list_projects` - List all projects (returns summary)
 - `get_project` - Get project details
 - `create_project` - Create a new project
 - `update_project` - Update a project
@@ -165,7 +200,7 @@ node dist/index.js
 
 ### Applications
 
-- `list_applications` - List all applications
+- `list_applications` - List all applications (returns summary)
 - `get_application` - Get application details
 - `create_application_private_gh` - Create app from private GitHub repo (GitHub App)
 - `create_application_private_key` - Create app from private repo using deploy key
@@ -182,7 +217,7 @@ node dist/index.js
 
 ### Databases
 
-- `list_databases` - List all databases
+- `list_databases` - List all databases (returns summary)
 - `get_database` - Get database details
 - `start_database` - Start a database
 - `stop_database` - Stop a database
@@ -190,8 +225,11 @@ node dist/index.js
 
 ### Services
 
-- `list_services` - List all services
+- `list_services` - List all services (returns summary)
 - `get_service` - Get service details
+- `create_service` - Create a one-click service (e.g., pocketbase, mysql, redis, wordpress)
+- `update_service` - Update a service
+- `delete_service` - Delete a service
 - `start_service` - Start a service
 - `stop_service` - Stop a service
 - `restart_service` - Restart a service
@@ -201,7 +239,7 @@ node dist/index.js
 
 ### Deployments
 
-- `list_deployments` - List running deployments
+- `list_deployments` - List running deployments (returns summary)
 - `get_deployment` - Get deployment details
 - `deploy` - Deploy by tag or UUID
 - `list_application_deployments` - List deployments for an application
