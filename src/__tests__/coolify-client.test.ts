@@ -294,6 +294,33 @@ describe('CoolifyClient', () => {
         }),
       );
     });
+
+    it('should create a service with docker_compose_raw instead of type', async () => {
+      const responseData = {
+        uuid: 'compose-uuid',
+        domains: ['custom.example.com'],
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+      const createData: CreateServiceRequest = {
+        name: 'custom-compose-service',
+        project_uuid: 'project-uuid',
+        environment_uuid: 'env-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: 'dmVyc2lvbjogIjMiCnNlcnZpY2VzOgogIGFwcDoKICAgIGltYWdlOiBuZ2lueA==',
+      };
+
+      const result = await client.createService(createData);
+
+      expect(result).toEqual(responseData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify(createData),
+        }),
+      );
+    });
   });
 
   describe('deleteService', () => {
@@ -321,6 +348,24 @@ describe('CoolifyClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid?delete_volumes=true&docker_cleanup=true',
+        expect.objectContaining({
+          method: 'DELETE',
+        }),
+      );
+    });
+
+    it('should delete a service with all options', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Service deleted' }));
+
+      await client.deleteService('test-uuid', {
+        deleteConfigurations: true,
+        deleteVolumes: true,
+        dockerCleanup: true,
+        deleteConnectedNetworks: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/test-uuid?delete_configurations=true&delete_volumes=true&docker_cleanup=true&delete_connected_networks=true',
         expect.objectContaining({
           method: 'DELETE',
         }),

@@ -601,7 +601,7 @@ export interface Service {
 }
 
 export interface CreateServiceRequest {
-  type: ServiceType;
+  type?: ServiceType;
   name?: string;
   description?: string;
   project_uuid: string;
@@ -610,6 +610,7 @@ export interface CreateServiceRequest {
   server_uuid: string;
   destination_uuid?: string;
   instant_deploy?: boolean;
+  docker_compose_raw?: string; // Base64 encoded docker-compose YAML (alternative to type)
 }
 
 /**
