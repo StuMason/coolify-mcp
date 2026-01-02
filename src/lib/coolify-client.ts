@@ -315,7 +315,7 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const servers = await this.request<Server[]>(`/servers${query}`);
-    return options?.summary ? servers.map(toServerSummary) : servers;
+    return options?.summary && Array.isArray(servers) ? servers.map(toServerSummary) : servers;
   }
 
   async getServer(uuid: string): Promise<Server> {
@@ -364,7 +364,7 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const projects = await this.request<Project[]>(`/projects${query}`);
-    return options?.summary ? projects.map(toProjectSummary) : projects;
+    return options?.summary && Array.isArray(projects) ? projects.map(toProjectSummary) : projects;
   }
 
   async getProject(uuid: string): Promise<Project> {
@@ -432,7 +432,7 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const apps = await this.request<Application[]>(`/applications${query}`);
-    return options?.summary ? apps.map(toApplicationSummary) : apps;
+    return options?.summary && Array.isArray(apps) ? apps.map(toApplicationSummary) : apps;
   }
 
   async getApplication(uuid: string): Promise<Application> {
@@ -585,7 +585,7 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const dbs = await this.request<Database[]>(`/databases${query}`);
-    return options?.summary ? dbs.map(toDatabaseSummary) : dbs;
+    return options?.summary && Array.isArray(dbs) ? dbs.map(toDatabaseSummary) : dbs;
   }
 
   async getDatabase(uuid: string): Promise<Database> {
@@ -657,7 +657,7 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const services = await this.request<Service[]>(`/services${query}`);
-    return options?.summary ? services.map(toServiceSummary) : services;
+    return options?.summary && Array.isArray(services) ? services.map(toServiceSummary) : services;
   }
 
   async getService(uuid: string): Promise<Service> {
@@ -746,7 +746,9 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const deployments = await this.request<Deployment[]>(`/deployments${query}`);
-    return options?.summary ? deployments.map(toDeploymentSummary) : deployments;
+    return options?.summary && Array.isArray(deployments)
+      ? deployments.map(toDeploymentSummary)
+      : deployments;
   }
 
   async getDeployment(uuid: string): Promise<Deployment> {
