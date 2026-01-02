@@ -66,6 +66,71 @@ import type {
   Version,
 } from '../types/coolify.js';
 
+// =============================================================================
+// List Options & Summary Types
+// =============================================================================
+
+export interface ListOptions {
+  page?: number;
+  per_page?: number;
+  summary?: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total?: number;
+  page?: number;
+  per_page?: number;
+}
+
+// Summary types - reduced versions for list endpoints
+export interface ServerSummary {
+  uuid: string;
+  name: string;
+  ip: string;
+  status?: string;
+  is_reachable?: boolean;
+}
+
+export interface ApplicationSummary {
+  uuid: string;
+  name: string;
+  status?: string;
+  fqdn?: string;
+  git_repository?: string;
+  git_branch?: string;
+}
+
+export interface DatabaseSummary {
+  uuid: string;
+  name: string;
+  type: string;
+  status: string;
+  is_public: boolean;
+}
+
+export interface ServiceSummary {
+  uuid: string;
+  name: string;
+  type: string;
+  status: string;
+  domains?: string[];
+}
+
+export interface DeploymentSummary {
+  uuid: string;
+  deployment_uuid: string;
+  application_name?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ProjectSummary {
+  uuid: string;
+  name: string;
+  description?: string;
+}
+
 /**
  * Remove undefined values and false booleans from an object.
  * Coolify API rejects requests with explicit false values for optional booleans.
@@ -78,6 +143,69 @@ function cleanRequestData<T extends object>(data: T): Partial<T> {
     }
   }
   return cleaned;
+}
+
+// =============================================================================
+// Summary Transformers - reduce full objects to essential fields
+// =============================================================================
+
+function toServerSummary(server: Server): ServerSummary {
+  return {
+    uuid: server.uuid,
+    name: server.name,
+    ip: server.ip,
+    status: server.status,
+    is_reachable: server.is_reachable,
+  };
+}
+
+function toApplicationSummary(app: Application): ApplicationSummary {
+  return {
+    uuid: app.uuid,
+    name: app.name,
+    status: app.status,
+    fqdn: app.fqdn,
+    git_repository: app.git_repository,
+    git_branch: app.git_branch,
+  };
+}
+
+function toDatabaseSummary(db: Database): DatabaseSummary {
+  return {
+    uuid: db.uuid,
+    name: db.name,
+    type: db.type,
+    status: db.status,
+    is_public: db.is_public,
+  };
+}
+
+function toServiceSummary(svc: Service): ServiceSummary {
+  return {
+    uuid: svc.uuid,
+    name: svc.name,
+    type: svc.type,
+    status: svc.status,
+    domains: svc.domains,
+  };
+}
+
+function toDeploymentSummary(dep: Deployment): DeploymentSummary {
+  return {
+    uuid: dep.uuid,
+    deployment_uuid: dep.deployment_uuid,
+    application_name: dep.application_name,
+    status: dep.status,
+    created_at: dep.created_at,
+  };
+}
+
+function toProjectSummary(proj: Project): ProjectSummary {
+  return {
+    uuid: proj.uuid,
+    name: proj.name,
+    description: proj.description,
+  };
 }
 
 /**
@@ -181,8 +309,13 @@ export class CoolifyClient {
   // Server endpoints
   // ===========================================================================
 
-  async listServers(): Promise<Server[]> {
-    return this.request<Server[]>('/servers');
+  async listServers(options?: ListOptions): Promise<Server[] | ServerSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const servers = await this.request<Server[]>(`/servers${query}`);
+    return options?.summary ? servers.map(toServerSummary) : servers;
   }
 
   async getServer(uuid: string): Promise<Server> {
@@ -225,8 +358,13 @@ export class CoolifyClient {
   // Project endpoints
   // ===========================================================================
 
-  async listProjects(): Promise<Project[]> {
-    return this.request<Project[]>('/projects');
+  async listProjects(options?: ListOptions): Promise<Project[] | ProjectSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const projects = await this.request<Project[]>(`/projects${query}`);
+    return options?.summary ? projects.map(toProjectSummary) : projects;
   }
 
   async getProject(uuid: string): Promise<Project> {
@@ -288,8 +426,13 @@ export class CoolifyClient {
   // Application endpoints
   // ===========================================================================
 
-  async listApplications(): Promise<Application[]> {
-    return this.request<Application[]>('/applications');
+  async listApplications(options?: ListOptions): Promise<Application[] | ApplicationSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const apps = await this.request<Application[]>(`/applications${query}`);
+    return options?.summary ? apps.map(toApplicationSummary) : apps;
   }
 
   async getApplication(uuid: string): Promise<Application> {
@@ -436,8 +579,13 @@ export class CoolifyClient {
   // Database endpoints
   // ===========================================================================
 
-  async listDatabases(): Promise<Database[]> {
-    return this.request<Database[]>('/databases');
+  async listDatabases(options?: ListOptions): Promise<Database[] | DatabaseSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const dbs = await this.request<Database[]>(`/databases${query}`);
+    return options?.summary ? dbs.map(toDatabaseSummary) : dbs;
   }
 
   async getDatabase(uuid: string): Promise<Database> {
@@ -503,8 +651,13 @@ export class CoolifyClient {
   // Service endpoints
   // ===========================================================================
 
-  async listServices(): Promise<Service[]> {
-    return this.request<Service[]>('/services');
+  async listServices(options?: ListOptions): Promise<Service[] | ServiceSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const services = await this.request<Service[]>(`/services${query}`);
+    return options?.summary ? services.map(toServiceSummary) : services;
   }
 
   async getService(uuid: string): Promise<Service> {
@@ -587,8 +740,13 @@ export class CoolifyClient {
   // Deployment endpoints
   // ===========================================================================
 
-  async listDeployments(): Promise<Deployment[]> {
-    return this.request<Deployment[]>('/deployments');
+  async listDeployments(options?: ListOptions): Promise<Deployment[] | DeploymentSummary[]> {
+    const query = this.buildQueryString({
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+    const deployments = await this.request<Deployment[]>(`/deployments${query}`);
+    return options?.summary ? deployments.map(toDeploymentSummary) : deployments;
   }
 
   async getDeployment(uuid: string): Promise<Deployment> {

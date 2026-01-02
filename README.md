@@ -62,6 +62,23 @@ claude mcp add coolify \
 env COOLIFY_ACCESS_TOKEN=your-api-token COOLIFY_BASE_URL=https://your-coolify-instance.com npx -y @masonator/coolify-mcp
 ```
 
+## Pagination & Summary Mode
+
+All list endpoints support optional pagination and summary mode to reduce response size:
+
+```bash
+# Pagination - get page 2 with 10 items per page
+list_applications(page=2, per_page=10)
+
+# Summary mode - returns only essential fields (uuid, name, status, etc.)
+list_applications(summary=true)
+
+# Combine both for optimal performance
+list_servers(page=1, per_page=20, summary=true)
+```
+
+**Summary mode reduces response size by ~90%** - perfect for getting an overview before requesting full details on specific items.
+
 ## Example Prompts
 
 ### Debugging & Monitoring
@@ -72,6 +89,7 @@ What resources are running on server {uuid}?
 Get the logs for application {uuid}
 What environment variables are set for application {uuid}?
 Show me recent deployments for application {uuid}
+List all applications in summary mode
 ```
 
 ### Application Management

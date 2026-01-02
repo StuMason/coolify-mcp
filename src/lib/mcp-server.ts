@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { CoolifyClient } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -74,8 +74,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Servers (5 tools)
     // =========================================================================
-    this.tool('list_servers', 'List all servers', {}, async () =>
-      wrapHandler(() => this.client.listServers()),
+    this.tool(
+      'list_servers',
+      'List all servers',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, name, ip, status) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listServers({ page, per_page, summary })),
     );
 
     this.tool(
@@ -109,8 +120,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Projects (5 tools)
     // =========================================================================
-    this.tool('list_projects', 'List all projects', {}, async () =>
-      wrapHandler(() => this.client.listProjects()),
+    this.tool(
+      'list_projects',
+      'List all projects',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, name, description) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listProjects({ page, per_page, summary })),
     );
 
     this.tool(
@@ -193,8 +215,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Applications (15 tools)
     // =========================================================================
-    this.tool('list_applications', 'List all applications', {}, async () =>
-      wrapHandler(() => this.client.listApplications()),
+    this.tool(
+      'list_applications',
+      'List all applications',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, name, status, fqdn, git_repository) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listApplications({ page, per_page, summary })),
     );
 
     this.tool(
@@ -346,8 +379,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Databases (5 tools)
     // =========================================================================
-    this.tool('list_databases', 'List all databases', {}, async () =>
-      wrapHandler(() => this.client.listDatabases()),
+    this.tool(
+      'list_databases',
+      'List all databases',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, name, type, status) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listDatabases({ page, per_page, summary })),
     );
 
     this.tool(
@@ -381,8 +425,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Services (9 tools)
     // =========================================================================
-    this.tool('list_services', 'List all services', {}, async () =>
-      wrapHandler(() => this.client.listServices()),
+    this.tool(
+      'list_services',
+      'List all services',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, name, type, status, domains) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listServices({ page, per_page, summary })),
     );
 
     this.tool(
@@ -463,8 +518,19 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Deployments (4 tools)
     // =========================================================================
-    this.tool('list_deployments', 'List running deployments', {}, async () =>
-      wrapHandler(() => this.client.listDeployments()),
+    this.tool(
+      'list_deployments',
+      'List running deployments',
+      {
+        page: z.number().optional().describe('Page number for pagination'),
+        per_page: z.number().optional().describe('Items per page (default: all)'),
+        summary: z
+          .boolean()
+          .optional()
+          .describe('Return summary (uuid, deployment_uuid, application_name, status) instead of full details'),
+      },
+      async ({ page, per_page, summary }) =>
+        wrapHandler(() => this.client.listDeployments({ page, per_page, summary })),
     );
 
     this.tool(
