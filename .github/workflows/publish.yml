@@ -9,7 +9,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Only run if the commit message contains a version bump or is a merge
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -47,11 +49,9 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: npm run build
 
-      - name: Publish to npm
+      - name: Publish to npm (provenance)
         if: steps.version.outputs.exists == 'false'
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
 
       - name: Skip publish (version exists)
         if: steps.version.outputs.exists == 'true'
