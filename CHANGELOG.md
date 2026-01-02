@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-01-02
+
+### Added
+
+- **Private Keys CRUD** - Full management of SSH deploy keys:
+
+  - `list_private_keys` - List all private keys
+  - `get_private_key` - Get private key details
+  - `create_private_key` - Create a new private key for deployments
+  - `update_private_key` - Update a private key
+  - `delete_private_key` - Delete a private key
+
+- **Database Backups** - Monitor and manage database backup schedules and executions:
+
+  - `list_database_backups` - List scheduled backups for a database
+  - `get_database_backup` - Get details of a scheduled backup
+  - `list_backup_executions` - List execution history for a scheduled backup
+  - `get_backup_execution` - Get details of a specific backup execution
+
+- **Deployment Control**:
+  - `cancel_deployment` - Cancel a running deployment
+
+### Changed
+
+- Total tool count increased from 47 to 58 tools
+- Updated to Coolify API v460 specification
+
 ## [0.6.0] - 2026-01-02
 
 ### Changed

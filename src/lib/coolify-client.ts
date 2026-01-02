@@ -42,7 +42,7 @@ import type {
   Database,
   UpdateDatabaseRequest,
   DatabaseBackup,
-  CreateDatabaseBackupRequest,
+  BackupExecution,
   // Service types
   Service,
   CreateServiceRequest,
@@ -132,13 +132,13 @@ export interface ProjectSummary {
 }
 
 /**
- * Remove undefined values and false booleans from an object.
- * Coolify API rejects requests with explicit false values for optional booleans.
+ * Remove undefined values from an object.
+ * Keeps explicit false values so features like HTTP Basic Auth can be disabled.
  */
 function cleanRequestData<T extends object>(data: T): Partial<T> {
   const cleaned: Partial<T> = {};
   for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined && value !== false) {
+    if (value !== undefined) {
       (cleaned as Record<string, unknown>)[key] = value;
     }
   }
@@ -630,24 +630,6 @@ export class CoolifyClient {
   }
 
   // ===========================================================================
-  // Database Backups
-  // ===========================================================================
-
-  async listDatabaseBackups(uuid: string): Promise<DatabaseBackup[]> {
-    return this.request<DatabaseBackup[]>(`/databases/${uuid}/backups`);
-  }
-
-  async createDatabaseBackup(
-    uuid: string,
-    data: CreateDatabaseBackupRequest,
-  ): Promise<UuidResponse & MessageResponse> {
-    return this.request<UuidResponse & MessageResponse>(`/databases/${uuid}/backups`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  // ===========================================================================
   // Service endpoints
   // ===========================================================================
 
@@ -856,5 +838,43 @@ export class CoolifyClient {
 
   async validateCloudToken(uuid: string): Promise<CloudTokenValidation> {
     return this.request<CloudTokenValidation>(`/cloud-tokens/${uuid}/validate`, { method: 'POST' });
+  }
+
+  // ===========================================================================
+  // Database Backup endpoints
+  // ===========================================================================
+
+  async listDatabaseBackups(databaseUuid: string): Promise<DatabaseBackup[]> {
+    return this.request<DatabaseBackup[]>(`/databases/${databaseUuid}/backups`);
+  }
+
+  async getDatabaseBackup(databaseUuid: string, backupUuid: string): Promise<DatabaseBackup> {
+    return this.request<DatabaseBackup>(`/databases/${databaseUuid}/backups/${backupUuid}`);
+  }
+
+  async listBackupExecutions(databaseUuid: string, backupUuid: string): Promise<BackupExecution[]> {
+    return this.request<BackupExecution[]>(
+      `/databases/${databaseUuid}/backups/${backupUuid}/executions`,
+    );
+  }
+
+  async getBackupExecution(
+    databaseUuid: string,
+    backupUuid: string,
+    executionUuid: string,
+  ): Promise<BackupExecution> {
+    return this.request<BackupExecution>(
+      `/databases/${databaseUuid}/backups/${backupUuid}/executions/${executionUuid}`,
+    );
+  }
+
+  // ===========================================================================
+  // Deployment Control endpoints
+  // ===========================================================================
+
+  async cancelDeployment(uuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/deployments/${uuid}/cancel`, {
+      method: 'POST',
+    });
   }
 }

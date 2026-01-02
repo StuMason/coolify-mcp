@@ -350,6 +350,9 @@ export interface UpdateApplicationRequest {
   limits_memory?: string;
   limits_memory_swap?: string;
   limits_cpus?: string;
+  is_http_basic_auth_enabled?: boolean;
+  http_basic_auth_username?: string;
+  http_basic_auth_password?: string;
 }
 
 export interface ApplicationActionResponse {
@@ -566,6 +569,18 @@ export interface CreateDatabaseBackupRequest {
   backup_now?: boolean;
   backup_retention?: number;
   backup_retention_days?: number;
+}
+
+export interface BackupExecution {
+  id: number;
+  uuid: string;
+  scheduled_database_backup_id: number;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  message?: string;
+  size?: number;
+  filename?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // =============================================================================
