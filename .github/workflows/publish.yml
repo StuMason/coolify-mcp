@@ -10,7 +10,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +52,37 @@ jobs:
       - name: Publish to npm (provenance)
         if: steps.version.outputs.exists == 'false'
         run: npm publish --access public --provenance
+
+      - name: Extract changelog for version
+        if: steps.version.outputs.exists == 'false'
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.current }}"
+          # Extract the section for this version from CHANGELOG.md
+          # Matches from ## [version] until the next ## [ or end of file
+          NOTES=$(awk "/^## \\[$VERSION\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+          # Handle multi-line output for GitHub Actions
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.current }}
+          name: v${{ steps.version.outputs.current }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+
+            📦 [View on npm](https://www.npmjs.com/package/@masonator/coolify-mcp/v/${{ steps.version.outputs.current }})
+          draft: false
+          prerelease: false
+          generate_release_notes: false
 
       - name: Skip publish (version exists)
         if: steps.version.outputs.exists == 'true'
