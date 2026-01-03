@@ -6,20 +6,21 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides **61 tools** focused on **debugging, management, and deployment**:
+This MCP server provides **65 tools** focused on **debugging, management, and deployment**:
 
-| Category           | Tools                                                                                                    |
-| ------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Infrastructure** | overview (all resources at once)                                                                         |
-| **Diagnostics**    | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                              |
-| **Servers**        | list, get, validate, resources, domains                                                                  |
-| **Projects**       | list, get, create, update, delete                                                                        |
-| **Environments**   | list, get, create, delete                                                                                |
-| **Applications**   | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
-| **Databases**      | list, get, start, stop, restart, backups (list, get), backup executions (list, get)                      |
-| **Services**       | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
-| **Deployments**    | list, get, deploy, cancel, list by application                                                           |
-| **Private Keys**   | list, get, create, update, delete                                                                        |
+| Category             | Tools                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Infrastructure**   | overview (all resources at once)                                                                         |
+| **Diagnostics**      | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                              |
+| **Batch Operations** | restart_project_apps, bulk_env_update, stop_all_apps, redeploy_project                                   |
+| **Servers**          | list, get, validate, resources, domains                                                                  |
+| **Projects**         | list, get, create, update, delete                                                                        |
+| **Environments**     | list, get, create, delete                                                                                |
+| **Applications**     | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
+| **Databases**        | list, get, start, stop, restart, backups (list, get), backup executions (list, get)                      |
+| **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
+| **Deployments**      | list, get, deploy, cancel, list by application                                                           |
+| **Private Keys**     | list, get, create, update, delete                                                                        |
 
 ## Installation
 
@@ -270,6 +271,15 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `create_private_key` - Create a new private key for deployments
 - `update_private_key` - Update a private key
 - `delete_private_key` - Delete a private key
+
+### Batch Operations
+
+Power user tools for operating on multiple resources at once:
+
+- `restart_project_apps` - Restart all applications in a project
+- `bulk_env_update` - Update or create an environment variable across multiple applications (upsert behavior)
+- `stop_all_apps` - Emergency stop all running applications (requires confirmation)
+- `redeploy_project` - Redeploy all applications in a project with force rebuild
 
 ## Contributing
 

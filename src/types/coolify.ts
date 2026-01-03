@@ -883,3 +883,17 @@ export interface InfrastructureIssuesReport {
   issues: InfrastructureIssue[];
   errors?: string[];
 }
+
+// =============================================================================
+// Batch Operation Types
+// =============================================================================
+
+export interface BatchOperationResult {
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+  succeeded: Array<{ uuid: string; name: string }>;
+  failed: Array<{ uuid: string; name: string; error: string }>;
+}

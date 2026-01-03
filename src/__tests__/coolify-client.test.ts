@@ -2362,4 +2362,355 @@ describe('CoolifyClient', () => {
       });
     });
   });
+
+  // ===========================================================================
+  // Batch Operations Tests
+  // ===========================================================================
+  describe('Batch Operations', () => {
+    describe('restartProjectApps', () => {
+      const mockApps = [
+        {
+          id: 1,
+          uuid: 'app-1',
+          name: 'app-one',
+          project_uuid: 'proj-1',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-2',
+          name: 'app-two',
+          project_uuid: 'proj-1',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 3,
+          uuid: 'app-3',
+          name: 'app-three',
+          project_uuid: 'proj-2', // Different project
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should restart all apps in a project', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Restarted' })) // app-1
+          .mockResolvedValueOnce(mockResponse({ message: 'Restarted' })); // app-2
+
+        const result = await client.restartProjectApps('proj-1');
+
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(2);
+        expect(result.summary.failed).toBe(0);
+        expect(result.succeeded).toEqual([
+          { uuid: 'app-1', name: 'app-one' },
+          { uuid: 'app-2', name: 'app-two' },
+        ]);
+        expect(result.failed).toEqual([]);
+      });
+
+      it('should handle partial failures gracefully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Restarted' }))
+          .mockRejectedValueOnce(new Error('App not running'));
+
+        const result = await client.restartProjectApps('proj-1');
+
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+        expect(result.succeeded).toHaveLength(1);
+        expect(result.failed).toHaveLength(1);
+        expect(result.failed[0].error).toBe('App not running');
+      });
+
+      it('should return empty result for empty project', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([]));
+
+        const result = await client.restartProjectApps('empty-project');
+
+        expect(result.summary.total).toBe(0);
+        expect(result.summary.succeeded).toBe(0);
+        expect(result.summary.failed).toBe(0);
+      });
+
+      it('should return empty result for project with no apps', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        const result = await client.restartProjectApps('nonexistent-project');
+
+        expect(result.summary.total).toBe(0);
+      });
+    });
+
+    describe('bulkEnvUpdate', () => {
+      const mockApps = [
+        {
+          id: 1,
+          uuid: 'app-1',
+          name: 'app-one',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-2',
+          name: 'app-two',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 3,
+          uuid: 'app-3',
+          name: 'app-three',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should update env var across multiple apps', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps)) // listApplications
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' })) // app-1
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' })); // app-2
+
+        const result = await client.bulkEnvUpdate(['app-1', 'app-2'], 'API_KEY', 'new-value');
+
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(2);
+        expect(result.summary.failed).toBe(0);
+        expect(result.succeeded).toEqual([
+          { uuid: 'app-1', name: 'app-one' },
+          { uuid: 'app-2', name: 'app-two' },
+        ]);
+      });
+
+      it('should handle partial failures', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }))
+          .mockRejectedValueOnce(new Error('App not found'));
+
+        const result = await client.bulkEnvUpdate(['app-1', 'app-2'], 'API_KEY', 'new-value');
+
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+        expect(result.failed[0].error).toBe('App not found');
+      });
+
+      it('should handle unknown app UUIDs gracefully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }))
+          .mockRejectedValueOnce(new Error('Application not found'));
+
+        const result = await client.bulkEnvUpdate(['app-1', 'unknown-app'], 'API_KEY', 'new-value');
+
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+        expect(result.succeeded[0].uuid).toBe('app-1');
+        expect(result.failed[0].uuid).toBe('unknown-app');
+        expect(result.failed[0].error).toBe('Application not found');
+      });
+
+      it('should return empty result for empty app UUIDs array', async () => {
+        const result = await client.bulkEnvUpdate([], 'API_KEY', 'new-value');
+
+        expect(result.summary.total).toBe(0);
+        expect(result.summary.succeeded).toBe(0);
+        expect(result.summary.failed).toBe(0);
+        // No API calls should be made
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should send build time flag when specified', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
+
+        await client.bulkEnvUpdate(['app-1'], 'BUILD_VAR', 'value', true);
+
+        // Verify the PATCH call was made with is_build_time
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/applications/app-1/envs',
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({ key: 'BUILD_VAR', value: 'value', is_build_time: true }),
+          }),
+        );
+      });
+    });
+
+    describe('stopAllApps', () => {
+      const mockApps = [
+        {
+          id: 1,
+          uuid: 'app-1',
+          name: 'running-app',
+          status: 'running:healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-2',
+          name: 'healthy-app',
+          status: 'healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 3,
+          uuid: 'app-3',
+          name: 'stopped-app',
+          status: 'exited',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should stop all running apps', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Stopped' })) // app-1
+          .mockResolvedValueOnce(mockResponse({ message: 'Stopped' })); // app-2
+
+        const result = await client.stopAllApps();
+
+        // Only 2 apps are running (app-1 and app-2), app-3 is already stopped
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(2);
+        expect(result.summary.failed).toBe(0);
+      });
+
+      it('should handle partial failures', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Stopped' }))
+          .mockRejectedValueOnce(new Error('Failed to stop'));
+
+        const result = await client.stopAllApps();
+
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+      });
+
+      it('should return empty result when no running apps', async () => {
+        const stoppedApps = [
+          { ...mockApps[2] }, // Only the stopped app
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(stoppedApps));
+
+        const result = await client.stopAllApps();
+
+        expect(result.summary.total).toBe(0);
+      });
+    });
+
+    describe('redeployProjectApps', () => {
+      const mockApps = [
+        {
+          id: 1,
+          uuid: 'app-1',
+          name: 'app-one',
+          project_uuid: 'proj-1',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-2',
+          name: 'app-two',
+          project_uuid: 'proj-1',
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 3,
+          uuid: 'app-3',
+          name: 'app-three',
+          project_uuid: 'proj-2', // Different project
+          status: 'running',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should redeploy all apps in a project', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' })) // app-1
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' })); // app-2
+
+        const result = await client.redeployProjectApps('proj-1');
+
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(2);
+        expect(result.summary.failed).toBe(0);
+      });
+
+      it('should use force=true by default', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
+
+        await client.redeployProjectApps('proj-1');
+
+        // Verify deploy calls use force=true
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/deploy?tag=app-1&force=true',
+          expect.any(Object),
+        );
+      });
+
+      it('should support force=false', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
+
+        await client.redeployProjectApps('proj-1', false);
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/deploy?tag=app-1&force=false',
+          expect.any(Object),
+        );
+      });
+
+      it('should handle partial failures', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
+          .mockRejectedValueOnce(new Error('Build failed'));
+
+        const result = await client.redeployProjectApps('proj-1');
+
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+        expect(result.failed[0].error).toBe('Build failed');
+      });
+
+      it('should return empty result for empty project', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([]));
+
+        const result = await client.redeployProjectApps('empty-project');
+
+        expect(result.summary.total).toBe(0);
+      });
+    });
+  });
 });

@@ -71,6 +71,8 @@ import type {
   ServerDiagnostic,
   InfrastructureIssue,
   InfrastructureIssuesReport,
+  // Batch operation types
+  BatchOperationResult,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -1319,5 +1321,162 @@ export class CoolifyClient {
       issues,
       ...(errors.length > 0 && { errors }),
     };
+  }
+
+  // ===========================================================================
+  // Batch Operations
+  // ===========================================================================
+
+  /**
+   * Aggregate results from Promise.allSettled into a BatchOperationResult.
+   */
+  private aggregateBatchResults(
+    resources: Array<{ uuid: string; name?: string }>,
+    results: PromiseSettledResult<unknown>[],
+  ): BatchOperationResult {
+    const succeeded: Array<{ uuid: string; name: string }> = [];
+    const failed: Array<{ uuid: string; name: string; error: string }> = [];
+
+    results.forEach((result, index) => {
+      const resource = resources[index];
+      const name = resource.name || resource.uuid;
+
+      if (result.status === 'fulfilled') {
+        succeeded.push({ uuid: resource.uuid, name });
+      } else {
+        const error =
+          result.reason instanceof Error ? result.reason.message : String(result.reason);
+        failed.push({ uuid: resource.uuid, name, error });
+      }
+    });
+
+    return {
+      summary: {
+        total: resources.length,
+        succeeded: succeeded.length,
+        failed: failed.length,
+      },
+      succeeded,
+      failed,
+    };
+  }
+
+  /**
+   * Restart all applications in a project.
+   * @param projectUuid - Project UUID
+   */
+  async restartProjectApps(projectUuid: string): Promise<BatchOperationResult> {
+    const allApps = (await this.listApplications()) as Application[];
+    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+
+    if (projectApps.length === 0) {
+      return {
+        summary: { total: 0, succeeded: 0, failed: 0 },
+        succeeded: [],
+        failed: [],
+      };
+    }
+
+    const results = await Promise.allSettled(
+      projectApps.map((app) => this.restartApplication(app.uuid)),
+    );
+
+    return this.aggregateBatchResults(projectApps, results);
+  }
+
+  /**
+   * Update or create an environment variable across multiple applications.
+   * Uses upsert behavior: creates if not exists, updates if exists.
+   * @param appUuids - Array of application UUIDs
+   * @param key - Environment variable key
+   * @param value - Environment variable value
+   * @param isBuildTime - Whether this is a build-time variable (default: false)
+   */
+  async bulkEnvUpdate(
+    appUuids: string[],
+    key: string,
+    value: string,
+    isBuildTime: boolean = false,
+  ): Promise<BatchOperationResult> {
+    // Early return for empty array - avoid unnecessary API call
+    if (appUuids.length === 0) {
+      return {
+        summary: { total: 0, succeeded: 0, failed: 0 },
+        succeeded: [],
+        failed: [],
+      };
+    }
+
+    // Get app names first for better response
+    const allApps = (await this.listApplications()) as Application[];
+    const appMap = new Map(allApps.map((a) => [a.uuid, a.name || a.uuid]));
+
+    // Build the resource list with names
+    const resources = appUuids.map((uuid) => ({
+      uuid,
+      name: appMap.get(uuid) || uuid,
+    }));
+
+    const results = await Promise.allSettled(
+      appUuids.map((uuid) =>
+        this.updateApplicationEnvVar(uuid, { key, value, is_build_time: isBuildTime }),
+      ),
+    );
+
+    return this.aggregateBatchResults(resources, results);
+  }
+
+  /**
+   * Emergency stop all running applications across entire infrastructure.
+   */
+  async stopAllApps(): Promise<BatchOperationResult> {
+    const allApps = (await this.listApplications()) as Application[];
+
+    // Only stop running apps
+    const runningApps = allApps.filter((app) => {
+      const status = app.status || '';
+      return status.includes('running') || status.includes('healthy');
+    });
+
+    if (runningApps.length === 0) {
+      return {
+        summary: { total: 0, succeeded: 0, failed: 0 },
+        succeeded: [],
+        failed: [],
+      };
+    }
+
+    const results = await Promise.allSettled(
+      runningApps.map((app) => this.stopApplication(app.uuid)),
+    );
+
+    return this.aggregateBatchResults(runningApps, results);
+  }
+
+  /**
+   * Redeploy all applications in a project.
+   * @param projectUuid - Project UUID
+   * @param force - Force rebuild (default: true)
+   */
+  async redeployProjectApps(
+    projectUuid: string,
+    force: boolean = true,
+  ): Promise<BatchOperationResult> {
+    const allApps = (await this.listApplications()) as Application[];
+    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+
+    if (projectApps.length === 0) {
+      return {
+        summary: { total: 0, succeeded: 0, failed: 0 },
+        succeeded: [],
+        failed: [],
+      };
+    }
+
+    const results = await Promise.allSettled(
+      projectApps.map((app) => this.deployByTagOrUuid(app.uuid, force)),
+    );
+
+    return this.aggregateBatchResults(projectApps, results);
   }
 }

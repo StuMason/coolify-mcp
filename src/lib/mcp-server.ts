@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.8.1';
+const VERSION = '0.9.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -783,6 +783,58 @@ export class CoolifyMcpServer extends McpServer {
       'Scan entire infrastructure for common issues. Finds: unreachable servers, unhealthy/stopped applications, exited databases, and stopped services. Returns a summary with issue counts and detailed list of problems.',
       {},
       async () => wrapHandler(() => this.client.findInfrastructureIssues()),
+    );
+
+    // =========================================================================
+    // Batch Operations (4 tools) - Operate on multiple resources at once
+    // =========================================================================
+    this.tool(
+      'restart_project_apps',
+      'Restart all applications in a project. Returns a summary of succeeded/failed restarts with details.',
+      { project_uuid: z.string().describe('Project UUID') },
+      async ({ project_uuid }) => wrapHandler(() => this.client.restartProjectApps(project_uuid)),
+    );
+
+    this.tool(
+      'bulk_env_update',
+      'Update or create an environment variable across multiple applications (upsert behavior). Returns summary of succeeded/failed updates.',
+      {
+        app_uuids: z.array(z.string()).describe('Array of application UUIDs'),
+        key: z.string().describe('Environment variable key'),
+        value: z.string().describe('Environment variable value'),
+        is_build_time: z.boolean().optional().describe('Build-time variable (default: false)'),
+      },
+      async ({ app_uuids, key, value, is_build_time }) =>
+        wrapHandler(() => this.client.bulkEnvUpdate(app_uuids, key, value, is_build_time)),
+    );
+
+    this.tool(
+      'stop_all_apps',
+      'EMERGENCY: Stop ALL running applications across entire infrastructure. Only stops apps that are currently running or healthy. Use with caution!',
+      {
+        confirm: z.literal(true).describe('Must be true to confirm this dangerous operation'),
+      },
+      async ({ confirm }) => {
+        if (!confirm) {
+          return {
+            content: [
+              { type: 'text' as const, text: 'Error: Must set confirm=true to stop all apps' },
+            ],
+          };
+        }
+        return wrapHandler(() => this.client.stopAllApps());
+      },
+    );
+
+    this.tool(
+      'redeploy_project',
+      'Redeploy all applications in a project with force rebuild. Returns summary of succeeded/failed deployments.',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        force: z.boolean().optional().describe('Force rebuild (default: true)'),
+      },
+      async ({ project_uuid, force }) =>
+        wrapHandler(() => this.client.redeployProjectApps(project_uuid, force ?? true)),
     );
   }
 }

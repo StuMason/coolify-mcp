@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Coolify that provides 61 tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, and smart diagnostics.
+MCP (Model Context Protocol) server for Coolify that provides 65 tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, smart diagnostics, and batch operations.
 
 ## Commands
 
@@ -103,7 +103,7 @@ When making changes to the codebase, ensure documentation is updated:
 
 2. **README.md** - Update if:
 
-   - Tool count changes (update "61 tools" in Features section)
+   - Tool count changes (update "65 tools" in Features section)
    - New tools added (add to appropriate category in Available Tools)
    - New example prompts needed
    - Response size improvements made (update comparison table)

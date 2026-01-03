@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-03
+
+### Added
+
+- **Batch Operations** - Power user tools for operating on multiple resources at once:
+
+  - `restart_project_apps` - Restart all applications in a project
+  - `bulk_env_update` - Update or create an environment variable across multiple applications (upsert behavior)
+  - `stop_all_apps` - Emergency stop all running applications (requires confirmation)
+  - `redeploy_project` - Redeploy all applications in a project with force rebuild
+
+- `BatchOperationResult` type for standardized batch operation responses with success/failure tracking
+
+### Changed
+
+- Total tool count increased from 61 to 65 tools
+
 ## [0.8.1] - 2026-01-03
 
 ### Changed
