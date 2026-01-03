@@ -2511,12 +2511,27 @@ describe('CoolifyClient', () => {
       it('should handle unknown app UUIDs gracefully', async () => {
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApps))
-          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }))
+          .mockRejectedValueOnce(new Error('Application not found'));
 
         const result = await client.bulkEnvUpdate(['app-1', 'unknown-app'], 'API_KEY', 'new-value');
 
-        // unknown-app won't be in the app map, so it uses UUID as name
-        expect(result.succeeded.some((s) => s.uuid === 'app-1')).toBe(true);
+        expect(result.summary.total).toBe(2);
+        expect(result.summary.succeeded).toBe(1);
+        expect(result.summary.failed).toBe(1);
+        expect(result.succeeded[0].uuid).toBe('app-1');
+        expect(result.failed[0].uuid).toBe('unknown-app');
+        expect(result.failed[0].error).toBe('Application not found');
+      });
+
+      it('should return empty result for empty app UUIDs array', async () => {
+        const result = await client.bulkEnvUpdate([], 'API_KEY', 'new-value');
+
+        expect(result.summary.total).toBe(0);
+        expect(result.summary.succeeded).toBe(0);
+        expect(result.summary.failed).toBe(0);
+        // No API calls should be made
+        expect(mockFetch).not.toHaveBeenCalled();
       });
 
       it('should send build time flag when specified', async () => {

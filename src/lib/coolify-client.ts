@@ -1398,6 +1398,15 @@ export class CoolifyClient {
     value: string,
     isBuildTime: boolean = false,
   ): Promise<BatchOperationResult> {
+    // Early return for empty array - avoid unnecessary API call
+    if (appUuids.length === 0) {
+      return {
+        summary: { total: 0, succeeded: 0, failed: 0 },
+        succeeded: [],
+        failed: [],
+      };
+    }
+
     // Get app names first for better response
     const allApps = (await this.listApplications()) as Application[];
     const appMap = new Map(allApps.map((a) => [a.uuid, a.name || a.uuid]));
