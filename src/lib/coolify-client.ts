@@ -954,7 +954,7 @@ export class CoolifyClient {
 
     const matches = servers.filter((server) => {
       const nameMatch = server.name?.toLowerCase().includes(queryLower);
-      const ipMatch = server.ip?.includes(query);
+      const ipMatch = server.ip?.toLowerCase().includes(queryLower);
       return nameMatch || ipMatch;
     });
 
