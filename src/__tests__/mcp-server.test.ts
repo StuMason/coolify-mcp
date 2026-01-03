@@ -14,6 +14,9 @@ const mockListProjects = jest.fn<CoolifyClient['listProjects']>();
 const mockListApplications = jest.fn<CoolifyClient['listApplications']>();
 const mockListDatabases = jest.fn<CoolifyClient['listDatabases']>();
 const mockListServices = jest.fn<CoolifyClient['listServices']>();
+const mockDiagnoseApplication = jest.fn<CoolifyClient['diagnoseApplication']>();
+const mockDiagnoseServer = jest.fn<CoolifyClient['diagnoseServer']>();
+const mockFindInfrastructureIssues = jest.fn<CoolifyClient['findInfrastructureIssues']>();
 
 // Mock the CoolifyClient module
 jest.mock('../lib/coolify-client.js', () => ({
@@ -23,6 +26,9 @@ jest.mock('../lib/coolify-client.js', () => ({
     listApplications: mockListApplications,
     listDatabases: mockListDatabases,
     listServices: mockListServices,
+    diagnoseApplication: mockDiagnoseApplication,
+    diagnoseServer: mockDiagnoseServer,
+    findInfrastructureIssues: mockFindInfrastructureIssues,
     getVersion: jest.fn(),
   })),
 }));
@@ -164,6 +170,191 @@ describe('CoolifyMcpServer', () => {
       mockListServers.mockRejectedValue(new Error('Connection failed'));
 
       await expect(mockListServers({ summary: true })).rejects.toThrow('Connection failed');
+    });
+  });
+
+  describe('diagnostic tools', () => {
+    beforeEach(() => {
+      new CoolifyMcpServer({
+        baseUrl: 'http://localhost:3000',
+        accessToken: 'test-token',
+      });
+    });
+
+    describe('diagnose_app', () => {
+      it('should call diagnoseApplication with the query', async () => {
+        mockDiagnoseApplication.mockResolvedValue({
+          application: {
+            uuid: 'app-uuid-123',
+            name: 'test-app',
+            status: 'running',
+            fqdn: 'https://test.example.com',
+            git_repository: 'org/repo',
+            git_branch: 'main',
+          },
+          health: { status: 'healthy', issues: [] },
+          logs: 'Application started',
+          environment_variables: {
+            count: 2,
+            variables: [{ key: 'NODE_ENV', is_build_time: false }],
+          },
+          recent_deployments: [],
+        });
+
+        await mockDiagnoseApplication('test-app');
+
+        expect(mockDiagnoseApplication).toHaveBeenCalledWith('test-app');
+      });
+
+      it('should call diagnoseApplication with a domain', async () => {
+        mockDiagnoseApplication.mockResolvedValue({
+          application: null,
+          health: { status: 'unknown', issues: [] },
+          logs: null,
+          environment_variables: { count: 0, variables: [] },
+          recent_deployments: [],
+          errors: ['Application not found'],
+        });
+
+        await mockDiagnoseApplication('tidylinker.com');
+
+        expect(mockDiagnoseApplication).toHaveBeenCalledWith('tidylinker.com');
+      });
+
+      it('should call diagnoseApplication with a UUID', async () => {
+        mockDiagnoseApplication.mockResolvedValue({
+          application: {
+            uuid: 'xs0sgs4gog044s4k4c88kgsc',
+            name: 'test-app',
+            status: 'running',
+            fqdn: null,
+            git_repository: null,
+            git_branch: null,
+          },
+          health: { status: 'healthy', issues: [] },
+          logs: null,
+          environment_variables: { count: 0, variables: [] },
+          recent_deployments: [],
+        });
+
+        await mockDiagnoseApplication('xs0sgs4gog044s4k4c88kgsc');
+
+        expect(mockDiagnoseApplication).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc');
+      });
+    });
+
+    describe('diagnose_server', () => {
+      it('should call diagnoseServer with the query', async () => {
+        mockDiagnoseServer.mockResolvedValue({
+          server: {
+            uuid: 'srv-uuid-123',
+            name: 'production-server',
+            ip: '192.168.1.100',
+            status: 'running',
+            is_reachable: true,
+          },
+          health: { status: 'healthy', issues: [] },
+          resources: [],
+          domains: [],
+          validation: { message: 'Server is reachable' },
+        });
+
+        await mockDiagnoseServer('production-server');
+
+        expect(mockDiagnoseServer).toHaveBeenCalledWith('production-server');
+      });
+
+      it('should call diagnoseServer with an IP address', async () => {
+        mockDiagnoseServer.mockResolvedValue({
+          server: {
+            uuid: 'srv-uuid-123',
+            name: 'production-server',
+            ip: '192.168.1.100',
+            status: 'running',
+            is_reachable: true,
+          },
+          health: { status: 'healthy', issues: [] },
+          resources: [],
+          domains: [],
+          validation: { message: 'Server is reachable' },
+        });
+
+        await mockDiagnoseServer('192.168.1.100');
+
+        expect(mockDiagnoseServer).toHaveBeenCalledWith('192.168.1.100');
+      });
+
+      it('should call diagnoseServer with a UUID', async () => {
+        mockDiagnoseServer.mockResolvedValue({
+          server: {
+            uuid: 'ggkk8w4c08gw48oowsg4g0oc',
+            name: 'coolify-apps',
+            ip: '10.0.0.1',
+            status: 'running',
+            is_reachable: true,
+          },
+          health: { status: 'healthy', issues: [] },
+          resources: [],
+          domains: [],
+          validation: { message: 'Server is reachable' },
+        });
+
+        await mockDiagnoseServer('ggkk8w4c08gw48oowsg4g0oc');
+
+        expect(mockDiagnoseServer).toHaveBeenCalledWith('ggkk8w4c08gw48oowsg4g0oc');
+      });
+    });
+
+    describe('find_issues', () => {
+      it('should call findInfrastructureIssues', async () => {
+        mockFindInfrastructureIssues.mockResolvedValue({
+          summary: {
+            total_issues: 2,
+            unhealthy_applications: 1,
+            unhealthy_databases: 0,
+            unhealthy_services: 1,
+            unreachable_servers: 0,
+          },
+          issues: [
+            {
+              type: 'application',
+              uuid: 'app-1',
+              name: 'broken-app',
+              issue: 'Application is unhealthy',
+              status: 'exited:unhealthy',
+            },
+            {
+              type: 'service',
+              uuid: 'svc-1',
+              name: 'broken-service',
+              issue: 'Service has exited',
+              status: 'exited',
+            },
+          ],
+        });
+
+        await mockFindInfrastructureIssues();
+
+        expect(mockFindInfrastructureIssues).toHaveBeenCalled();
+      });
+
+      it('should return empty issues when infrastructure is healthy', async () => {
+        mockFindInfrastructureIssues.mockResolvedValue({
+          summary: {
+            total_issues: 0,
+            unhealthy_applications: 0,
+            unhealthy_databases: 0,
+            unhealthy_services: 0,
+            unreachable_servers: 0,
+          },
+          issues: [],
+        });
+
+        const result = await mockFindInfrastructureIssues();
+
+        expect(result.summary.total_issues).toBe(0);
+        expect(result.issues).toHaveLength(0);
+      });
     });
   });
 });

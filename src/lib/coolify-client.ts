@@ -64,6 +64,12 @@ import type {
   CloudTokenValidation,
   // Version types
   Version,
+  // Diagnostic types
+  DiagnosticHealthStatus,
+  ApplicationDiagnostic,
+  ServerDiagnostic,
+  InfrastructureIssue,
+  InfrastructureIssuesReport,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -876,5 +882,428 @@ export class CoolifyClient {
     return this.request<MessageResponse>(`/deployments/${uuid}/cancel`, {
       method: 'POST',
     });
+  }
+
+  // ===========================================================================
+  // Smart Lookup Helpers
+  // ===========================================================================
+
+  /**
+   * Check if a string looks like a UUID (Coolify format or standard format).
+   * Coolify UUIDs are alphanumeric strings, typically 24 chars like "xs0sgs4gog044s4k4c88kgsc"
+   * Also accepts standard UUID format with hyphens like "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+   */
+  private isLikelyUuid(query: string): boolean {
+    // Coolify UUID format: alphanumeric, 20+ chars
+    if (/^[a-z0-9]{20,}$/i.test(query)) {
+      return true;
+    }
+    // Standard UUID format with hyphens (8-4-4-4-12)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Find an application by UUID, name, or domain (FQDN).
+   * Returns the UUID if found, throws if not found or multiple matches.
+   */
+  async resolveApplicationUuid(query: string): Promise<string> {
+    // If it looks like a UUID, use it directly
+    if (this.isLikelyUuid(query)) {
+      return query;
+    }
+
+    // Otherwise, search by name or domain
+    const apps = (await this.listApplications()) as Application[];
+    const queryLower = query.toLowerCase();
+
+    const matches = apps.filter((app) => {
+      const nameMatch = app.name?.toLowerCase().includes(queryLower);
+      const fqdnMatch = app.fqdn?.toLowerCase().includes(queryLower);
+      return nameMatch || fqdnMatch;
+    });
+
+    if (matches.length === 0) {
+      throw new Error(`No application found matching "${query}"`);
+    }
+    if (matches.length > 1) {
+      const matchList = matches.map((a) => `${a.name} (${a.fqdn || 'no domain'})`).join(', ');
+      throw new Error(
+        `Multiple applications match "${query}": ${matchList}. Please be more specific or use a UUID.`,
+      );
+    }
+
+    return matches[0].uuid;
+  }
+
+  /**
+   * Find a server by UUID, name, or IP address.
+   * Returns the UUID if found, throws if not found or multiple matches.
+   */
+  async resolveServerUuid(query: string): Promise<string> {
+    // If it looks like a UUID, use it directly
+    if (this.isLikelyUuid(query)) {
+      return query;
+    }
+
+    // Otherwise, search by name or IP
+    const servers = (await this.listServers()) as Server[];
+    const queryLower = query.toLowerCase();
+
+    const matches = servers.filter((server) => {
+      const nameMatch = server.name?.toLowerCase().includes(queryLower);
+      const ipMatch = server.ip?.toLowerCase().includes(queryLower);
+      return nameMatch || ipMatch;
+    });
+
+    if (matches.length === 0) {
+      throw new Error(`No server found matching "${query}"`);
+    }
+    if (matches.length > 1) {
+      const matchList = matches.map((s) => `${s.name} (${s.ip})`).join(', ');
+      throw new Error(
+        `Multiple servers match "${query}": ${matchList}. Please be more specific or use a UUID.`,
+      );
+    }
+
+    return matches[0].uuid;
+  }
+
+  // ===========================================================================
+  // Diagnostic endpoints (composite tools)
+  // ===========================================================================
+
+  /**
+   * Get comprehensive diagnostic info for an application.
+   * Aggregates: application details, logs, env vars, recent deployments.
+   * @param query - Application UUID, name, or domain (FQDN)
+   */
+  async diagnoseApplication(query: string): Promise<ApplicationDiagnostic> {
+    // Resolve query to UUID
+    let uuid: string;
+    try {
+      uuid = await this.resolveApplicationUuid(query);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        application: null,
+        health: { status: 'unknown', issues: [] },
+        logs: null,
+        environment_variables: { count: 0, variables: [] },
+        recent_deployments: [],
+        errors: [msg],
+      };
+    }
+
+    const results = await Promise.allSettled([
+      this.getApplication(uuid),
+      this.getApplicationLogs(uuid, 50),
+      this.listApplicationEnvVars(uuid),
+      this.listApplicationDeployments(uuid),
+    ]);
+
+    const errors: string[] = [];
+
+    const extract = <T>(result: PromiseSettledResult<T>, name: string): T | null => {
+      if (result.status === 'fulfilled') return result.value;
+      const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      errors.push(`${name}: ${msg}`);
+      return null;
+    };
+
+    const app = extract(results[0], 'application');
+    const logs = extract(results[1], 'logs');
+    const envVars = extract(results[2], 'environment_variables');
+    const deployments = extract(results[3], 'deployments');
+
+    // Determine health status and issues
+    const issues: string[] = [];
+    let healthStatus: DiagnosticHealthStatus = 'unknown';
+
+    if (app) {
+      const status = app.status || '';
+      if (status.includes('running') && status.includes('healthy')) {
+        healthStatus = 'healthy';
+      } else if (
+        status.includes('exited') ||
+        status.includes('unhealthy') ||
+        status.includes('error')
+      ) {
+        healthStatus = 'unhealthy';
+        issues.push(`Status: ${status}`);
+      } else if (status.includes('running')) {
+        healthStatus = 'healthy';
+      } else {
+        issues.push(`Status: ${status}`);
+      }
+    }
+
+    // Check for failed deployments
+    if (deployments) {
+      const recentFailed = deployments.slice(0, 5).filter((d) => d.status === 'failed');
+      if (recentFailed.length > 0) {
+        issues.push(`${recentFailed.length} failed deployment(s) in last 5`);
+        if (healthStatus === 'healthy') healthStatus = 'unhealthy';
+      }
+    }
+
+    return {
+      application: app
+        ? {
+            uuid: app.uuid,
+            name: app.name,
+            status: app.status || 'unknown',
+            fqdn: app.fqdn || null,
+            git_repository: app.git_repository || null,
+            git_branch: app.git_branch || null,
+          }
+        : null,
+      health: {
+        status: healthStatus,
+        issues,
+      },
+      logs: typeof logs === 'string' ? logs : null,
+      environment_variables: {
+        count: envVars?.length || 0,
+        variables: (envVars || []).map((v) => ({
+          key: v.key,
+          is_build_time: v.is_build_time ?? false,
+        })),
+      },
+      recent_deployments: (deployments || []).slice(0, 5).map((d) => ({
+        uuid: d.uuid,
+        status: d.status,
+        created_at: d.created_at,
+      })),
+      ...(errors.length > 0 && { errors }),
+    };
+  }
+
+  /**
+   * Get comprehensive diagnostic info for a server.
+   * Aggregates: server details, resources, domains, validation.
+   * @param query - Server UUID, name, or IP address
+   */
+  async diagnoseServer(query: string): Promise<ServerDiagnostic> {
+    // Resolve query to UUID
+    let uuid: string;
+    try {
+      uuid = await this.resolveServerUuid(query);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        server: null,
+        health: { status: 'unknown', issues: [] },
+        resources: [],
+        domains: [],
+        validation: null,
+        errors: [msg],
+      };
+    }
+
+    const results = await Promise.allSettled([
+      this.getServer(uuid),
+      this.getServerResources(uuid),
+      this.getServerDomains(uuid),
+      this.validateServer(uuid),
+    ]);
+
+    const errors: string[] = [];
+
+    const extract = <T>(result: PromiseSettledResult<T>, name: string): T | null => {
+      if (result.status === 'fulfilled') return result.value;
+      const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      errors.push(`${name}: ${msg}`);
+      return null;
+    };
+
+    const server = extract(results[0], 'server');
+    const resources = extract(results[1], 'resources');
+    const domains = extract(results[2], 'domains');
+    const validation = extract(results[3], 'validation');
+
+    // Determine health status and issues
+    const issues: string[] = [];
+    let healthStatus: DiagnosticHealthStatus = 'unknown';
+
+    if (server) {
+      if (server.is_reachable === true) {
+        healthStatus = 'healthy';
+      } else if (server.is_reachable === false) {
+        healthStatus = 'unhealthy';
+        issues.push('Server is not reachable');
+      }
+
+      if (server.is_usable === false) {
+        issues.push('Server is not usable');
+        healthStatus = 'unhealthy';
+      }
+    }
+
+    // Check for unhealthy resources
+    if (resources) {
+      const unhealthyResources = resources.filter(
+        (r) =>
+          r.status.includes('exited') ||
+          r.status.includes('unhealthy') ||
+          r.status.includes('error'),
+      );
+      if (unhealthyResources.length > 0) {
+        issues.push(`${unhealthyResources.length} unhealthy resource(s)`);
+      }
+    }
+
+    return {
+      server: server
+        ? {
+            uuid: server.uuid,
+            name: server.name,
+            ip: server.ip,
+            status: server.status || null,
+            is_reachable: server.is_reachable ?? null,
+          }
+        : null,
+      health: {
+        status: healthStatus,
+        issues,
+      },
+      resources: (resources || []).map((r) => ({
+        uuid: r.uuid,
+        name: r.name,
+        type: r.type,
+        status: r.status,
+      })),
+      domains: (domains || []).map((d) => ({
+        ip: d.ip,
+        domains: d.domains,
+      })),
+      validation: validation
+        ? {
+            message: validation.message,
+            ...(validation.validation_logs && { validation_logs: validation.validation_logs }),
+          }
+        : null,
+      ...(errors.length > 0 && { errors }),
+    };
+  }
+
+  /**
+   * Scan infrastructure for common issues.
+   * Finds: unreachable servers, unhealthy apps, exited databases, stopped services.
+   */
+  async findInfrastructureIssues(): Promise<InfrastructureIssuesReport> {
+    const results = await Promise.allSettled([
+      this.listServers(),
+      this.listApplications(),
+      this.listDatabases(),
+      this.listServices(),
+    ]);
+
+    const errors: string[] = [];
+    const issues: InfrastructureIssue[] = [];
+
+    const extract = <T>(result: PromiseSettledResult<T>, name: string): T | null => {
+      if (result.status === 'fulfilled') return result.value;
+      const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      errors.push(`${name}: ${msg}`);
+      return null;
+    };
+
+    const servers = extract(results[0], 'servers') as Server[] | null;
+    const applications = extract(results[1], 'applications') as Application[] | null;
+    const databases = extract(results[2], 'databases') as Database[] | null;
+    const services = extract(results[3], 'services') as Service[] | null;
+
+    // Check servers for unreachable
+    if (servers) {
+      for (const server of servers) {
+        if (server.is_reachable === false) {
+          issues.push({
+            type: 'server',
+            uuid: server.uuid,
+            name: server.name,
+            issue: 'Server is not reachable',
+            status: server.status || 'unreachable',
+          });
+        }
+      }
+    }
+
+    // Check applications for unhealthy status
+    if (applications) {
+      for (const app of applications) {
+        const status = app.status || '';
+        if (
+          status.includes('exited') ||
+          status.includes('unhealthy') ||
+          status.includes('error') ||
+          status === 'stopped'
+        ) {
+          issues.push({
+            type: 'application',
+            uuid: app.uuid,
+            name: app.name,
+            issue: `Application status: ${status}`,
+            status,
+          });
+        }
+      }
+    }
+
+    // Check databases for unhealthy status
+    if (databases) {
+      for (const db of databases) {
+        const status = db.status || '';
+        if (
+          status.includes('exited') ||
+          status.includes('unhealthy') ||
+          status.includes('error') ||
+          status === 'stopped'
+        ) {
+          issues.push({
+            type: 'database',
+            uuid: db.uuid,
+            name: db.name,
+            issue: `Database status: ${status}`,
+            status,
+          });
+        }
+      }
+    }
+
+    // Check services for unhealthy status
+    if (services) {
+      for (const svc of services) {
+        const status = svc.status || '';
+        if (
+          status.includes('exited') ||
+          status.includes('unhealthy') ||
+          status.includes('error') ||
+          status === 'stopped'
+        ) {
+          issues.push({
+            type: 'service',
+            uuid: svc.uuid,
+            name: svc.name,
+            issue: `Service status: ${status}`,
+            status,
+          });
+        }
+      }
+    }
+
+    return {
+      summary: {
+        total_issues: issues.length,
+        unhealthy_applications: issues.filter((i) => i.type === 'application').length,
+        unhealthy_databases: issues.filter((i) => i.type === 'database').length,
+        unhealthy_services: issues.filter((i) => i.type === 'service').length,
+        unreachable_servers: issues.filter((i) => i.type === 'server').length,
+      },
+      issues,
+      ...(errors.length > 0 && { errors }),
+    };
   }
 }

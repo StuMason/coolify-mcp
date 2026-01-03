@@ -1672,4 +1672,663 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Deployment cancelled' });
     });
   });
+
+  // ===========================================================================
+  // Smart Lookup Tests
+  // ===========================================================================
+  describe('Smart Lookup', () => {
+    describe('resolveApplicationUuid', () => {
+      const mockApps = [
+        {
+          id: 1,
+          uuid: 'app-uuid-1',
+          name: 'tidylinker',
+          status: 'running',
+          fqdn: 'https://tidylinker.com',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-uuid-2',
+          name: 'my-api',
+          status: 'running',
+          fqdn: 'https://api.example.com',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should return UUID directly if it looks like a UUID', async () => {
+        // UUIDs are alphanumeric, 20+ chars - no API call should be made
+        const result = await client.resolveApplicationUuid('xs0sgs4gog044s4k4c88kgsc');
+        expect(result).toBe('xs0sgs4gog044s4k4c88kgsc');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should find application by name', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        const result = await client.resolveApplicationUuid('tidylinker');
+
+        expect(result).toBe('app-uuid-1');
+      });
+
+      it('should find application by partial name (case-insensitive)', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        const result = await client.resolveApplicationUuid('TidyLink');
+
+        expect(result).toBe('app-uuid-1');
+      });
+
+      it('should find application by domain', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        const result = await client.resolveApplicationUuid('tidylinker.com');
+
+        expect(result).toBe('app-uuid-1');
+      });
+
+      it('should find application by partial domain', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        const result = await client.resolveApplicationUuid('api.example.com');
+
+        expect(result).toBe('app-uuid-2');
+      });
+
+      it('should throw error if no application found', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+
+        await expect(client.resolveApplicationUuid('nonexistent')).rejects.toThrow(
+          'No application found matching "nonexistent"',
+        );
+      });
+
+      it('should throw error if multiple applications match', async () => {
+        const multiMatchApps = [
+          { ...mockApps[0], name: 'test-app-1' },
+          { ...mockApps[1], name: 'test-app-2' },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(multiMatchApps));
+
+        await expect(client.resolveApplicationUuid('test-app')).rejects.toThrow(
+          'Multiple applications match',
+        );
+      });
+    });
+
+    describe('resolveServerUuid', () => {
+      const mockServers = [
+        {
+          id: 1,
+          uuid: 'server-uuid-1',
+          name: 'coolify-apps',
+          ip: '192.168.1.100',
+          user: 'root',
+          port: 22,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'server-uuid-2',
+          name: 'production-db',
+          ip: '10.0.0.50',
+          user: 'root',
+          port: 22,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should return UUID directly if it looks like a UUID', async () => {
+        const result = await client.resolveServerUuid('ggkk8w4c08gw48oowsg4g0oc');
+        expect(result).toBe('ggkk8w4c08gw48oowsg4g0oc');
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should find server by name', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockServers));
+
+        const result = await client.resolveServerUuid('coolify-apps');
+
+        expect(result).toBe('server-uuid-1');
+      });
+
+      it('should find server by partial name (case-insensitive)', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockServers));
+
+        const result = await client.resolveServerUuid('Coolify');
+
+        expect(result).toBe('server-uuid-1');
+      });
+
+      it('should find server by IP address', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockServers));
+
+        const result = await client.resolveServerUuid('192.168.1.100');
+
+        expect(result).toBe('server-uuid-1');
+      });
+
+      it('should find server by partial IP', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockServers));
+
+        const result = await client.resolveServerUuid('10.0.0');
+
+        expect(result).toBe('server-uuid-2');
+      });
+
+      it('should throw error if no server found', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse(mockServers));
+
+        await expect(client.resolveServerUuid('nonexistent')).rejects.toThrow(
+          'No server found matching "nonexistent"',
+        );
+      });
+
+      it('should throw error if multiple servers match', async () => {
+        const multiMatchServers = [
+          { ...mockServers[0], name: 'prod-server-1' },
+          { ...mockServers[1], name: 'prod-server-2' },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(multiMatchServers));
+
+        await expect(client.resolveServerUuid('prod-server')).rejects.toThrow(
+          'Multiple servers match',
+        );
+      });
+    });
+  });
+
+  // ===========================================================================
+  // Diagnostic Methods Tests
+  // ===========================================================================
+  describe('Diagnostic Methods', () => {
+    describe('diagnoseApplication', () => {
+      // Use UUID-like format that matches the isLikelyUuid check
+      const testAppUuid = 'app0uuid0test0001234567';
+      const mockApp = {
+        id: 1,
+        uuid: testAppUuid,
+        name: 'test-app',
+        status: 'running:healthy',
+        fqdn: 'https://test.com',
+        git_repository: 'org/repo',
+        git_branch: 'main',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+
+      const mockLogs = 'Log line 1\nLog line 2\nLog line 3';
+
+      const mockEnvVars = [
+        {
+          id: 1,
+          uuid: 'env-1',
+          key: 'DATABASE_URL',
+          value: 'postgres://...',
+          is_build_time: false,
+        },
+        { id: 2, uuid: 'env-2', key: 'NODE_ENV', value: 'production', is_build_time: true },
+      ];
+
+      const mockDeployments = [
+        {
+          id: 1,
+          uuid: 'deploy-1',
+          deployment_uuid: 'deploy-1',
+          status: 'finished',
+          force_rebuild: false,
+          is_webhook: false,
+          is_api: false,
+          restart_only: false,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'deploy-2',
+          deployment_uuid: 'deploy-2',
+          status: 'finished',
+          force_rebuild: false,
+          is_webhook: false,
+          is_api: false,
+          restart_only: false,
+          created_at: '2024-01-02',
+          updated_at: '2024-01-02',
+        },
+      ];
+
+      it('should aggregate all application data successfully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse(mockDeployments));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.application).toEqual({
+          uuid: testAppUuid,
+          name: 'test-app',
+          status: 'running:healthy',
+          fqdn: 'https://test.com',
+          git_repository: 'org/repo',
+          git_branch: 'main',
+        });
+        expect(result.health.status).toBe('healthy');
+        expect(result.logs).toBe(mockLogs);
+        expect(result.environment_variables.count).toBe(2);
+        expect(result.environment_variables.variables).toEqual([
+          { key: 'DATABASE_URL', is_build_time: false },
+          { key: 'NODE_ENV', is_build_time: true },
+        ]);
+        expect(result.recent_deployments).toHaveLength(2);
+        expect(result.errors).toBeUndefined();
+      });
+
+      it('should detect unhealthy application status', async () => {
+        const unhealthyApp = { ...mockApp, status: 'exited:unhealthy' };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(unhealthyApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse([]));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.health.status).toBe('unhealthy');
+        expect(result.health.issues).toContain('Status: exited:unhealthy');
+      });
+
+      it('should detect failed deployments as issues', async () => {
+        const failedDeployments = [
+          { ...mockDeployments[0], status: 'failed' },
+          { ...mockDeployments[1], status: 'failed' },
+        ];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse(failedDeployments));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.health.issues).toContain('2 failed deployment(s) in last 5');
+      });
+
+      it('should handle partial failures gracefully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockRejectedValueOnce(new Error('Logs unavailable'))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse(mockDeployments));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.application).not.toBeNull();
+        expect(result.logs).toBeNull();
+        expect(result.errors).toContain('logs: Logs unavailable');
+      });
+
+      it('should handle complete failure gracefully', async () => {
+        mockFetch
+          .mockRejectedValueOnce(new Error('App not found'))
+          .mockRejectedValueOnce(new Error('Logs unavailable'))
+          .mockRejectedValueOnce(new Error('Env vars unavailable'))
+          .mockRejectedValueOnce(new Error('Deployments unavailable'));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.application).toBeNull();
+        expect(result.logs).toBeNull();
+        expect(result.health.status).toBe('unknown');
+        expect(result.errors).toHaveLength(4);
+      });
+
+      it('should find application by name and diagnose it', async () => {
+        const mockApps = [{ ...mockApp, uuid: 'found-uuid', name: 'my-app' }];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps)) // listApplications for lookup
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse(mockDeployments));
+
+        const result = await client.diagnoseApplication('my-app');
+
+        expect(result.application).not.toBeNull();
+        // First call should be to list apps for lookup
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          1,
+          'http://localhost:3000/api/v1/applications',
+          expect.any(Object),
+        );
+      });
+
+      it('should find application by domain and diagnose it', async () => {
+        const mockApps = [{ ...mockApp, uuid: 'found-uuid', fqdn: 'https://tidylinker.com' }];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps)) // listApplications for lookup
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(mockResponse(mockDeployments));
+
+        const result = await client.diagnoseApplication('tidylinker.com');
+
+        expect(result.application).not.toBeNull();
+      });
+
+      it('should return error in result when application not found by name', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([])); // Empty app list
+
+        const result = await client.diagnoseApplication('nonexistent-app');
+
+        expect(result.application).toBeNull();
+        expect(result.errors).toContain('No application found matching "nonexistent-app"');
+      });
+    });
+
+    describe('diagnoseServer', () => {
+      // Use UUID-like format that matches the isLikelyUuid check
+      const testServerUuid = 'srv0uuid0test0001234567';
+      const mockServer = {
+        id: 1,
+        uuid: testServerUuid,
+        name: 'test-server',
+        ip: '192.168.1.1',
+        user: 'root',
+        port: 22,
+        status: 'running',
+        is_reachable: true,
+        is_usable: true,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+
+      const mockResources = [
+        {
+          id: 1,
+          uuid: 'res-1',
+          name: 'app-1',
+          type: 'application',
+          status: 'running:healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'res-2',
+          name: 'db-1',
+          type: 'database',
+          status: 'running:healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      const mockDomains = [{ ip: '192.168.1.1', domains: ['example.com', 'api.example.com'] }];
+
+      const mockValidation = { message: 'Server is reachable and validated' };
+
+      it('should aggregate all server data successfully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServer))
+          .mockResolvedValueOnce(mockResponse(mockResources))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer(testServerUuid);
+
+        expect(result.server).toEqual({
+          uuid: testServerUuid,
+          name: 'test-server',
+          ip: '192.168.1.1',
+          status: 'running',
+          is_reachable: true,
+        });
+        expect(result.health.status).toBe('healthy');
+        expect(result.resources).toHaveLength(2);
+        expect(result.domains).toHaveLength(1);
+        expect(result.validation?.message).toBe('Server is reachable and validated');
+        expect(result.errors).toBeUndefined();
+      });
+
+      it('should detect unreachable server', async () => {
+        const unreachableServer = { ...mockServer, is_reachable: false };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(unreachableServer))
+          .mockResolvedValueOnce(mockResponse(mockResources))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer(testServerUuid);
+
+        expect(result.health.status).toBe('unhealthy');
+        expect(result.health.issues).toContain('Server is not reachable');
+      });
+
+      it('should detect unhealthy resources', async () => {
+        const unhealthyResources = [
+          { ...mockResources[0], status: 'exited:unhealthy' },
+          { ...mockResources[1], status: 'running:healthy' },
+        ];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServer))
+          .mockResolvedValueOnce(mockResponse(unhealthyResources))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer(testServerUuid);
+
+        expect(result.health.issues).toContain('1 unhealthy resource(s)');
+      });
+
+      it('should handle partial failures gracefully', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServer))
+          .mockRejectedValueOnce(new Error('Resources unavailable'))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer(testServerUuid);
+
+        expect(result.server).not.toBeNull();
+        expect(result.resources).toEqual([]);
+        expect(result.errors).toContain('resources: Resources unavailable');
+      });
+
+      it('should find server by name and diagnose it', async () => {
+        const mockServers = [{ ...mockServer, uuid: 'found-uuid', name: 'coolify-apps' }];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServers)) // listServers for lookup
+          .mockResolvedValueOnce(mockResponse(mockServer))
+          .mockResolvedValueOnce(mockResponse(mockResources))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer('coolify-apps');
+
+        expect(result.server).not.toBeNull();
+        // First call should be to list servers for lookup
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          1,
+          'http://localhost:3000/api/v1/servers',
+          expect.any(Object),
+        );
+      });
+
+      it('should find server by IP and diagnose it', async () => {
+        const mockServers = [{ ...mockServer, uuid: 'found-uuid', ip: '10.0.0.5' }];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServers)) // listServers for lookup
+          .mockResolvedValueOnce(mockResponse(mockServer))
+          .mockResolvedValueOnce(mockResponse(mockResources))
+          .mockResolvedValueOnce(mockResponse(mockDomains))
+          .mockResolvedValueOnce(mockResponse(mockValidation));
+
+        const result = await client.diagnoseServer('10.0.0.5');
+
+        expect(result.server).not.toBeNull();
+      });
+
+      it('should return error in result when server not found by name', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([])); // Empty server list
+
+        const result = await client.diagnoseServer('nonexistent-server');
+
+        expect(result.server).toBeNull();
+        expect(result.errors).toContain('No server found matching "nonexistent-server"');
+      });
+    });
+
+    describe('findInfrastructureIssues', () => {
+      const mockServers = [
+        {
+          id: 1,
+          uuid: 'server-1',
+          name: 'healthy-server',
+          ip: '1.1.1.1',
+          user: 'root',
+          port: 22,
+          is_reachable: true,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'server-2',
+          name: 'unreachable-server',
+          ip: '2.2.2.2',
+          user: 'root',
+          port: 22,
+          is_reachable: false,
+          status: 'error',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      const mockApplications = [
+        {
+          id: 1,
+          uuid: 'app-1',
+          name: 'healthy-app',
+          status: 'running:healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'app-2',
+          name: 'unhealthy-app',
+          status: 'exited:unhealthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      const mockDatabases = [
+        {
+          id: 1,
+          uuid: 'db-1',
+          name: 'healthy-db',
+          type: 'postgresql',
+          status: 'running:healthy',
+          is_public: false,
+          image: 'postgres:16',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'db-2',
+          name: 'stopped-db',
+          type: 'redis',
+          status: 'exited:unhealthy',
+          is_public: false,
+          image: 'redis:7',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      const mockServices = [
+        {
+          id: 1,
+          uuid: 'svc-1',
+          name: 'healthy-service',
+          type: 'pocketbase',
+          status: 'running:healthy',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          id: 2,
+          uuid: 'svc-2',
+          name: 'exited-service',
+          type: 'n8n',
+          status: 'exited',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      it('should find all infrastructure issues', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServers))
+          .mockResolvedValueOnce(mockResponse(mockApplications))
+          .mockResolvedValueOnce(mockResponse(mockDatabases))
+          .mockResolvedValueOnce(mockResponse(mockServices));
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.total_issues).toBe(4);
+        expect(result.summary.unreachable_servers).toBe(1);
+        expect(result.summary.unhealthy_applications).toBe(1);
+        expect(result.summary.unhealthy_databases).toBe(1);
+        expect(result.summary.unhealthy_services).toBe(1);
+        expect(result.issues).toHaveLength(4);
+        expect(result.errors).toBeUndefined();
+      });
+
+      it('should return empty issues when everything is healthy', async () => {
+        const healthyServers = [mockServers[0]];
+        const healthyApps = [mockApplications[0]];
+        const healthyDbs = [mockDatabases[0]];
+        const healthySvcs = [mockServices[0]];
+
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(healthyServers))
+          .mockResolvedValueOnce(mockResponse(healthyApps))
+          .mockResolvedValueOnce(mockResponse(healthyDbs))
+          .mockResolvedValueOnce(mockResponse(healthySvcs));
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.total_issues).toBe(0);
+        expect(result.issues).toHaveLength(0);
+      });
+
+      it('should handle partial failures and still report issues', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockServers))
+          .mockRejectedValueOnce(new Error('Applications unavailable'))
+          .mockResolvedValueOnce(mockResponse(mockDatabases))
+          .mockResolvedValueOnce(mockResponse(mockServices));
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.unreachable_servers).toBe(1);
+        expect(result.summary.unhealthy_databases).toBe(1);
+        expect(result.summary.unhealthy_services).toBe(1);
+        expect(result.summary.unhealthy_applications).toBe(0); // Failed to fetch
+        expect(result.errors).toContain('applications: Applications unavailable');
+      });
+    });
+  });
 });

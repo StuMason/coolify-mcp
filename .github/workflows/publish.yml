@@ -33,7 +33,7 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
@@ -49,7 +49,7 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: npm run build
 
-      - name: Publish to npm (trusted publishing)
+      - name: Publish to npm
         if: steps.version.outputs.exists == 'false'
         run: npm publish --access public
 
