@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Coolify that provides 58 tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, and private keys.
+MCP (Model Context Protocol) server for Coolify that provides 61 tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, and smart diagnostics.
 
 ## Commands
 
@@ -89,3 +89,25 @@ CI auto-publishes to npm via trusted publishing on version bump. Use:
 npm version patch|minor|major
 git push origin main --tags
 ```
+
+## Documentation Standards
+
+When making changes to the codebase, ensure documentation is updated:
+
+1. **CHANGELOG.md** - Add entry under appropriate version with:
+
+   - `### Added` - New features
+   - `### Changed` - Breaking changes or significant modifications
+   - `### Fixed` - Bug fixes
+   - Follow [Keep a Changelog](https://keepachangelog.com/) format
+
+2. **README.md** - Update if:
+
+   - Tool count changes (update "61 tools" in Features section)
+   - New tools added (add to appropriate category in Available Tools)
+   - New example prompts needed
+   - Response size improvements made (update comparison table)
+
+3. **This file (CLAUDE.md)** - Update tool count if changed
+
+Always work on a feature branch and include documentation updates in the same PR as code changes.

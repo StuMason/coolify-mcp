@@ -408,6 +408,14 @@ export interface BulkUpdateEnvVarsRequest {
   data: CreateEnvVarRequest[];
 }
 
+// Summary type for env vars - reduces response size significantly
+export interface EnvVarSummary {
+  uuid: string;
+  key: string;
+  value: string;
+  is_build_time: boolean;
+}
+
 // =============================================================================
 // Database Types
 // =============================================================================

@@ -1,16 +1,17 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
-
 # Coolify MCP Server
+
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
 
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
 ## Features
 
-This MCP server provides **58 tools** focused on **debugging, management, and deployment**:
+This MCP server provides **61 tools** focused on **debugging, management, and deployment**:
 
 | Category           | Tools                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
 | **Infrastructure** | overview (all resources at once)                                                                         |
+| **Diagnostics**    | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                              |
 | **Servers**        | list, get, validate, resources, domains                                                                  |
 | **Projects**       | list, get, create, update, delete                                                                        |
 | **Environments**   | list, get, create, delete                                                                                |
@@ -82,11 +83,12 @@ The Coolify API returns extremely verbose responses - a single application can c
 
 ### Response Size Comparison
 
-| Endpoint          | Full Response | Summary Response | Reduction |
-| ----------------- | ------------- | ---------------- | --------- |
-| list_applications | ~170KB        | ~4.4KB           | **97%**   |
-| list_services     | ~367KB        | ~1.2KB           | **99%**   |
-| list_servers      | ~4KB          | ~0.4KB           | **90%**   |
+| Endpoint              | Full Response | Summary Response | Reduction |
+| --------------------- | ------------- | ---------------- | --------- |
+| list_applications     | ~170KB        | ~4.4KB           | **97%**   |
+| list_services         | ~367KB        | ~1.2KB           | **99%**   |
+| list_servers          | ~4KB          | ~0.4KB           | **90%**   |
+| list_application_envs | ~3KB/var      | ~0.1KB/var       | **97%**   |
 
 ### Recommended Workflow
 
@@ -108,7 +110,7 @@ list_applications(page=2, per_page=10)
 
 ### Getting Started
 
-```
+```text
 Give me an overview of my infrastructure
 Show me all my applications
 What's running on my servers?
@@ -116,9 +118,12 @@ What's running on my servers?
 
 ### Debugging & Monitoring
 
-```
+```text
+Diagnose my stuartmason.co.uk app
+What's wrong with my-api application?
+Check the status of server 192.168.1.100
+Find any issues in my infrastructure
 Get the logs for application {uuid}
-What's the status of application {uuid}?
 What environment variables are set for application {uuid}?
 Show me recent deployments for application {uuid}
 What resources are running on server {uuid}?
@@ -126,7 +131,7 @@ What resources are running on server {uuid}?
 
 ### Application Management
 
-```
+```text
 Restart application {uuid}
 Stop the database {uuid}
 Start service {uuid}
@@ -136,7 +141,7 @@ Update the DATABASE_URL env var for application {uuid}
 
 ### Project Setup
 
-```
+```text
 Create a new project called "my-app"
 Create a staging environment in project {uuid}
 Deploy my app from private GitHub repo org/repo on branch main
@@ -175,6 +180,14 @@ node dist/index.js
 
 - `get_version` - Get Coolify API version
 - `get_infrastructure_overview` - Get a high-level overview of all infrastructure (servers, projects, applications, databases, services)
+
+### Diagnostics (Smart Lookup)
+
+These tools accept human-friendly identifiers instead of just UUIDs:
+
+- `diagnose_app` - Get comprehensive app diagnostics (status, logs, env vars, deployments). Accepts UUID, name, or domain (e.g., "stuartmason.co.uk" or "my-app")
+- `diagnose_server` - Get server diagnostics (status, resources, domains, validation). Accepts UUID, name, or IP address (e.g., "coolify-apps" or "192.168.1.100")
+- `find_issues` - Scan entire infrastructure for unhealthy apps, databases, services, and unreachable servers
 
 ### Servers
 

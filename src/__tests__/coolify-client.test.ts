@@ -952,6 +952,37 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should list application env vars with summary', async () => {
+      const fullEnvVar = {
+        id: 1,
+        uuid: 'env-var-uuid',
+        key: 'API_KEY',
+        value: 'secret123',
+        is_build_time: false,
+        is_literal: true,
+        is_multiline: false,
+        is_preview: false,
+        is_shared: false,
+        is_shown_once: false,
+        application_id: 1,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse([fullEnvVar]));
+
+      const result = await client.listApplicationEnvVars('app-uuid', { summary: true });
+
+      // Summary should only include uuid, key, value, is_build_time
+      expect(result).toEqual([
+        {
+          uuid: 'env-var-uuid',
+          key: 'API_KEY',
+          value: 'secret123',
+          is_build_time: false,
+        },
+      ]);
+    });
+
     it('should create application env var', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-env-uuid' }));
 

@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-01-03
+
+### Changed
+
+- **Environment variable responses now use summary mode** - `list_application_envs` now returns only essential fields (uuid, key, value, is_build_time) instead of 20+ fields, reducing response sizes by ~80% and preventing context window exhaustion
+
+### Added
+
+- `EnvVarSummary` type for optimized env var responses
+
+## [0.8.0] - 2026-01-03
+
+### Added
+
+- **Smart Diagnostic Tools** - Composite tools that aggregate multiple API calls into single, context-optimized responses for debugging:
+
+  - `diagnose_app` - Get comprehensive app diagnostics (status, logs, env vars, deployments). Accepts UUID, name, or domain (e.g., "stuartmason.co.uk")
+  - `diagnose_server` - Get server diagnostics (status, resources, domains, validation). Accepts UUID, name, or IP address
+  - `find_issues` - Scan infrastructure for unhealthy apps, databases, services, and unreachable servers
+
+- **Smart Lookup** - Diagnostic tools now accept human-friendly identifiers:
+  - Applications: UUID, name, or domain (FQDN)
+  - Servers: UUID, name, or IP address
+
+### Changed
+
+- Total tool count increased from 58 to 61 tools
+
 ## [0.7.1] - 2026-01-02
 
 ### Fixed
