@@ -49,9 +49,9 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: npm run build
 
-      - name: Publish to npm (trusted publishing)
+      - name: Publish to npm
         if: steps.version.outputs.exists == 'false'
-        run: npm publish --access public
+        run: npm publish --access public --provenance
 
       - name: Extract changelog for version
         if: steps.version.outputs.exists == 'false'
