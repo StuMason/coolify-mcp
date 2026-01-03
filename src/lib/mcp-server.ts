@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.9.0';
+const VERSION = '1.0.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -61,11 +61,12 @@ export class CoolifyMcpServer extends McpServer {
     super({
       name: 'coolify',
       version: VERSION,
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, prompts: {} },
     });
 
     this.client = new CoolifyClient(config);
     this.registerTools();
+    this.registerPrompts();
   }
 
   async connect(transport: Transport): Promise<void> {
@@ -835,6 +836,285 @@ export class CoolifyMcpServer extends McpServer {
       },
       async ({ project_uuid, force }) =>
         wrapHandler(() => this.client.redeployProjectApps(project_uuid, force ?? true)),
+    );
+  }
+
+  // ===========================================================================
+  // Prompt Templates - Guided Workflows
+  // ===========================================================================
+  private registerPrompts(): void {
+    // -------------------------------------------------------------------------
+    // debug-app: Comprehensive application debugging workflow
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'debug-app',
+      'Debug an application - gathers status, logs, env vars, and recent deployments to diagnose issues',
+      {
+        query: z
+          .string()
+          .describe(
+            'Application identifier: UUID, name, or domain (e.g., "my-app" or "example.com")',
+          ),
+      },
+      async ({ query }) => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `I need help debugging my Coolify application "${query}". Please:
+
+1. First, use the diagnose_app tool with query="${query}" to get comprehensive diagnostics
+2. Analyze the results and identify:
+   - Current health status and any issues
+   - Recent deployment failures or errors in logs
+   - Missing or misconfigured environment variables
+   - Any patterns suggesting the root cause
+3. Provide a clear diagnosis with:
+   - What's wrong (if anything)
+   - Likely root cause
+   - Recommended fix steps
+4. If the app seems healthy, confirm this and suggest any optimizations
+
+Start by running diagnose_app now.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // health-check: Full infrastructure health analysis
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'health-check',
+      'Perform a comprehensive health check of your entire Coolify infrastructure',
+      {},
+      async () => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `Please perform a comprehensive health check of my Coolify infrastructure:
+
+1. Run find_issues to scan for problems across all servers, apps, databases, and services
+2. Run get_infrastructure_overview to get the full picture
+3. For any issues found, provide:
+   - Severity (critical/warning/info)
+   - Affected resource and current status
+   - Recommended remediation steps
+4. Summarize the overall health:
+   - Total resources and their states
+   - Any immediate actions needed
+   - Preventive recommendations
+
+Start by running find_issues now.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // deploy-app: Step-by-step deployment wizard
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'deploy-app',
+      'Step-by-step wizard to deploy a new application from a Git repository',
+      {
+        repo: z.string().describe('Git repository URL or org/repo format'),
+        branch: z.string().optional().describe('Branch to deploy (default: main)'),
+      },
+      async ({ repo, branch }) => {
+        const branchName = branch || 'main';
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `I want to deploy a new application from ${repo} (branch: ${branchName}). Please guide me through the process:
+
+1. First, run list_projects to show available projects
+2. Ask me which project to deploy to (or help create a new one)
+3. Run list_servers to show available servers
+4. Ask me which server to deploy on
+5. Run list_private_keys to check available deploy keys
+6. Based on the repository type:
+   - If GitHub and we have a GitHub App configured, use create_application_private_gh
+   - Otherwise, help set up a deploy key and use create_application_private_key
+7. After creation, ask about:
+   - Environment variables needed
+   - Domain/FQDN configuration
+   - Whether to deploy immediately
+
+Start by showing me the available projects.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // troubleshoot-ssl: SSL certificate diagnosis workflow
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'troubleshoot-ssl',
+      'Diagnose SSL/TLS certificate issues for a domain',
+      {
+        domain: z.string().describe('Domain having SSL issues (e.g., "example.com")'),
+      },
+      async ({ domain }) => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `I'm having SSL/TLS certificate issues with the domain "${domain}". Please help me diagnose:
+
+1. First, use diagnose_app with query="${domain}" to find the application
+2. Check the application's FQDN configuration
+3. Look for common SSL issues:
+   - Is the domain correctly configured in the FQDN field?
+   - Are there any proxy/redirect issues in the logs?
+   - Is Let's Encrypt renewal working (check for ACME errors)?
+4. Check the server's domain configuration using get_server_domains
+5. Provide remediation steps:
+   - If domain misconfiguration: show how to fix with update_application
+   - If SSL renewal issue: suggest checking DNS and Traefik config
+   - If proxy issue: suggest checking Traefik labels
+
+Start by finding the application for this domain.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // restart-project: Safely restart all apps in a project
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'restart-project',
+      'Safely restart all applications in a project with status monitoring',
+      {
+        project: z.string().describe('Project UUID or name'),
+      },
+      async ({ project }) => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `I need to restart all applications in the project "${project}". Please handle this safely:
+
+1. First, run list_projects to find the project UUID (if a name was given)
+2. Run get_project to confirm the project details and list its environments
+3. Run list_applications to find all apps in this project
+4. Show me a summary of what will be restarted:
+   - List each application with current status
+   - Warn about any that are already unhealthy
+5. Ask for my confirmation before proceeding
+6. If confirmed, run restart_project_apps with the project UUID
+7. After restart, check the results and report:
+   - Which apps restarted successfully
+   - Any failures and why
+   - Current status of each app
+
+Start by finding the project.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // env-audit: Audit environment variables across apps
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'env-audit',
+      'Audit and compare environment variables across applications',
+      {
+        apps: z
+          .string()
+          .optional()
+          .describe('Comma-separated app names/UUIDs to audit (optional, defaults to all)'),
+        key: z.string().optional().describe('Specific env var key to check across apps'),
+      },
+      async ({ apps, key }) => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `Please audit environment variables across my applications${apps ? ` (${apps})` : ''}${key ? ` focusing on the "${key}" variable` : ''}:
+
+1. Run list_applications to get the list of apps
+2. For ${apps ? 'the specified apps' : 'each application'}, run list_application_envs
+3. Analyze the environment variables:
+   ${key ? `- Check if "${key}" is set consistently across all apps` : '- Identify common variables that differ between apps'}
+   - Flag any sensitive-looking values that might be exposed
+   - Identify missing variables that exist in some apps but not others
+   - Check for any empty or placeholder values
+4. Provide a summary:
+   - Table showing variable presence across apps
+   - Recommendations for standardization
+   - Any security concerns
+
+Start by listing the applications.`,
+              },
+            },
+          ],
+        };
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // backup-status: Check database backup status
+    // -------------------------------------------------------------------------
+    this.prompt(
+      'backup-status',
+      'Check backup status and history for all databases',
+      {},
+      async () => {
+        return {
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `Please check the backup status of all my databases:
+
+1. Run list_databases to get all databases
+2. For each database, run list_database_backups to check scheduled backups
+3. For databases with backups configured, run list_backup_executions to check recent history
+4. Report:
+   - Databases WITHOUT any backup schedules (critical!)
+   - Last successful backup for each database
+   - Any failed backups in the last 7 days
+   - Backup frequency and retention settings
+5. Provide recommendations:
+   - Which databases need backup configuration
+   - Any backup schedules that seem too infrequent
+   - Storage concerns if backups are piling up
+
+Start by listing all databases.`,
+              },
+            },
+          ],
+        };
+      },
     );
   }
 }

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-01-03
+
+### Added
+
+- **MCP Prompts - Workflow Templates** - Pre-built guided workflows that users can invoke:
+
+  - `debug-app` - Comprehensive application debugging (gathers logs, status, env vars, deployments)
+  - `health-check` - Full infrastructure health analysis
+  - `deploy-app` - Step-by-step deployment wizard from Git repository
+  - `troubleshoot-ssl` - SSL/TLS certificate diagnosis workflow
+  - `restart-project` - Safely restart all apps in a project with status monitoring
+  - `env-audit` - Audit and compare environment variables across applications
+  - `backup-status` - Check database backup status and history
+
+### Changed
+
+- **v1.0.0 Milestone** - Production-ready with 65 tools and 7 prompt templates
+
 ## [0.9.0] - 2026-01-03
 
 ### Added

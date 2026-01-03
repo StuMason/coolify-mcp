@@ -6,7 +6,7 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides **65 tools** focused on **debugging, management, and deployment**:
+This MCP server provides **65 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
 
 | Category             | Tools                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -21,6 +21,20 @@ This MCP server provides **65 tools** focused on **debugging, management, and de
 | **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
 | **Deployments**      | list, get, deploy, cancel, list by application                                                           |
 | **Private Keys**     | list, get, create, update, delete                                                                        |
+
+### Workflow Prompts
+
+Pre-built guided workflows that walk you through common tasks:
+
+| Prompt             | Description                                                 |
+| ------------------ | ----------------------------------------------------------- |
+| `debug-app`        | Debug an application - gathers logs, status, env vars       |
+| `health-check`     | Full infrastructure health analysis                         |
+| `deploy-app`       | Step-by-step deployment wizard from Git repository          |
+| `troubleshoot-ssl` | SSL/TLS certificate diagnosis workflow                      |
+| `restart-project`  | Safely restart all apps in a project with status monitoring |
+| `env-audit`        | Audit and compare environment variables across applications |
+| `backup-status`    | Check database backup status and history                    |
 
 ## Installation
 
