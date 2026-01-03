@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.7.1';
+const VERSION = '0.8.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -758,6 +758,30 @@ export class CoolifyMcpServer extends McpServer {
         wrapHandler(() =>
           this.client.getBackupExecution(database_uuid, backup_uuid, execution_uuid),
         ),
+    );
+
+    // =========================================================================
+    // Diagnostics (3 tools) - Composite tools for debugging
+    // =========================================================================
+    this.tool(
+      'diagnose_app',
+      'Get comprehensive diagnostic info for an application. Accepts UUID, name, or domain (e.g., "tidylinker.com" or "my-app"). Aggregates: status, health assessment, logs (last 50 lines), environment variables (keys only, values hidden), and recent deployments. Use this for debugging application issues.',
+      { query: z.string().describe('Application UUID, name, or domain (FQDN)') },
+      async ({ query }) => wrapHandler(() => this.client.diagnoseApplication(query)),
+    );
+
+    this.tool(
+      'diagnose_server',
+      'Get comprehensive diagnostic info for a server. Accepts UUID, name, or IP address (e.g., "coolify-apps" or "192.168.1.100"). Aggregates: server status, health assessment, running resources, configured domains, and connection validation. Use this for debugging server issues.',
+      { query: z.string().describe('Server UUID, name, or IP address') },
+      async ({ query }) => wrapHandler(() => this.client.diagnoseServer(query)),
+    );
+
+    this.tool(
+      'find_issues',
+      'Scan entire infrastructure for common issues. Finds: unreachable servers, unhealthy/stopped applications, exited databases, and stopped services. Returns a summary with issue counts and detailed list of problems.',
+      {},
+      async () => wrapHandler(() => this.client.findInfrastructureIssues()),
     );
   }
 }

@@ -14,7 +14,8 @@ export default {
     ],
   },
   extensionsToTreatAsEsm: ['.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '\\.d\\.ts$'],
+  testMatch: ['<rootDir>/src/**/*.test.ts'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   collectCoverage: true,
   collectCoverageFrom: [
     'src/lib/**/*.ts',

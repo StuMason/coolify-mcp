@@ -794,3 +794,84 @@ export interface HealthCheck {
   status: 'healthy' | 'unhealthy';
   version?: string;
 }
+
+// =============================================================================
+// Diagnostic Types (Composite responses for debugging)
+// =============================================================================
+
+export type DiagnosticHealthStatus = 'healthy' | 'unhealthy' | 'unknown';
+
+export interface ApplicationDiagnostic {
+  application: {
+    uuid: string;
+    name: string;
+    status: string;
+    fqdn: string | null;
+    git_repository: string | null;
+    git_branch: string | null;
+  } | null;
+  health: {
+    status: DiagnosticHealthStatus;
+    issues: string[];
+  };
+  logs: string | null;
+  environment_variables: {
+    count: number;
+    variables: Array<{ key: string; is_build_time: boolean }>;
+  };
+  recent_deployments: Array<{
+    uuid: string;
+    status: string;
+    created_at: string;
+  }>;
+  errors?: string[];
+}
+
+export interface ServerDiagnostic {
+  server: {
+    uuid: string;
+    name: string;
+    ip: string;
+    status: string | null;
+    is_reachable: boolean | null;
+  } | null;
+  health: {
+    status: DiagnosticHealthStatus;
+    issues: string[];
+  };
+  resources: Array<{
+    uuid: string;
+    name: string;
+    type: string;
+    status: string;
+  }>;
+  domains: Array<{
+    ip: string;
+    domains: string[];
+  }>;
+  validation: {
+    message: string;
+    validation_logs?: string;
+  } | null;
+  errors?: string[];
+}
+
+export interface InfrastructureIssue {
+  type: 'application' | 'database' | 'service' | 'server';
+  uuid: string;
+  name: string;
+  issue: string;
+  status: string;
+}
+
+export interface InfrastructureIssuesReport {
+  summary: {
+    total_issues: number;
+    unhealthy_applications: number;
+    unhealthy_databases: number;
+    unhealthy_services: number;
+    unreachable_servers: number;
+  };
+  issues: InfrastructureIssue[];
+  errors?: string[];
+}
