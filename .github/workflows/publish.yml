@@ -51,7 +51,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.version.outputs.exists == 'false'
-        run: npm publish --access public
+        run: npm publish --access public --provenance
 
       - name: Extract changelog for version
         if: steps.version.outputs.exists == 'false'
