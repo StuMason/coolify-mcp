@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -382,9 +382,10 @@ export class CoolifyMcpServer extends McpServer {
     // Application env vars
     this.tool(
       'list_application_envs',
-      'List application environment variables',
+      'List application environment variables (returns summary: uuid, key, value, is_build_time)',
       { uuid: z.string().describe('Application UUID') },
-      async ({ uuid }) => wrapHandler(() => this.client.listApplicationEnvVars(uuid)),
+      async ({ uuid }) =>
+        wrapHandler(() => this.client.listApplicationEnvVars(uuid, { summary: true })),
     );
 
     this.tool(
@@ -765,7 +766,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'diagnose_app',
-      'Get comprehensive diagnostic info for an application. Accepts UUID, name, or domain (e.g., "tidylinker.com" or "my-app"). Aggregates: status, health assessment, logs (last 50 lines), environment variables (keys only, values hidden), and recent deployments. Use this for debugging application issues.',
+      'Get comprehensive diagnostic info for an application. Accepts UUID, name, or domain (e.g., "stuartmason.co.uk" or "my-app"). Aggregates: status, health assessment, logs (last 50 lines), environment variables (keys only, values hidden), and recent deployments. Use this for debugging application issues.',
       { query: z.string().describe('Application UUID, name, or domain (FQDN)') },
       async ({ query }) => wrapHandler(() => this.client.diagnoseApplication(query)),
     );

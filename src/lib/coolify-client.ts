@@ -35,6 +35,7 @@ import type {
   ApplicationActionResponse,
   // Environment variable types
   EnvironmentVariable,
+  EnvVarSummary,
   CreateEnvVarRequest,
   UpdateEnvVarRequest,
   BulkUpdateEnvVarsRequest,
@@ -211,6 +212,15 @@ function toProjectSummary(proj: Project): ProjectSummary {
     uuid: proj.uuid,
     name: proj.name,
     description: proj.description,
+  };
+}
+
+function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
+  return {
+    uuid: envVar.uuid,
+    key: envVar.key,
+    value: envVar.value,
+    is_build_time: envVar.is_build_time,
   };
 }
 
@@ -547,8 +557,12 @@ export class CoolifyClient {
   // Application Environment Variables
   // ===========================================================================
 
-  async listApplicationEnvVars(uuid: string): Promise<EnvironmentVariable[]> {
-    return this.request<EnvironmentVariable[]>(`/applications/${uuid}/envs`);
+  async listApplicationEnvVars(
+    uuid: string,
+    options?: { summary?: boolean },
+  ): Promise<EnvironmentVariable[] | EnvVarSummary[]> {
+    const envVars = await this.request<EnvironmentVariable[]>(`/applications/${uuid}/envs`);
+    return options?.summary ? envVars.map(toEnvVarSummary) : envVars;
   }
 
   async createApplicationEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
