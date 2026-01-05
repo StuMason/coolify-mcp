@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
