@@ -1,6 +1,15 @@
 # Coolify MCP Server
 
+[![npm version](https://img.shields.io/npm/v/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/@masonator/coolify-mcp.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
+[![CI](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
+
+> **The most comprehensive MCP server for Coolify** - 67 tools, 7 workflow prompts, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
 
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
@@ -297,15 +306,36 @@ Power user tools for operating on multiple resources at once:
 - `stop_all_apps` - Emergency stop all running applications (requires confirmation)
 - `redeploy_project` - Redeploy all applications in a project with force rebuild
 
+## Why Coolify MCP?
+
+- **Context-Optimized**: Responses are 90-99% smaller than raw API, preventing context window exhaustion
+- **Smart Lookup**: Find apps by domain (`stuartmason.co.uk`), servers by IP, not just UUIDs
+- **Batch Operations**: Restart entire projects, bulk update env vars, emergency stop all apps
+- **Workflow Prompts**: Pre-built guided workflows for common tasks
+- **Production Ready**: 98%+ test coverage, TypeScript strict mode, comprehensive error handling
+- **Always Current**: Weekly OpenAPI drift detection ensures we stay in sync with Coolify
+
+## Related Links
+
+- [Coolify](https://coolify.io/) - The open-source & self-hostable Heroku/Netlify/Vercel alternative
+- [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol powering AI tool integrations
+- [MCP Server Registry](https://github.com/modelcontextprotocol/servers) - Official MCP server directory
+
 ## Contributing
 
-Contributions welcome! Please open an issue first to discuss major changes.
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT
+MIT - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- [GitHub Issues](https://github.com/stumason/coolify-mcp/issues)
+- [GitHub Issues](https://github.com/StuMason/coolify-mcp/issues)
 - [Coolify Community](https://coolify.io/docs/contact)
+
+---
+
+<p align="center">
+  <strong>If you find this useful, please ⭐ star the repo!</strong>
+</p>
