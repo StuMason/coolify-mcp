@@ -6,18 +6,18 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides **65 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
+This MCP server provides **67 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
 
 | Category             | Tools                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Infrastructure**   | overview (all resources at once)                                                                         |
+| **Infrastructure**   | overview, mcp_version (all resources at once)                                                            |
 | **Diagnostics**      | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                              |
 | **Batch Operations** | restart_project_apps, bulk_env_update, stop_all_apps, redeploy_project                                   |
 | **Servers**          | list, get, validate, resources, domains                                                                  |
 | **Projects**         | list, get, create, update, delete                                                                        |
 | **Environments**     | list, get, create, delete                                                                                |
 | **Applications**     | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
-| **Databases**        | list, get, start, stop, restart, backups (list, get), backup executions (list, get)                      |
+| **Databases**        | list, get, delete, start, stop, restart, backups (list, get), backup executions (list, get)              |
 | **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
 | **Deployments**      | list, get, deploy, cancel, list by application                                                           |
 | **Private Keys**     | list, get, create, update, delete                                                                        |
@@ -194,6 +194,7 @@ node dist/index.js
 ### Infrastructure
 
 - `get_version` - Get Coolify API version
+- `get_mcp_version` - Get coolify-mcp server version (useful to verify which version is installed)
 - `get_infrastructure_overview` - Get a high-level overview of all infrastructure (servers, projects, applications, databases, services)
 
 ### Diagnostics (Smart Lookup)
@@ -251,6 +252,7 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `start_database` - Start a database
 - `stop_database` - Stop a database
 - `restart_database` - Restart a database
+- `delete_database` - Delete a database (with optional volume cleanup)
 - `list_database_backups` - List scheduled backups for a database
 - `get_database_backup` - Get details of a scheduled backup
 - `list_backup_executions` - List execution history for a scheduled backup

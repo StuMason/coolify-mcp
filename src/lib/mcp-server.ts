@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -74,9 +74,23 @@ export class CoolifyMcpServer extends McpServer {
   }
 
   private registerTools(): void {
-    // Version
+    // Version tools
     this.tool('get_version', 'Get Coolify API version', {}, async () =>
       wrapHandler(() => this.client.getVersion()),
+    );
+
+    this.tool(
+      'get_mcp_version',
+      'Get the version of this MCP server (coolify-mcp). Useful to verify which version is installed.',
+      {},
+      async () => ({
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ version: VERSION, name: '@masonator/coolify-mcp' }, null, 2),
+          },
+        ],
+      }),
     );
 
     // Infrastructure Overview - high-level view of all resources
@@ -426,7 +440,7 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Databases (5 tools)
+    // Databases (6 tools)
     // =========================================================================
     this.tool(
       'list_databases',
@@ -465,6 +479,17 @@ export class CoolifyMcpServer extends McpServer {
       'Restart a database',
       { uuid: z.string().describe('Database UUID') },
       async ({ uuid }) => wrapHandler(() => this.client.restartDatabase(uuid)),
+    );
+
+    this.tool(
+      'delete_database',
+      'Delete a database. WARNING: This permanently deletes the database and optionally its volumes. Data cannot be recovered unless you have backups.',
+      {
+        uuid: z.string().describe('Database UUID'),
+        delete_volumes: z.boolean().optional().describe('Delete volumes (default: false)'),
+      },
+      async ({ uuid, delete_volumes }) =>
+        wrapHandler(() => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes })),
     );
 
     // =========================================================================
