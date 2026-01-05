@@ -1,0 +1,159 @@
+name: OpenAPI Drift Detection
+
+on:
+  schedule:
+    # Run weekly on Monday at 7am UK time
+    - cron: '0 7 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download current Coolify OpenAPI spec
+        id: download
+        run: |
+          # Coolify's OpenAPI spec location
+          curl -sSL "https://raw.githubusercontent.com/coollabsio/coolify/main/openapi.yaml" -o /tmp/coolify-openapi-new.yaml
+
+          # Check if download succeeded
+          if [ ! -s /tmp/coolify-openapi-new.yaml ]; then
+            echo "Failed to download OpenAPI spec"
+            exit 1
+          fi
+
+          echo "Downloaded Coolify OpenAPI spec"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compare OpenAPI specs
+        id: compare
+        run: |
+          # Install openapi-diff tool
+          npm install -g openapi-diff
+
+          # If we have a cached spec, compare against it
+          if [ -f ".github/coolify-openapi-baseline.yaml" ]; then
+            echo "Comparing against baseline spec..."
+
+            # Run diff and capture output
+            set +e
+            DIFF_OUTPUT=$(openapi-diff .github/coolify-openapi-baseline.yaml /tmp/coolify-openapi-new.yaml 2>&1)
+            DIFF_EXIT=$?
+            set -e
+
+            echo "diff_exit=$DIFF_EXIT" >> $GITHUB_OUTPUT
+
+            if [ $DIFF_EXIT -ne 0 ]; then
+              echo "Changes detected in Coolify OpenAPI spec"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+
+              # Save diff output for issue creation
+              echo "$DIFF_OUTPUT" > /tmp/diff-output.txt
+
+              # Extract key changes for issue body
+              {
+                echo "DIFF_SUMMARY<<EOF"
+                echo "$DIFF_OUTPUT" | head -200
+                echo "EOF"
+              } >> $GITHUB_OUTPUT
+            else
+              echo "No changes detected"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No baseline spec found, creating initial baseline"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "needs_baseline=true" >> $GITHUB_OUTPUT
+          fi
+
+          # Always update the temp spec for potential baseline update
+          cp /tmp/coolify-openapi-new.yaml /tmp/coolify-openapi-current.yaml
+
+      - name: Create issue for API changes
+        if: steps.compare.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const diffSummary = process.env.DIFF_SUMMARY || 'Unable to generate diff summary';
+
+            // Check if there's already an open issue for API drift
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'api-drift',
+              state: 'open'
+            });
+
+            if (existingIssues.data.length > 0) {
+              // Add comment to existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssues.data[0].number,
+                body: `## New API Changes Detected (${new Date().toISOString().split('T')[0]})\n\n\`\`\`\n${diffSummary}\n\`\`\`\n\nPlease review and update the MCP tools accordingly.`
+              });
+              console.log(`Added comment to existing issue #${existingIssues.data[0].number}`);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Coolify API has changed - review required`,
+                labels: ['api-drift', 'maintenance'],
+                body: `## Coolify OpenAPI Specification Changes Detected
+
+            The weekly API drift check has detected changes in the Coolify OpenAPI specification.
+
+            ### Changes Summary
+
+            \`\`\`
+            ${diffSummary}
+            \`\`\`
+
+            ### Action Required
+
+            1. Review the changes above
+            2. Determine if any MCP tools need updating:
+               - New endpoints → Consider adding new tools
+               - Removed endpoints → Remove or deprecate affected tools
+               - Changed parameters → Update tool schemas
+            3. Update the baseline spec after addressing changes
+
+            ### Resources
+
+            - [Coolify OpenAPI Spec](https://github.com/coollabsio/coolify/blob/main/openapi.yaml)
+            - [Coolify API Docs](https://coolify.io/docs/api-reference)
+
+            ---
+            *This issue was automatically created by the OpenAPI Drift Detection workflow.*`
+              });
+              console.log('Created new API drift issue');
+            }
+        env:
+          DIFF_SUMMARY: ${{ steps.compare.outputs.DIFF_SUMMARY }}
+
+      - name: Update baseline spec
+        if: steps.compare.outputs.needs_baseline == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p .github
+          cp /tmp/coolify-openapi-current.yaml .github/coolify-openapi-baseline.yaml
+          echo "Baseline spec updated"
+
+      - name: Commit baseline if updated
+        if: steps.compare.outputs.needs_baseline == 'true' || github.event_name == 'workflow_dispatch'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: update Coolify OpenAPI baseline spec'
+          file_pattern: '.github/coolify-openapi-baseline.yaml'
+          branch: main
