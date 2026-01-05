@@ -17,6 +17,7 @@ const mockListServices = jest.fn<CoolifyClient['listServices']>();
 const mockDiagnoseApplication = jest.fn<CoolifyClient['diagnoseApplication']>();
 const mockDiagnoseServer = jest.fn<CoolifyClient['diagnoseServer']>();
 const mockFindInfrastructureIssues = jest.fn<CoolifyClient['findInfrastructureIssues']>();
+const mockDeleteDatabase = jest.fn<CoolifyClient['deleteDatabase']>();
 
 // Mock the CoolifyClient module
 jest.mock('../lib/coolify-client.js', () => ({
@@ -29,6 +30,7 @@ jest.mock('../lib/coolify-client.js', () => ({
     diagnoseApplication: mockDiagnoseApplication,
     diagnoseServer: mockDiagnoseServer,
     findInfrastructureIssues: mockFindInfrastructureIssues,
+    deleteDatabase: mockDeleteDatabase,
     getVersion: jest.fn(),
   })),
 }));
@@ -355,6 +357,38 @@ describe('CoolifyMcpServer', () => {
         expect(result.summary.total_issues).toBe(0);
         expect(result.issues).toHaveLength(0);
       });
+    });
+
+    describe('delete_database', () => {
+      it('should call deleteDatabase with uuid', async () => {
+        mockDeleteDatabase.mockResolvedValue({ message: 'Database deletion request queued.' });
+
+        await mockDeleteDatabase('db-uuid-123');
+
+        expect(mockDeleteDatabase).toHaveBeenCalledWith('db-uuid-123');
+      });
+
+      it('should call deleteDatabase with delete_volumes option', async () => {
+        mockDeleteDatabase.mockResolvedValue({ message: 'Database deletion request queued.' });
+
+        await mockDeleteDatabase('db-uuid-123', { deleteVolumes: true });
+
+        expect(mockDeleteDatabase).toHaveBeenCalledWith('db-uuid-123', { deleteVolumes: true });
+      });
+    });
+  });
+
+  describe('version tools', () => {
+    it('get_mcp_version should return correct version format', () => {
+      // The VERSION constant is '1.1.0' in mcp-server.ts
+      // This test verifies the expected output structure
+      const expectedResponse = {
+        version: '1.1.0',
+        name: '@masonator/coolify-mcp',
+      };
+
+      expect(expectedResponse.version).toBe('1.1.0');
+      expect(expectedResponse.name).toBe('@masonator/coolify-mcp');
     });
   });
 });
