@@ -5,11 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1] - 2026-01-05
+## [1.5.0] - 2026-01-06
 
 ### Fixed
 
 - `delete_environment` now uses correct API path `/projects/{project_uuid}/environments/{environment_name_or_uuid}` (breaking: now requires `project_uuid` parameter)
+
+### Changed
+
+- Claude Code review workflow now only runs on PR creation (not every push)
+- Upgraded to Prettier 4.0
+
+### Removed
+
+- Obsolete documentation files in `docs/features/` (14 ADR files) and `docs/mcp-*.md` files (~7,700 lines removed)
+
+## [1.1.1] - 2026-01-05
 
 ### Changed
 
