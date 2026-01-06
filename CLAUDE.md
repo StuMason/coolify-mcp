@@ -95,14 +95,12 @@ git push origin main --tags
 When making changes to the codebase, ensure documentation is updated:
 
 1. **CHANGELOG.md** - Add entry under appropriate version with:
-
    - `### Added` - New features
    - `### Changed` - Breaking changes or significant modifications
    - `### Fixed` - Bug fixes
    - Follow [Keep a Changelog](https://keepachangelog.com/) format
 
 2. **README.md** - Update if:
-
    - Tool count changes (update "67 tools" in Features section)
    - New tools added (add to appropriate category in Available Tools)
    - New example prompts needed
