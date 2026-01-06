@@ -9,27 +9,27 @@
 [![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
 
-> **The most comprehensive MCP server for Coolify** - 67 tools, 7 workflow prompts, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
+> **The most comprehensive MCP server for Coolify** - 75 tools, 7 workflow prompts, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
 
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
 ## Features
 
-This MCP server provides **67 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
+This MCP server provides **75 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
 
-| Category             | Tools                                                                                                    |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Infrastructure**   | overview, mcp_version (all resources at once)                                                            |
-| **Diagnostics**      | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                              |
-| **Batch Operations** | restart_project_apps, bulk_env_update, stop_all_apps, redeploy_project                                   |
-| **Servers**          | list, get, validate, resources, domains                                                                  |
-| **Projects**         | list, get, create, update, delete                                                                        |
-| **Environments**     | list, get, create, delete                                                                                |
-| **Applications**     | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key) |
-| **Databases**        | list, get, delete, start, stop, restart, backups (list, get), backup executions (list, get)              |
-| **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                 |
-| **Deployments**      | list, get, deploy, cancel, list by application                                                           |
-| **Private Keys**     | list, get, create, update, delete                                                                        |
+| Category             | Tools                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Infrastructure**   | overview, mcp_version (all resources at once)                                                                 |
+| **Diagnostics**      | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                                   |
+| **Batch Operations** | restart_project_apps, bulk_env_update, stop_all_apps, redeploy_project                                        |
+| **Servers**          | list, get, validate, resources, domains                                                                       |
+| **Projects**         | list, get, create, update, delete                                                                             |
+| **Environments**     | list, get, create, delete                                                                                     |
+| **Applications**     | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key)      |
+| **Databases**        | list, get, create (8 types), delete, start, stop, restart, backups (list, get), backup executions (list, get) |
+| **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                      |
+| **Deployments**      | list, get, deploy, cancel, list by application                                                                |
+| **Private Keys**     | list, get, create, update, delete                                                                             |
 
 ### Workflow Prompts
 

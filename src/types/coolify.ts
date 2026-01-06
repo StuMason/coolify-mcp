@@ -545,6 +545,83 @@ export interface UpdateDatabaseRequest {
   dragonfly_password?: string;
 }
 
+// Base interface for database creation requests
+export interface CreateDatabaseBaseRequest {
+  server_uuid: string;
+  project_uuid: string;
+  environment_name?: string;
+  environment_uuid?: string;
+  destination_uuid?: string;
+  name?: string;
+  description?: string;
+  image?: string;
+  is_public?: boolean;
+  public_port?: number;
+  limits_memory?: string;
+  limits_memory_swap?: string;
+  limits_memory_swappiness?: number;
+  limits_memory_reservation?: string;
+  limits_cpus?: string;
+  limits_cpuset?: string;
+  limits_cpu_shares?: number;
+  instant_deploy?: boolean;
+}
+
+export interface CreatePostgresqlRequest extends CreateDatabaseBaseRequest {
+  postgres_user?: string;
+  postgres_password?: string;
+  postgres_db?: string;
+  postgres_initdb_args?: string;
+  postgres_host_auth_method?: string;
+  postgres_conf?: string;
+}
+
+export interface CreateMysqlRequest extends CreateDatabaseBaseRequest {
+  mysql_root_password?: string;
+  mysql_user?: string;
+  mysql_password?: string;
+  mysql_database?: string;
+  mysql_conf?: string;
+}
+
+export interface CreateMariadbRequest extends CreateDatabaseBaseRequest {
+  mariadb_root_password?: string;
+  mariadb_user?: string;
+  mariadb_password?: string;
+  mariadb_database?: string;
+  mariadb_conf?: string;
+}
+
+export interface CreateMongodbRequest extends CreateDatabaseBaseRequest {
+  mongo_initdb_root_username?: string;
+  mongo_initdb_root_password?: string;
+  mongo_initdb_database?: string;
+  mongo_conf?: string;
+}
+
+export interface CreateRedisRequest extends CreateDatabaseBaseRequest {
+  redis_password?: string;
+  redis_conf?: string;
+}
+
+export interface CreateKeydbRequest extends CreateDatabaseBaseRequest {
+  keydb_password?: string;
+  keydb_conf?: string;
+}
+
+export interface CreateClickhouseRequest extends CreateDatabaseBaseRequest {
+  clickhouse_admin_user?: string;
+  clickhouse_admin_password?: string;
+}
+
+export interface CreateDragonflyRequest extends CreateDatabaseBaseRequest {
+  dragonfly_password?: string;
+}
+
+export interface CreateDatabaseResponse {
+  uuid: string;
+}
+
 // =============================================================================
 // Database Backup Types
 // =============================================================================

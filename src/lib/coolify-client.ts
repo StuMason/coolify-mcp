@@ -42,6 +42,15 @@ import type {
   // Database types
   Database,
   UpdateDatabaseRequest,
+  CreatePostgresqlRequest,
+  CreateMysqlRequest,
+  CreateMariadbRequest,
+  CreateMongodbRequest,
+  CreateRedisRequest,
+  CreateKeydbRequest,
+  CreateClickhouseRequest,
+  CreateDragonflyRequest,
+  CreateDatabaseResponse,
   DatabaseBackup,
   BackupExecution,
   // Service types
@@ -654,6 +663,63 @@ export class CoolifyClient {
   async restartDatabase(uuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/databases/${uuid}/restart`, {
       method: 'POST',
+    });
+  }
+
+  // Database creation methods
+  async createPostgresql(data: CreatePostgresqlRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/postgresql', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createMysql(data: CreateMysqlRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/mysql', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createMariadb(data: CreateMariadbRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/mariadb', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createMongodb(data: CreateMongodbRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/mongodb', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createRedis(data: CreateRedisRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/redis', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createKeydb(data: CreateKeydbRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/keydb', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createClickhouse(data: CreateClickhouseRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/clickhouse', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createDragonfly(data: CreateDragonflyRequest): Promise<CreateDatabaseResponse> {
+    return this.request<CreateDatabaseResponse>('/databases/dragonfly', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 
