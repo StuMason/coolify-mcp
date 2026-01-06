@@ -40,11 +40,13 @@ jobs:
         run: npm run build
 
       - name: Test with coverage
-        run: npm test
+        run: npm run test:coverage
 
       - name: Upload coverage to Codecov
         if: matrix.node-version == '20.x'
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
           fail_ci_if_error: false
+          verbose: true
