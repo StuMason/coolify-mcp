@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Coolify that provides 75 tools and 7 workflow prompts for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, smart diagnostics, and batch operations. Prompts provide guided workflows for debugging, deployment, health checks, and more.
+MCP (Model Context Protocol) server for Coolify that provides 33 token-optimized tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, smart diagnostics, and batch operations. v2.0.0 reduced token usage by 85% (from ~43,000 to ~6,600 tokens) by consolidating related operations into single tools with action parameters.
 
 ## Commands
 
@@ -101,11 +101,11 @@ When making changes to the codebase, ensure documentation is updated:
    - Follow [Keep a Changelog](https://keepachangelog.com/) format
 
 2. **README.md** - Update if:
-   - Tool count changes (update "75 tools" in Features section)
+   - Tool count changes (update "33 tools" in Features section)
    - New tools added (add to appropriate category in Available Tools)
    - New example prompts needed
    - Response size improvements made (update comparison table)
 
-3. **This file (CLAUDE.md)** - Update tool count if changed
+3. **This file (CLAUDE.md)** - Update tool count if changed (currently 33 tools)
 
 Always work on a feature branch and include documentation updates in the same PR as code changes.
