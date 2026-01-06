@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-06
+
+### Added
+
+- **Database Creation Tools** - Full CRUD support for all database types:
+  - `create_postgresql` - Create PostgreSQL databases
+  - `create_mysql` - Create MySQL databases
+  - `create_mariadb` - Create MariaDB databases
+  - `create_mongodb` - Create MongoDB databases
+  - `create_redis` - Create Redis databases
+  - `create_keydb` - Create KeyDB databases
+  - `create_clickhouse` - Create ClickHouse databases
+  - `create_dragonfly` - Create Dragonfly databases (Redis-compatible)
+
+### Changed
+
+- Total tool count increased from 67 to 75 tools
+- Database tools section now has 14 tools (was 6)
+
 ## [1.5.0] - 2026-01-06
 
 ### Fixed

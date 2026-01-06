@@ -18,6 +18,14 @@ const mockDiagnoseApplication = jest.fn<CoolifyClient['diagnoseApplication']>();
 const mockDiagnoseServer = jest.fn<CoolifyClient['diagnoseServer']>();
 const mockFindInfrastructureIssues = jest.fn<CoolifyClient['findInfrastructureIssues']>();
 const mockDeleteDatabase = jest.fn<CoolifyClient['deleteDatabase']>();
+const mockCreatePostgresql = jest.fn<CoolifyClient['createPostgresql']>();
+const mockCreateMysql = jest.fn<CoolifyClient['createMysql']>();
+const mockCreateMariadb = jest.fn<CoolifyClient['createMariadb']>();
+const mockCreateMongodb = jest.fn<CoolifyClient['createMongodb']>();
+const mockCreateRedis = jest.fn<CoolifyClient['createRedis']>();
+const mockCreateKeydb = jest.fn<CoolifyClient['createKeydb']>();
+const mockCreateClickhouse = jest.fn<CoolifyClient['createClickhouse']>();
+const mockCreateDragonfly = jest.fn<CoolifyClient['createDragonfly']>();
 
 // Mock the CoolifyClient module
 jest.mock('../lib/coolify-client.js', () => ({
@@ -31,6 +39,14 @@ jest.mock('../lib/coolify-client.js', () => ({
     diagnoseServer: mockDiagnoseServer,
     findInfrastructureIssues: mockFindInfrastructureIssues,
     deleteDatabase: mockDeleteDatabase,
+    createPostgresql: mockCreatePostgresql,
+    createMysql: mockCreateMysql,
+    createMariadb: mockCreateMariadb,
+    createMongodb: mockCreateMongodb,
+    createRedis: mockCreateRedis,
+    createKeydb: mockCreateKeydb,
+    createClickhouse: mockCreateClickhouse,
+    createDragonfly: mockCreateDragonfly,
     getVersion: jest.fn(),
   })),
 }));
@@ -374,6 +390,96 @@ describe('CoolifyMcpServer', () => {
         await mockDeleteDatabase('db-uuid-123', { deleteVolumes: true });
 
         expect(mockDeleteDatabase).toHaveBeenCalledWith('db-uuid-123', { deleteVolumes: true });
+      });
+    });
+
+    describe('database creation tools', () => {
+      const baseParams = {
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        environment_name: 'production',
+      };
+
+      it('should call createPostgresql with correct params', async () => {
+        mockCreatePostgresql.mockResolvedValue({ uuid: 'pg-uuid' });
+
+        await mockCreatePostgresql({ ...baseParams, postgres_user: 'myuser' });
+
+        expect(mockCreatePostgresql).toHaveBeenCalledWith({
+          ...baseParams,
+          postgres_user: 'myuser',
+        });
+      });
+
+      it('should call createMysql with correct params', async () => {
+        mockCreateMysql.mockResolvedValue({ uuid: 'mysql-uuid' });
+
+        await mockCreateMysql({ ...baseParams, mysql_user: 'myuser' });
+
+        expect(mockCreateMysql).toHaveBeenCalledWith({
+          ...baseParams,
+          mysql_user: 'myuser',
+        });
+      });
+
+      it('should call createMariadb with correct params', async () => {
+        mockCreateMariadb.mockResolvedValue({ uuid: 'mariadb-uuid' });
+
+        await mockCreateMariadb(baseParams);
+
+        expect(mockCreateMariadb).toHaveBeenCalledWith(baseParams);
+      });
+
+      it('should call createMongodb with correct params', async () => {
+        mockCreateMongodb.mockResolvedValue({ uuid: 'mongo-uuid' });
+
+        await mockCreateMongodb({ ...baseParams, mongo_initdb_root_username: 'admin' });
+
+        expect(mockCreateMongodb).toHaveBeenCalledWith({
+          ...baseParams,
+          mongo_initdb_root_username: 'admin',
+        });
+      });
+
+      it('should call createRedis with correct params', async () => {
+        mockCreateRedis.mockResolvedValue({ uuid: 'redis-uuid' });
+
+        await mockCreateRedis({ ...baseParams, redis_password: 'secret' });
+
+        expect(mockCreateRedis).toHaveBeenCalledWith({
+          ...baseParams,
+          redis_password: 'secret',
+        });
+      });
+
+      it('should call createKeydb with correct params', async () => {
+        mockCreateKeydb.mockResolvedValue({ uuid: 'keydb-uuid' });
+
+        await mockCreateKeydb(baseParams);
+
+        expect(mockCreateKeydb).toHaveBeenCalledWith(baseParams);
+      });
+
+      it('should call createClickhouse with correct params', async () => {
+        mockCreateClickhouse.mockResolvedValue({ uuid: 'clickhouse-uuid' });
+
+        await mockCreateClickhouse({ ...baseParams, clickhouse_admin_user: 'admin' });
+
+        expect(mockCreateClickhouse).toHaveBeenCalledWith({
+          ...baseParams,
+          clickhouse_admin_user: 'admin',
+        });
+      });
+
+      it('should call createDragonfly with correct params', async () => {
+        mockCreateDragonfly.mockResolvedValue({ uuid: 'dragonfly-uuid' });
+
+        await mockCreateDragonfly({ ...baseParams, dragonfly_password: 'secret' });
+
+        expect(mockCreateDragonfly).toHaveBeenCalledWith({
+          ...baseParams,
+          dragonfly_password: 'secret',
+        });
       });
     });
   });

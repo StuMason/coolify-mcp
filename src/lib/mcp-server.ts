@@ -31,7 +31,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 /** Wrap tool handler with consistent error handling */
 function wrapHandler<T>(
@@ -445,7 +445,7 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Databases (6 tools)
+    // Databases (14 tools)
     // =========================================================================
     this.tool(
       'list_databases',
@@ -495,6 +495,127 @@ export class CoolifyMcpServer extends McpServer {
       },
       async ({ uuid, delete_volumes }) =>
         wrapHandler(() => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes })),
+    );
+
+    // Database creation tools - shared schema for base fields
+    const databaseBaseSchema = {
+      server_uuid: z.string().describe('Server UUID'),
+      project_uuid: z.string().describe('Project UUID'),
+      environment_name: z.string().optional().describe('Environment name'),
+      environment_uuid: z.string().optional().describe('Environment UUID'),
+      destination_uuid: z.string().optional().describe('Destination UUID'),
+      name: z.string().optional().describe('Database name'),
+      description: z.string().optional().describe('Database description'),
+      image: z.string().optional().describe('Docker image'),
+      is_public: z.boolean().optional().describe('Make database publicly accessible'),
+      public_port: z.number().optional().describe('Public port'),
+      limits_memory: z.string().optional().describe('Memory limit'),
+      limits_memory_swap: z.string().optional().describe('Memory swap limit'),
+      limits_memory_swappiness: z.number().optional().describe('Memory swappiness'),
+      limits_memory_reservation: z.string().optional().describe('Memory reservation'),
+      limits_cpus: z.string().optional().describe('CPU limit'),
+      limits_cpuset: z.string().optional().describe('CPU set'),
+      limits_cpu_shares: z.number().optional().describe('CPU shares'),
+      instant_deploy: z.boolean().optional().describe('Deploy immediately after creation'),
+    };
+
+    this.tool(
+      'create_postgresql',
+      'Create a new PostgreSQL database',
+      {
+        ...databaseBaseSchema,
+        postgres_user: z.string().optional().describe('PostgreSQL user'),
+        postgres_password: z.string().optional().describe('PostgreSQL password'),
+        postgres_db: z.string().optional().describe('PostgreSQL database name'),
+        postgres_initdb_args: z.string().optional().describe('PostgreSQL initdb args'),
+        postgres_host_auth_method: z.string().optional().describe('PostgreSQL host auth method'),
+        postgres_conf: z.string().optional().describe('PostgreSQL configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createPostgresql(args)),
+    );
+
+    this.tool(
+      'create_mysql',
+      'Create a new MySQL database',
+      {
+        ...databaseBaseSchema,
+        mysql_root_password: z.string().optional().describe('MySQL root password'),
+        mysql_user: z.string().optional().describe('MySQL user'),
+        mysql_password: z.string().optional().describe('MySQL password'),
+        mysql_database: z.string().optional().describe('MySQL database name'),
+        mysql_conf: z.string().optional().describe('MySQL configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createMysql(args)),
+    );
+
+    this.tool(
+      'create_mariadb',
+      'Create a new MariaDB database',
+      {
+        ...databaseBaseSchema,
+        mariadb_root_password: z.string().optional().describe('MariaDB root password'),
+        mariadb_user: z.string().optional().describe('MariaDB user'),
+        mariadb_password: z.string().optional().describe('MariaDB password'),
+        mariadb_database: z.string().optional().describe('MariaDB database name'),
+        mariadb_conf: z.string().optional().describe('MariaDB configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createMariadb(args)),
+    );
+
+    this.tool(
+      'create_mongodb',
+      'Create a new MongoDB database',
+      {
+        ...databaseBaseSchema,
+        mongo_initdb_root_username: z.string().optional().describe('MongoDB root username'),
+        mongo_initdb_root_password: z.string().optional().describe('MongoDB root password'),
+        mongo_initdb_database: z.string().optional().describe('MongoDB database name'),
+        mongo_conf: z.string().optional().describe('MongoDB configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createMongodb(args)),
+    );
+
+    this.tool(
+      'create_redis',
+      'Create a new Redis database',
+      {
+        ...databaseBaseSchema,
+        redis_password: z.string().optional().describe('Redis password'),
+        redis_conf: z.string().optional().describe('Redis configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createRedis(args)),
+    );
+
+    this.tool(
+      'create_keydb',
+      'Create a new KeyDB database',
+      {
+        ...databaseBaseSchema,
+        keydb_password: z.string().optional().describe('KeyDB password'),
+        keydb_conf: z.string().optional().describe('KeyDB configuration'),
+      },
+      async (args) => wrapHandler(() => this.client.createKeydb(args)),
+    );
+
+    this.tool(
+      'create_clickhouse',
+      'Create a new ClickHouse database',
+      {
+        ...databaseBaseSchema,
+        clickhouse_admin_user: z.string().optional().describe('ClickHouse admin user'),
+        clickhouse_admin_password: z.string().optional().describe('ClickHouse admin password'),
+      },
+      async (args) => wrapHandler(() => this.client.createClickhouse(args)),
+    );
+
+    this.tool(
+      'create_dragonfly',
+      'Create a new Dragonfly database (Redis-compatible)',
+      {
+        ...databaseBaseSchema,
+        dragonfly_password: z.string().optional().describe('Dragonfly password'),
+      },
+      async (args) => wrapHandler(() => this.client.createDragonfly(args)),
     );
 
     // =========================================================================

@@ -1177,6 +1177,135 @@ describe('CoolifyClient', () => {
         expect.any(Object),
       );
     });
+
+    it('should create a PostgreSQL database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'pg-uuid' }));
+
+      const result = await client.createPostgresql({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        environment_name: 'production',
+        postgres_user: 'myuser',
+        postgres_db: 'mydb',
+      });
+
+      expect(result).toEqual({ uuid: 'pg-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/postgresql',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a MySQL database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'mysql-uuid' }));
+
+      const result = await client.createMysql({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        mysql_user: 'myuser',
+        mysql_database: 'mydb',
+      });
+
+      expect(result).toEqual({ uuid: 'mysql-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/mysql',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a MariaDB database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'mariadb-uuid' }));
+
+      const result = await client.createMariadb({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+      });
+
+      expect(result).toEqual({ uuid: 'mariadb-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/mariadb',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a MongoDB database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'mongo-uuid' }));
+
+      const result = await client.createMongodb({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        mongo_initdb_root_username: 'admin',
+      });
+
+      expect(result).toEqual({ uuid: 'mongo-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/mongodb',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a Redis database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'redis-uuid' }));
+
+      const result = await client.createRedis({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        redis_password: 'secret',
+      });
+
+      expect(result).toEqual({ uuid: 'redis-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/redis',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a KeyDB database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'keydb-uuid' }));
+
+      const result = await client.createKeydb({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+      });
+
+      expect(result).toEqual({ uuid: 'keydb-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/keydb',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a ClickHouse database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'clickhouse-uuid' }));
+
+      const result = await client.createClickhouse({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        clickhouse_admin_user: 'admin',
+      });
+
+      expect(result).toEqual({ uuid: 'clickhouse-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/clickhouse',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should create a Dragonfly database', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'dragonfly-uuid' }));
+
+      const result = await client.createDragonfly({
+        server_uuid: 'server-uuid',
+        project_uuid: 'project-uuid',
+        dragonfly_password: 'secret',
+      });
+
+      expect(result).toEqual({ uuid: 'dragonfly-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/dragonfly',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
   });
 
   // =========================================================================
