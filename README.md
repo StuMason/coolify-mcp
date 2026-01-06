@@ -9,41 +9,33 @@
 [![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
 
-> **The most comprehensive MCP server for Coolify** - 75 tools, 7 workflow prompts, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
+> **The most comprehensive MCP server for Coolify** - 34 optimized tools, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
 
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
 ## Features
 
-This MCP server provides **75 tools** and **7 workflow prompts** for **debugging, management, and deployment**:
+This MCP server provides **34 token-optimized tools** for **debugging, management, and deployment**:
 
-| Category             | Tools                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Infrastructure**   | overview, mcp_version (all resources at once)                                                                 |
-| **Diagnostics**      | diagnose_app, diagnose_server, find_issues (smart lookup by name/domain/IP)                                   |
-| **Batch Operations** | restart_project_apps, bulk_env_update, stop_all_apps, redeploy_project                                        |
-| **Servers**          | list, get, validate, resources, domains                                                                       |
-| **Projects**         | list, get, create, update, delete                                                                             |
-| **Environments**     | list, get, create, delete                                                                                     |
-| **Applications**     | list, get, update, delete, start, stop, restart, logs, env vars (CRUD), create (private-gh, private-key)      |
-| **Databases**        | list, get, create (8 types), delete, start, stop, restart, backups (list, get), backup executions (list, get) |
-| **Services**         | list, get, create, update, delete, start, stop, restart, env vars (list, create, delete)                      |
-| **Deployments**      | list, get, deploy, cancel, list by application                                                                |
-| **Private Keys**     | list, get, create, update, delete                                                                             |
+| Category             | Tools                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`                           |
+| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                          |
+| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`            |
+| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`     |
+| **Projects**         | `projects` (list, get, create, update, delete via action param)                           |
+| **Environments**     | `environments` (list, get, create, delete via action param)                               |
+| **Applications**     | `list_applications`, `get_application`, `application` (CRUD), `application_logs`          |
+| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` |
+| **Services**         | `list_services`, `get_service`, `service` (create, update, delete)                        |
+| **Control**          | `control` (start/stop/restart for apps, databases, services)                              |
+| **Env Vars**         | `env_vars` (CRUD for application and service env vars)                                    |
+| **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                    |
+| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                       |
 
-### Workflow Prompts
+### v2.0.0 Token Diet
 
-Pre-built guided workflows that walk you through common tasks:
-
-| Prompt             | Description                                                 |
-| ------------------ | ----------------------------------------------------------- |
-| `debug-app`        | Debug an application - gathers logs, status, env vars       |
-| `health-check`     | Full infrastructure health analysis                         |
-| `deploy-app`       | Step-by-step deployment wizard from Git repository          |
-| `troubleshoot-ssl` | SSL/TLS certificate diagnosis workflow                      |
-| `restart-project`  | Safely restart all apps in a project with status monitoring |
-| `env-audit`        | Audit and compare environment variables across applications |
-| `backup-status`    | Check database backup status and history                    |
+v2.0.0 reduced token usage by **85%** (from ~43,000 to ~6,600 tokens) by consolidating related operations into single tools with action parameters. This prevents context window exhaustion in AI assistants.
 
 ## Installation
 

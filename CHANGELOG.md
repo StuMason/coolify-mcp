@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-06
+
+### Breaking Changes - Token Diet Release 🏋️
+
+**v2.0.0 is a complete rewrite of the MCP tool layer focused on drastically reducing token usage.**
+
+- **Token reduction: ~43,000 → ~6,600 tokens** (85% reduction)
+- **Tool count: 77 → 34 tools** (56% reduction)
+- All prompts removed (7 prompts were unused)
+
+### Changed
+
+- **Consolidated tools** - Related operations now share a single tool with action parameters:
+  - Server: `server_resources`, `server_domains`, `validate_server` (separate focused tools)
+  - Projects: `projects` tool with `action: list|get|create|update|delete`
+  - Environments: `environments` tool with `action: list|get|create|delete`
+  - Applications: `application` tool with `action: create_github|create_key|update|delete`
+  - Databases: `database` tool with `action: create|delete` and `type: postgresql|mysql|mariadb|mongodb|redis|keydb|clickhouse|dragonfly`
+  - Services: `service` tool with `action: create|update|delete`
+  - Control: `control` tool for start/stop/restart across applications, databases, services
+  - Env vars: `env_vars` tool for CRUD across applications and services
+  - Private keys: `private_keys` tool with `action: list|get|create|update|delete`
+  - Backups: `database_backups` tool with `action: list|get|list_executions|get_execution`
+  - Deployments: `deployment` tool with `action: get|cancel|list_for_app`
+
+- **Terse descriptions** - All tool descriptions minimized for token efficiency
+
+### Removed
+
+- All 7 MCP prompts (`debug-app`, `health-check`, `deploy-app`, `troubleshoot-ssl`, `restart-project`, `env-audit`, `backup-status`)
+- `get_infrastructure_overview` moved to inline implementation in `get_infrastructure_overview` tool (simpler)
+
+### Migration Guide
+
+Most v1.x tool names still exist unchanged:
+
+- `get_version`, `get_mcp_version` - unchanged
+- `list_servers`, `get_server` - unchanged
+- `list_applications`, `get_application`, `get_application_logs` - unchanged
+- `list_databases`, `get_database` - unchanged
+- `list_services`, `get_service` - unchanged
+- `list_deployments`, `deploy` - unchanged
+- `diagnose_app`, `diagnose_server`, `find_issues` - unchanged
+- `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project` - unchanged
+
+Consolidated tools (use action parameter):
+
+- `create_project` → `projects` with `action: 'create'`
+- `delete_project` → `projects` with `action: 'delete'`
+- `create_postgresql` → `database` with `action: 'create', type: 'postgresql'`
+- `start_application` → `control` with `resource: 'application', action: 'start'`
+- `create_application_env` → `env_vars` with `resource: 'application', action: 'create'`
+
 ## [1.6.0] - 2026-01-06
 
 ### Added
