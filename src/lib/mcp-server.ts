@@ -272,10 +272,15 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'delete_environment',
-      'Delete an environment',
-      { environment_uuid: z.string().describe('Environment UUID') },
-      async ({ environment_uuid }) =>
-        wrapHandler(() => this.client.deleteProjectEnvironment(environment_uuid)),
+      'Delete an environment. Environment must be empty (no resources).',
+      {
+        project_uuid: z.string().describe('Project UUID'),
+        environment_name_or_uuid: z.string().describe('Environment name or UUID'),
+      },
+      async ({ project_uuid, environment_name_or_uuid }) =>
+        wrapHandler(() =>
+          this.client.deleteProjectEnvironment(project_uuid, environment_name_or_uuid),
+        ),
     );
 
     // =========================================================================
