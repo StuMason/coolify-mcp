@@ -2,8 +2,7 @@
  * Coolify MCP Server v2.0.0
  * Consolidated tools for efficient token usage
  */
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -42,7 +41,7 @@ export class CoolifyMcpServer extends McpServer {
   private readonly client: CoolifyClient;
 
   constructor(config: CoolifyConfig) {
-    super({ name: 'coolify', version: VERSION, capabilities: { tools: {} } });
+    super({ name: 'coolify', version: VERSION });
     this.client = new CoolifyClient(config);
     this.registerTools();
   }
@@ -140,7 +139,7 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Servers (4 tools)
+    // Servers (5 tools)
     // =========================================================================
     this.tool(
       'list_servers',
@@ -160,6 +159,13 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool('server_domains', 'Domains on server', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getServerDomains(uuid)),
+    );
+
+    this.tool(
+      'validate_server',
+      'Validate server connection',
+      { uuid: z.string() },
+      async ({ uuid }) => wrap(() => this.client.validateServer(uuid)),
     );
 
     // =========================================================================
@@ -636,7 +642,13 @@ export class CoolifyMcpServer extends McpServer {
           case 'create':
             if (!private_key)
               return { content: [{ type: 'text' as const, text: 'Error: private_key required' }] };
-            return wrap(() => this.client.createPrivateKey({ private_key, name, description }));
+            return wrap(() =>
+              this.client.createPrivateKey({
+                private_key,
+                name: name || 'unnamed-key',
+                description,
+              }),
+            );
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };

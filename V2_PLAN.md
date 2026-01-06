@@ -46,7 +46,7 @@ Reduce MCP token usage from ~43,000 to <15,000 tokens while preserving all funct
 - [ ] Create PR
 - [ ] Merge and tag v2.0.0
 
-## New Tool Structure (33 tools)
+## New Tool Structure (34 tools)
 
 | Tool                          | Description              | Consolidates                                  |
 | ----------------------------- | ------------------------ | --------------------------------------------- |
@@ -85,7 +85,7 @@ Reduce MCP token usage from ~43,000 to <15,000 tokens while preserving all funct
 | `stop_all_apps`               | Emergency stop           | -                                             |
 | `redeploy_project`            | Batch redeploy           | -                                             |
 
-**Total: 33 tools** (down from 77)
+**Total: 34 tools** (down from 77)
 
 ## Removed
 

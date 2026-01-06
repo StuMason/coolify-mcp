@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **v2.0.0 is a complete rewrite of the MCP tool layer focused on drastically reducing token usage.**
 
 - **Token reduction: ~43,000 → ~6,600 tokens** (85% reduction)
-- **Tool count: 77 → 33 tools** (57% reduction)
+- **Tool count: 77 → 34 tools** (56% reduction)
 - All prompts removed (7 prompts were unused)
 
 ### Changed
