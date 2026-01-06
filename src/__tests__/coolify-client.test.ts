@@ -714,11 +714,11 @@ describe('CoolifyClient', () => {
     it('should delete a project environment', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted' }));
 
-      const result = await client.deleteProjectEnvironment('env-uuid');
+      const result = await client.deleteProjectEnvironment('project-uuid', 'env-uuid');
 
       expect(result).toEqual({ message: 'Deleted' });
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/v1/projects/environments/env-uuid',
+        'http://localhost:3000/api/v1/projects/project-uuid/environments/env-uuid',
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
