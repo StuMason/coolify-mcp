@@ -434,10 +434,16 @@ export class CoolifyClient {
     });
   }
 
-  async deleteProjectEnvironment(environmentUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/projects/environments/${environmentUuid}`, {
-      method: 'DELETE',
-    });
+  async deleteProjectEnvironment(
+    projectUuid: string,
+    environmentNameOrUuid: string,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/projects/${projectUuid}/environments/${environmentNameOrUuid}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
