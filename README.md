@@ -17,25 +17,25 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 This MCP server provides **34 token-optimized tools** for **debugging, management, and deployment**:
 
-| Category             | Tools                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`                           |
-| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                          |
-| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`            |
-| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`     |
-| **Projects**         | `projects` (list, get, create, update, delete via action param)                           |
-| **Environments**     | `environments` (list, get, create, delete via action param)                               |
-| **Applications**     | `list_applications`, `get_application`, `application` (CRUD), `application_logs`          |
-| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` |
-| **Services**         | `list_services`, `get_service`, `service` (create, update, delete)                        |
-| **Control**          | `control` (start/stop/restart for apps, databases, services)                              |
-| **Env Vars**         | `env_vars` (CRUD for application and service env vars)                                    |
-| **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                    |
-| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                       |
+| Category             | Tools                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`                                                             |
+| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                            |
+| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                              |
+| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`                                       |
+| **Projects**         | `projects` (list, get, create, update, delete via action param)                                                             |
+| **Environments**     | `environments` (list, get, create, delete via action param)                                                                 |
+| **Applications**     | `list_applications`, `get_application`, `application` (CRUD), `application_logs`                                            |
+| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` (CRUD schedules, view executions) |
+| **Services**         | `list_services`, `get_service`, `service` (create, update, delete)                                                          |
+| **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                |
+| **Env Vars**         | `env_vars` (CRUD for application and service env vars)                                                                      |
+| **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                                                      |
+| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                         |
 
-### v2.0.0 Token Diet
+### Token-Optimized Design
 
-v2.0.0 reduced token usage by **85%** (from ~43,000 to ~6,600 tokens) by consolidating related operations into single tools with action parameters. This prevents context window exhaustion in AI assistants.
+The server uses **85% fewer tokens** than a naive implementation (6,600 vs 43,000) by consolidating related operations into single tools with action parameters. This prevents context window exhaustion in AI assistants.
 
 ## Installation
 
@@ -216,78 +216,49 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 
 ### Projects
 
-- `list_projects` - List all projects (returns summary)
-- `get_project` - Get project details
-- `create_project` - Create a new project
-- `update_project` - Update a project
-- `delete_project` - Delete a project
+- `projects` - Manage projects with `action: list|get|create|update|delete`
 
 ### Environments
 
-- `list_environments` - List environments in a project
-- `get_environment` - Get environment details
-- `create_environment` - Create environment in a project
-- `delete_environment` - Delete an environment
+- `environments` - Manage environments with `action: list|get|create|delete`
 
 ### Applications
 
 - `list_applications` - List all applications (returns summary)
 - `get_application` - Get application details
-- `create_application_private_gh` - Create app from private GitHub repo (GitHub App)
-- `create_application_private_key` - Create app from private repo using deploy key
-- `update_application` - Update an application
-- `delete_application` - Delete an application
-- `start_application` - Start an application
-- `stop_application` - Stop an application
-- `restart_application` - Restart an application
-- `get_application_logs` - Get application logs
-- `list_application_envs` - List application environment variables
-- `create_application_env` - Create application environment variable
-- `update_application_env` - Update application environment variable
-- `delete_application_env` - Delete application environment variable
+- `application_logs` - Get application logs
+- `application` - Create, update, or delete apps with `action: create_github|create_key|update|delete`
+- `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
+- `control` - Start/stop/restart with `resource: application, action: start|stop|restart`
 
 ### Databases
 
 - `list_databases` - List all databases (returns summary)
 - `get_database` - Get database details
-- `start_database` - Start a database
-- `stop_database` - Stop a database
-- `restart_database` - Restart a database
-- `delete_database` - Delete a database (with optional volume cleanup)
-- `list_database_backups` - List scheduled backups for a database
-- `get_database_backup` - Get details of a scheduled backup
-- `list_backup_executions` - List execution history for a scheduled backup
-- `get_backup_execution` - Get details of a specific backup execution
+- `database` - Create or delete databases with `action: create|delete, type: postgresql|mysql|mariadb|mongodb|redis|keydb|clickhouse|dragonfly`
+- `database_backups` - Manage backup schedules with `action: list_schedules|get_schedule|create|update|delete|list_executions|get_execution`
+  - Configure frequency, retention policies, S3 storage
+  - Enable/disable schedules without deletion
+  - View backup execution history
+- `control` - Start/stop/restart with `resource: database, action: start|stop|restart`
 
 ### Services
 
 - `list_services` - List all services (returns summary)
 - `get_service` - Get service details
-- `create_service` - Create a one-click service (e.g., pocketbase, mysql, redis, wordpress)
-- `update_service` - Update a service
-- `delete_service` - Delete a service
-- `start_service` - Start a service
-- `stop_service` - Stop a service
-- `restart_service` - Restart a service
-- `list_service_envs` - List service environment variables
-- `create_service_env` - Create service environment variable
-- `delete_service_env` - Delete service environment variable
+- `service` - Create, update, or delete services with `action: create|update|delete`
+- `env_vars` - Manage env vars with `resource: service, action: list|create|delete`
+- `control` - Start/stop/restart with `resource: service, action: start|stop|restart`
 
 ### Deployments
 
 - `list_deployments` - List running deployments (returns summary)
-- `get_deployment` - Get deployment details
 - `deploy` - Deploy by tag or UUID
-- `cancel_deployment` - Cancel a running deployment
-- `list_application_deployments` - List deployments for an application
+- `deployment` - Manage deployments with `action: get|cancel|list_for_app`
 
 ### Private Keys
 
-- `list_private_keys` - List all private keys (SSH keys for deployments)
-- `get_private_key` - Get private key details
-- `create_private_key` - Create a new private key for deployments
-- `update_private_key` - Update a private key
-- `delete_private_key` - Delete a private key
+- `private_keys` - Manage SSH keys with `action: list|get|create|update|delete`
 
 ### Batch Operations
 
@@ -303,9 +274,8 @@ Power user tools for operating on multiple resources at once:
 - **Context-Optimized**: Responses are 90-99% smaller than raw API, preventing context window exhaustion
 - **Smart Lookup**: Find apps by domain (`stuartmason.co.uk`), servers by IP, not just UUIDs
 - **Batch Operations**: Restart entire projects, bulk update env vars, emergency stop all apps
-- **Workflow Prompts**: Pre-built guided workflows for common tasks
 - **Production Ready**: 98%+ test coverage, TypeScript strict mode, comprehensive error handling
-- **Always Current**: Weekly OpenAPI drift detection ensures we stay in sync with Coolify
+- **Always Current**: Weekly OpenAPI drift detection ensures the server stays in sync with Coolify
 
 ## Related Links
 
