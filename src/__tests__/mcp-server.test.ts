@@ -126,6 +126,9 @@ describe('CoolifyMcpServer v2', () => {
       // Backup operations
       expect(typeof client.listDatabaseBackups).toBe('function');
       expect(typeof client.getDatabaseBackup).toBe('function');
+      expect(typeof client.createDatabaseBackup).toBe('function');
+      expect(typeof client.updateDatabaseBackup).toBe('function');
+      expect(typeof client.deleteDatabaseBackup).toBe('function');
       expect(typeof client.listBackupExecutions).toBe('function');
       expect(typeof client.getBackupExecution).toBe('function');
 
