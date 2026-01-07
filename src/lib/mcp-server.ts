@@ -403,12 +403,10 @@ export class CoolifyMcpServer extends McpServer {
         dragonfly_password: z.string().optional(),
       },
       async (args) => {
-        const { action, type, uuid } = args;
+        const { action, type, uuid, delete_volumes, ...dbData } = args;
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-          return wrap(() =>
-            this.client.deleteDatabase(uuid, { deleteVolumes: args.delete_volumes }),
-          );
+          return wrap(() => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }));
         }
         // create
         if (!type || !args.server_uuid || !args.project_uuid) {
@@ -428,7 +426,7 @@ export class CoolifyMcpServer extends McpServer {
           clickhouse: (d) => this.client.createClickhouse(d),
           dragonfly: (d) => this.client.createDragonfly(d),
         };
-        return wrap(() => dbMethods[type](args));
+        return wrap(() => dbMethods[type](dbData));
       },
     );
 
