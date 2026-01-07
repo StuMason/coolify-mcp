@@ -53,6 +53,8 @@ import type {
   CreateDatabaseResponse,
   DatabaseBackup,
   BackupExecution,
+  CreateDatabaseBackupRequest,
+  UpdateDatabaseBackupRequest,
   // Service types
   Service,
   CreateServiceRequest,
@@ -960,6 +962,33 @@ export class CoolifyClient {
     return this.request<BackupExecution>(
       `/databases/${databaseUuid}/backups/${backupUuid}/executions/${executionUuid}`,
     );
+  }
+
+  async createDatabaseBackup(
+    databaseUuid: string,
+    data: CreateDatabaseBackupRequest,
+  ): Promise<DatabaseBackup> {
+    return this.request<DatabaseBackup>(`/databases/${databaseUuid}/backups`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDatabaseBackup(
+    databaseUuid: string,
+    backupUuid: string,
+    data: UpdateDatabaseBackupRequest,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${databaseUuid}/backups/${backupUuid}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDatabaseBackup(databaseUuid: string, backupUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${databaseUuid}/backups/${backupUuid}`, {
+      method: 'DELETE',
+    });
   }
 
   // ===========================================================================

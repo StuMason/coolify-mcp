@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-07
+
+### Added
+
+- **Full Database Backup Management** - Complete lifecycle management for database backup schedules:
+  - `database_backups` tool now supports `create`, `update`, and `delete` actions
+  - Configure backup frequency (hourly, daily, weekly, monthly)
+  - Set retention policies (days or amount limits for local and S3 storage)
+  - Enable/disable backup schedules without deletion
+  - S3 storage integration for off-server backups
+  - All backup configuration parameters supported:
+    - `frequency` - Cron expression or predefined schedule
+    - `enabled` - Enable/disable the backup schedule
+    - `save_s3` - Store backups in S3-compatible storage
+    - `s3_storage_uuid` - Which S3 storage to use
+    - `database_backup_retention_days_locally` - Days to keep backups locally (0 = unlimited)
+    - `database_backup_retention_days_s3` - Days to keep backups in S3 (0 = unlimited)
+    - `database_backup_retention_amount_locally` - Number of most recent backups to keep locally
+    - `database_backup_retention_amount_s3` - Number of most recent backups to keep in S3
+    - `databases_to_backup` - Specific databases to backup (for applicable database types)
+    - `dump_all` - Dump all databases (for applicable database types)
+
+### Changed
+
+- `database_backups` tool actions expanded from 4 to 7: `list_schedules`, `get_schedule`, `list_executions`, `get_execution`, `create`, `update`, `delete`
+
 ## [2.0.0] - 2026-01-06
 
 ### Breaking Changes - Token Diet Release 🏋️

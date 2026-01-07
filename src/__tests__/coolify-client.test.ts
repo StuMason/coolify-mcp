@@ -1152,6 +1152,55 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should create a database backup', async () => {
+      const mockBackup = { uuid: 'backup-uuid', frequency: '0 0 * * *', enabled: true };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockBackup));
+
+      const result = await client.createDatabaseBackup('db-uuid', {
+        frequency: '0 0 * * *',
+        enabled: true,
+        save_s3: true,
+        s3_storage_uuid: 'storage-uuid',
+        database_backup_retention_days_locally: 7,
+        database_backup_retention_days_s3: 7,
+      });
+
+      expect(result).toEqual(mockBackup);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should update a database backup', async () => {
+      const mockData = { message: 'Backup updated' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+
+      const result = await client.updateDatabaseBackup('db-uuid', 'backup-uuid', {
+        enabled: false,
+        frequency: '0 2 * * *',
+      });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+
+    it('should delete a database backup', async () => {
+      const mockData = { message: 'Backup deleted' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+
+      const result = await client.deleteDatabaseBackup('db-uuid', 'backup-uuid');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
     it('should list backup executions', async () => {
       const mockExecutions = [{ uuid: 'exec-uuid', status: 'success' }];
       mockFetch.mockResolvedValueOnce(mockResponse(mockExecutions));

@@ -1,5 +1,5 @@
 /**
- * Coolify MCP Server v2.0.0
+ * Coolify MCP Server v2.1.0
  * Consolidated tools for efficient token usage
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -17,7 +17,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 
 /** Wrap handler with error handling */
 function wrap<T>(
@@ -666,14 +666,34 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'database_backups',
-      'Manage backups: list_schedules/get_schedule/list_executions/get_execution',
+      'Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete',
       {
-        action: z.enum(['list_schedules', 'get_schedule', 'list_executions', 'get_execution']),
+        action: z.enum([
+          'list_schedules',
+          'get_schedule',
+          'list_executions',
+          'get_execution',
+          'create',
+          'update',
+          'delete',
+        ]),
         database_uuid: z.string(),
         backup_uuid: z.string().optional(),
         execution_uuid: z.string().optional(),
+        // Backup configuration parameters
+        frequency: z.string().optional(),
+        enabled: z.boolean().optional(),
+        save_s3: z.boolean().optional(),
+        s3_storage_uuid: z.string().optional(),
+        databases_to_backup: z.string().optional(),
+        dump_all: z.boolean().optional(),
+        database_backup_retention_days_locally: z.number().optional(),
+        database_backup_retention_days_s3: z.number().optional(),
+        database_backup_retention_amount_locally: z.number().optional(),
+        database_backup_retention_amount_s3: z.number().optional(),
       },
-      async ({ action, database_uuid, backup_uuid, execution_uuid }) => {
+      async (args) => {
+        const { action, database_uuid, backup_uuid, execution_uuid, ...backupData } = args;
         switch (action) {
           case 'list_schedules':
             return wrap(() => this.client.listDatabaseBackups(database_uuid));
@@ -695,6 +715,25 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() =>
               this.client.getBackupExecution(database_uuid, backup_uuid, execution_uuid),
             );
+          case 'create':
+            if (!args.frequency)
+              return { content: [{ type: 'text' as const, text: 'Error: frequency required' }] };
+            return wrap(() =>
+              this.client.createDatabaseBackup(database_uuid, {
+                ...backupData,
+                frequency: args.frequency!,
+              }),
+            );
+          case 'update':
+            if (!backup_uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: backup_uuid required' }] };
+            return wrap(() =>
+              this.client.updateDatabaseBackup(database_uuid, backup_uuid, backupData),
+            );
+          case 'delete':
+            if (!backup_uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: backup_uuid required' }] };
+            return wrap(() => this.client.deleteDatabaseBackup(database_uuid, backup_uuid));
         }
       },
     );

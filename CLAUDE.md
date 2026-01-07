@@ -48,7 +48,25 @@ List endpoints return summaries (uuid, name, status) not full objects. This redu
 2. Add types to `src/types/coolify.ts`
 3. Add client method with explicit return type
 4. Add MCP tool to `src/lib/mcp-server.ts`
-5. Add mocked test
+5. Add mocked tests (required for codecov coverage)
+
+### Testing Requirements
+
+**IMPORTANT**: All new client methods MUST have test coverage to pass codecov checks.
+
+When adding new client methods, you must add:
+
+1. **Client method tests** in `src/__tests__/coolify-client.test.ts`:
+   - Test the HTTP method (GET, POST, PATCH, DELETE)
+   - Test the endpoint path
+   - Test the request body if applicable
+   - Follow the existing test patterns in the file
+
+2. **Method existence tests** in `src/__tests__/mcp-server.test.ts`:
+   - Add `expect(typeof client.methodName).toBe('function');` in the appropriate section
+   - Ensures the method is properly exported and accessible
+
+**codecov will fail PRs with uncovered lines.** Always run `npm test` before committing.
 
 ### Client Method Example
 

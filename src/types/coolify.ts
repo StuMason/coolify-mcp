@@ -651,9 +651,23 @@ export interface CreateDatabaseBackupRequest {
   s3_storage_uuid?: string;
   databases_to_backup?: string;
   dump_all?: boolean;
-  backup_now?: boolean;
-  backup_retention?: number;
-  backup_retention_days?: number;
+  database_backup_retention_days_locally?: number;
+  database_backup_retention_days_s3?: number;
+  database_backup_retention_amount_locally?: number;
+  database_backup_retention_amount_s3?: number;
+}
+
+export interface UpdateDatabaseBackupRequest {
+  frequency?: string;
+  enabled?: boolean;
+  save_s3?: boolean;
+  s3_storage_uuid?: string;
+  databases_to_backup?: string;
+  dump_all?: boolean;
+  database_backup_retention_days_locally?: number;
+  database_backup_retention_days_s3?: number;
+  database_backup_retention_amount_locally?: number;
+  database_backup_retention_amount_s3?: number;
 }
 
 export interface BackupExecution {
