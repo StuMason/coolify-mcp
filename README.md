@@ -227,7 +227,7 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `list_applications` - List all applications (returns summary)
 - `get_application` - Get application details
 - `application_logs` - Get application logs
-- `application` - Create, update, or delete apps with `action: create_github|create_key|update|delete`
+- `application` - Create, update, or delete apps with `action: create_public|create_github|create_key|create_dockerimage|update|delete`
 - `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
 - `control` - Start/stop/restart with `resource: application, action: start|stop|restart`
 
