@@ -20,6 +20,7 @@ export interface ErrorResponse {
   error?: string;
   message: string;
   status?: number;
+  errors?: Record<string, string[]>; // Validation errors by field
 }
 
 export interface DeleteOptions {
@@ -344,12 +345,24 @@ export interface UpdateApplicationRequest {
   install_command?: string;
   build_command?: string;
   start_command?: string;
+  // Health check configuration
   health_check_enabled?: boolean;
   health_check_path?: string;
   health_check_port?: number;
+  health_check_host?: string;
+  health_check_method?: string;
+  health_check_return_code?: number;
+  health_check_scheme?: string;
+  health_check_response_text?: string;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  health_check_retries?: number;
+  health_check_start_period?: number;
+  // Resource limits
   limits_memory?: string;
   limits_memory_swap?: string;
   limits_cpus?: string;
+  // HTTP Basic Auth
   is_http_basic_auth_enabled?: boolean;
   http_basic_auth_username?: string;
   http_basic_auth_password?: string;

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - Unreleased
+
+### Added
+
+- **Docker Image Deployment** - Deploy pre-built images from Docker Hub or registries (#69):
+  - `application` tool now supports `create_dockerimage` action
+  - Required fields: `project_uuid`, `server_uuid`, `docker_registry_image_name`, `ports_exposes`
+  - Optional: `docker_registry_image_tag` (defaults to `latest`)
+
+- **Health Check Configuration** - Configure application health checks during create/update (#62):
+  - 12 health check fields now supported in `application` tool:
+    - `health_check_enabled` - Enable/disable health checks
+    - `health_check_path` - URL path for health check (e.g., `/up`, `/health`)
+    - `health_check_port` - Port to check
+    - `health_check_host` - Host for health check
+    - `health_check_method` - HTTP method (GET, POST, etc.)
+    - `health_check_return_code` - Expected HTTP status code
+    - `health_check_scheme` - HTTP or HTTPS
+    - `health_check_response_text` - Expected response text
+    - `health_check_interval` - Seconds between checks
+    - `health_check_timeout` - Seconds to wait for response
+    - `health_check_retries` - Number of retries before marking unhealthy
+    - `health_check_start_period` - Seconds to wait before starting checks
+
+- **Deployment Log Line Limiting** - Reduce token usage for large deployment logs (#68):
+  - `deployment` tool `get` action now supports `lines` parameter
+  - Returns only the last N lines of logs when specified
+  - Example: `deployment(action: 'get', uuid: 'xxx', lines: 50)`
+
+### Changed
+
+- **Improved Validation Errors** - API validation errors now include field-level details (#69):
+  - Errors like "Validation failed." now include: "Validation failed. - field: error message"
+  - Multiple validation errors per field are comma-separated
+  - Multiple fields are semicolon-separated
+
 ## [2.1.0] - 2026-01-07
 
 ### Added

@@ -259,7 +259,7 @@ export class CoolifyMcpServer extends McpServer {
       'application',
       'Manage app: create/update/delete',
       {
-        action: z.enum(['create_github', 'create_key', 'update', 'delete']),
+        action: z.enum(['create_github', 'create_key', 'create_dockerimage', 'update', 'delete']),
         uuid: z.string().optional(),
         // Create fields
         project_uuid: z.string().optional(),
@@ -271,10 +271,26 @@ export class CoolifyMcpServer extends McpServer {
         environment_name: z.string().optional(),
         build_pack: z.string().optional(),
         ports_exposes: z.string().optional(),
+        // Docker image fields
+        docker_registry_image_name: z.string().optional(),
+        docker_registry_image_tag: z.string().optional(),
         // Update fields
         name: z.string().optional(),
         description: z.string().optional(),
         fqdn: z.string().optional(),
+        // Health check fields
+        health_check_enabled: z.boolean().optional(),
+        health_check_path: z.string().optional(),
+        health_check_port: z.number().optional(),
+        health_check_host: z.string().optional(),
+        health_check_method: z.string().optional(),
+        health_check_return_code: z.number().optional(),
+        health_check_scheme: z.string().optional(),
+        health_check_response_text: z.string().optional(),
+        health_check_interval: z.number().optional(),
+        health_check_timeout: z.number().optional(),
+        health_check_retries: z.number().optional(),
+        health_check_start_period: z.number().optional(),
         // Delete fields
         delete_volumes: z.boolean().optional(),
       },
@@ -317,6 +333,23 @@ export class CoolifyMcpServer extends McpServer {
               };
             }
             return wrap(() => this.client.createApplicationPrivateKey(args as any));
+          case 'create_dockerimage':
+            if (
+              !args.project_uuid ||
+              !args.server_uuid ||
+              !args.docker_registry_image_name ||
+              !args.ports_exposes
+            ) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: project_uuid, server_uuid, docker_registry_image_name, ports_exposes required',
+                  },
+                ],
+              };
+            }
+            return wrap(() => this.client.createApplicationDockerImage(args as any));
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
@@ -603,11 +636,22 @@ export class CoolifyMcpServer extends McpServer {
       {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
+        lines: z.number().optional(), // Limit log output to last N lines (for 'get' action)
       },
-      async ({ action, uuid }) => {
+      async ({ action, uuid, lines }) => {
         switch (action) {
           case 'get':
-            return wrap(() => this.client.getDeployment(uuid));
+            return wrap(async () => {
+              const deployment = await this.client.getDeployment(uuid);
+              // Truncate logs to last N lines if specified
+              if (lines && deployment.logs) {
+                const logLines = deployment.logs.split('\n');
+                if (logLines.length > lines) {
+                  deployment.logs = logLines.slice(-lines).join('\n');
+                }
+              }
+              return deployment;
+            });
           case 'cancel':
             return wrap(() => this.client.cancelDeployment(uuid));
           case 'list_for_app':

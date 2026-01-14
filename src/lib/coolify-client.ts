@@ -278,7 +278,15 @@ export class CoolifyClient {
 
       if (!response.ok) {
         const error = data as ErrorResponse;
-        throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`);
+        // Include validation errors if present
+        let errorMessage = error.message || `HTTP ${response.status}: ${response.statusText}`;
+        if (error.errors && Object.keys(error.errors).length > 0) {
+          const validationDetails = Object.entries(error.errors)
+            .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+            .join('; ');
+          errorMessage = `${errorMessage} - ${validationDetails}`;
+        }
+        throw new Error(errorMessage);
       }
 
       return data as T;
