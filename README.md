@@ -111,7 +111,7 @@ The Coolify API returns extremely verbose responses - a single application can c
 1. **Start with overview**: `get_infrastructure_overview` - see everything at once
 2. **Find your target**: `list_applications` - get UUIDs of what you need
 3. **Dive deep**: `get_application(uuid)` - full details for one resource
-4. **Take action**: `restart_application(uuid)`, `get_application_logs(uuid)`, etc.
+4. **Take action**: `control(resource: 'application', action: 'restart')`, `application_logs(uuid)`, etc.
 
 ### Pagination
 
@@ -161,6 +161,8 @@ Update the DATABASE_URL env var for application {uuid}
 Create a new project called "my-app"
 Create a staging environment in project {uuid}
 Deploy my app from private GitHub repo org/repo on branch main
+Deploy nginx:latest from Docker Hub
+Deploy from public repo https://github.com/org/repo
 ```
 
 ## Environment Variables
@@ -228,6 +230,8 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `get_application` - Get application details
 - `application_logs` - Get application logs
 - `application` - Create, update, or delete apps with `action: create_public|create_github|create_key|create_dockerimage|update|delete`
+  - Deploy from public repos, private GitHub, SSH keys, or Docker images
+  - Configure health checks (path, interval, retries, etc.)
 - `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
 - `control` - Start/stop/restart with `resource: application, action: start|stop|restart`
 
@@ -254,7 +258,7 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 
 - `list_deployments` - List running deployments (returns summary)
 - `deploy` - Deploy by tag or UUID
-- `deployment` - Manage deployments with `action: get|cancel|list_for_app`
+- `deployment` - Manage deployments with `action: get|cancel|list_for_app` (supports `lines` param to limit log output)
 
 ### Private Keys
 
