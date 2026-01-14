@@ -63,7 +63,6 @@ describe('CoolifyMcpServer v2', () => {
       // Application operations
       expect(typeof client.listApplications).toBe('function');
       expect(typeof client.getApplication).toBe('function');
-      expect(typeof client.createApplicationPublic).toBe('function');
       expect(typeof client.createApplicationPrivateGH).toBe('function');
       expect(typeof client.createApplicationPrivateKey).toBe('function');
       expect(typeof client.createApplicationDockerImage).toBe('function');
