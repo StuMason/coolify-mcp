@@ -259,7 +259,7 @@ export class CoolifyMcpServer extends McpServer {
       'application',
       'Manage app: create/update/delete',
       {
-        action: z.enum(['create_github', 'create_key', 'create_dockerimage', 'update', 'delete']),
+        action: z.enum(['create_public', 'create_github', 'create_key', 'create_dockerimage', 'update', 'delete']),
         uuid: z.string().optional(),
         // Create fields
         project_uuid: z.string().optional(),
@@ -269,6 +269,7 @@ export class CoolifyMcpServer extends McpServer {
         git_repository: z.string().optional(),
         git_branch: z.string().optional(),
         environment_name: z.string().optional(),
+        environment_uuid: z.string().optional(),
         build_pack: z.string().optional(),
         ports_exposes: z.string().optional(),
         // Docker image fields
@@ -297,6 +298,25 @@ export class CoolifyMcpServer extends McpServer {
       async (args) => {
         const { action, uuid } = args;
         switch (action) {
+          case 'create_public':
+            if (
+              !args.project_uuid ||
+              !args.server_uuid ||
+              !args.git_repository ||
+              !args.git_branch ||
+              !args.build_pack ||
+              !args.ports_exposes
+            ) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: project_uuid, server_uuid, git_repository, git_branch, build_pack, ports_exposes required',
+                  },
+                ],
+              };
+            }
+            return wrap(() => this.client.createApplicationPublic(args as any));
           case 'create_github':
             if (
               !args.project_uuid ||
