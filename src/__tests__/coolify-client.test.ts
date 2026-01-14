@@ -521,6 +521,26 @@ describe('CoolifyClient', () => {
 
       await expect(client.listServers()).rejects.toThrow('HTTP 500: Error');
     });
+
+    it('should include validation errors in error message', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          {
+            message: 'Validation failed.',
+            errors: {
+              name: ['The name field is required.'],
+              email: ['The email must be valid.', 'The email is already taken.'],
+            },
+          },
+          false,
+          422,
+        ),
+      );
+
+      await expect(client.listServers()).rejects.toThrow(
+        'Validation failed. - name: The name field is required.; email: The email must be valid., The email is already taken.',
+      );
+    });
   });
 
   // =========================================================================
