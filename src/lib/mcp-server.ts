@@ -1,5 +1,5 @@
 /**
- * Coolify MCP Server v2.1.0
+ * Coolify MCP Server v2.2.0
  * Consolidated tools for efficient token usage
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -17,7 +17,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 
 /** Wrap handler with error handling */
 function wrap<T>(
