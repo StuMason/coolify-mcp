@@ -15,7 +15,7 @@ import {
   type ServiceSummary,
   type GitHubAppSummary,
 } from './coolify-client.js';
-import type { CoolifyConfig, GitHubApp, BuildPack } from '../types/coolify.js';
+import type { CoolifyConfig, GitHubApp } from '../types/coolify.js';
 
 const VERSION = '2.4.0';
 
@@ -303,7 +303,9 @@ export class CoolifyMcpServer extends McpServer {
         git_branch: z.string().optional(),
         environment_name: z.string().optional(),
         environment_uuid: z.string().optional(),
-        build_pack: z.string().optional(),
+        build_pack: z
+          .enum(['nixpacks', 'static', 'dockerfile', 'dockercompose', 'dockerimage'])
+          .optional(),
         ports_exposes: z.string().optional(),
         // Docker image fields
         docker_registry_image_name: z.string().optional(),
@@ -329,8 +331,7 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
       },
       async (args) => {
-        // Strip MCP-internal fields before passing to API (fixes #76)
-        const { action, uuid, delete_volumes, ...apiData } = args;
+        const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'create_public':
             if (
@@ -356,7 +357,7 @@ export class CoolifyMcpServer extends McpServer {
                 server_uuid: args.server_uuid!,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
-                build_pack: args.build_pack! as BuildPack,
+                build_pack: args.build_pack!,
                 ports_exposes: args.ports_exposes!,
                 environment_name: args.environment_name,
                 environment_uuid: args.environment_uuid,
@@ -389,7 +390,7 @@ export class CoolifyMcpServer extends McpServer {
                 github_app_uuid: args.github_app_uuid!,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
-                build_pack: args.build_pack as BuildPack | undefined,
+                build_pack: args.build_pack,
                 ports_exposes: args.ports_exposes,
                 environment_name: args.environment_name,
                 environment_uuid: args.environment_uuid,
@@ -422,7 +423,7 @@ export class CoolifyMcpServer extends McpServer {
                 private_key_uuid: args.private_key_uuid!,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
-                build_pack: args.build_pack as BuildPack | undefined,
+                build_pack: args.build_pack,
                 ports_exposes: args.ports_exposes,
                 environment_name: args.environment_name,
                 environment_uuid: args.environment_uuid,
@@ -461,10 +462,13 @@ export class CoolifyMcpServer extends McpServer {
                 fqdn: args.fqdn,
               }),
             );
-          case 'update':
+          case 'update': {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.updateApplication(uuid, apiData));
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { action: _, uuid: __, delete_volumes: ___, ...updateData } = args;
+            return wrap(() => this.client.updateApplication(uuid, updateData));
+          }
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
@@ -606,8 +610,7 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
       },
       async (args) => {
-        // Strip MCP-internal fields before passing to API (fixes #76)
-        const { action, uuid, delete_volumes, ...apiData } = args;
+        const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'create':
             if (!args.server_uuid || !args.project_uuid) {
@@ -629,10 +632,13 @@ export class CoolifyMcpServer extends McpServer {
                 docker_compose_raw: args.docker_compose_raw,
               }),
             );
-          case 'update':
+          case 'update': {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.updateService(uuid, apiData));
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { action: _, uuid: __, delete_volumes: ___, ...updateData } = args;
+            return wrap(() => this.client.updateService(uuid, updateData));
+          }
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
