@@ -6,7 +6,7 @@
  * These tests verify MCP server instantiation and structure.
  */
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { CoolifyMcpServer } from '../lib/mcp-server.js';
+import { CoolifyMcpServer, truncateLogs } from '../lib/mcp-server.js';
 
 describe('CoolifyMcpServer v2', () => {
   let server: CoolifyMcpServer;
@@ -160,5 +160,59 @@ describe('CoolifyMcpServer v2', () => {
       expect(client['baseUrl']).toBe('http://localhost:3000');
       expect(client['accessToken']).toBe('test-token');
     });
+  });
+});
+
+describe('truncateLogs', () => {
+  it('should return logs unchanged when within limits', () => {
+    const logs = 'line1\nline2\nline3';
+    const result = truncateLogs(logs, 200, 50000);
+    expect(result).toBe(logs);
+  });
+
+  it('should truncate to last N lines', () => {
+    const logs = 'line1\nline2\nline3\nline4\nline5';
+    const result = truncateLogs(logs, 3, 50000);
+    expect(result).toBe('line3\nline4\nline5');
+  });
+
+  it('should truncate by character limit when lines are huge', () => {
+    const hugeLine = 'x'.repeat(100);
+    const logs = `${hugeLine}\n${hugeLine}\n${hugeLine}`;
+    const result = truncateLogs(logs, 200, 50);
+    expect(result.length).toBeLessThanOrEqual(50);
+    expect(result.startsWith('...[truncated]...')).toBe(true);
+  });
+
+  it('should not add truncation prefix when under char limit', () => {
+    const logs = 'line1\nline2\nline3';
+    const result = truncateLogs(logs, 200, 50000);
+    expect(result.startsWith('...[truncated]...')).toBe(false);
+  });
+
+  it('should handle empty logs', () => {
+    const result = truncateLogs('', 200, 50000);
+    expect(result).toBe('');
+  });
+
+  it('should use default limits when not specified', () => {
+    const logs = 'line1\nline2';
+    const result = truncateLogs(logs);
+    expect(result).toBe(logs);
+  });
+
+  it('should respect custom line limit', () => {
+    const lines = Array.from({ length: 300 }, (_, i) => `line${i + 1}`).join('\n');
+    const result = truncateLogs(lines, 50, 50000);
+    const resultLines = result.split('\n');
+    expect(resultLines.length).toBe(50);
+    expect(resultLines[0]).toBe('line251');
+    expect(resultLines[49]).toBe('line300');
+  });
+
+  it('should respect custom char limit', () => {
+    const logs = 'x'.repeat(1000);
+    const result = truncateLogs(logs, 200, 100);
+    expect(result.length).toBe(100);
   });
 });

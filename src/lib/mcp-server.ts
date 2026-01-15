@@ -38,6 +38,32 @@ function wrap<T>(
     }));
 }
 
+const TRUNCATION_PREFIX = '...[truncated]...\n';
+
+/**
+ * Truncate logs by line count and character count.
+ * Exported for testing.
+ */
+export function truncateLogs(
+  logs: string,
+  lineLimit: number = 200,
+  charLimit: number = 50000,
+): string {
+  // First: limit by lines
+  const logLines = logs.split('\n');
+  const limitedLines = logLines.slice(-lineLimit);
+  let truncatedLogs = limitedLines.join('\n');
+
+  // Second: limit by characters (safety net for huge lines)
+  if (truncatedLogs.length > charLimit) {
+    // Account for prefix length to stay within limit
+    const prefixLen = TRUNCATION_PREFIX.length;
+    truncatedLogs = TRUNCATION_PREFIX + truncatedLogs.slice(-(charLimit - prefixLen));
+  }
+
+  return truncatedLogs;
+}
+
 export class CoolifyMcpServer extends McpServer {
   private readonly client: CoolifyClient;
 
@@ -535,7 +561,18 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createService(apiData as any));
+            return wrap(() =>
+              this.client.createService({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                type: args.type,
+                name: args.name,
+                description: args.description,
+                environment_name: args.environment_name,
+                instant_deploy: args.instant_deploy,
+                docker_compose_raw: args.docker_compose_raw,
+              }),
+            );
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
@@ -660,24 +697,23 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'deployment',
-      'Manage deployment: get/cancel/list_for_app',
+      'Manage deployment: get/cancel/list_for_app (logs truncated to last 200 lines/50K chars by default)',
       {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
-        lines: z.number().optional(), // Limit log output to last N lines (for 'get' action)
+        lines: z.number().optional(), // Limit log output to last N lines (default: 200)
+        max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)
       },
-      async ({ action, uuid, lines }) => {
+      async ({ action, uuid, lines, max_chars }) => {
         switch (action) {
           case 'get':
             return wrap(async () => {
               const deployment = await this.client.getDeployment(uuid);
-              // Truncate logs to last N lines if specified
-              if (lines && deployment.logs) {
-                const logLines = deployment.logs.split('\n');
-                if (logLines.length > lines) {
-                  deployment.logs = logLines.slice(-lines).join('\n');
-                }
+
+              if (deployment.logs) {
+                deployment.logs = truncateLogs(deployment.logs, lines ?? 200, max_chars ?? 50000);
               }
+
               return deployment;
             });
           case 'cancel':
