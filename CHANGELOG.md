@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-01-15
+
 ### Added
 
 - **Codecov Test Analytics** - Enable test result tracking (#84):
@@ -21,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Giant log lines (base64, docker build output) could still return 900K+ chars
   - Fix: Default to last 200 lines AND cap at 50K characters
   - Added `max_chars` parameter for customization
+
+- **Type Safety** - Eliminate all `as any` casts in MCP tool handlers (#81):
+  - `application` handlers (create_public, create_github, create_key, create_dockerimage) now use explicit typed objects
+  - `service` create handler uses explicit typed object
+  - Removed `eslint-disable @typescript-eslint/no-explicit-any` directive
+  - Fixed type definitions: `build_pack` and `ports_exposes` now optional for GitHub/Key deploys
+  - Verified against Coolify v4.0.0-beta.460
 
 ## [2.4.0] - 2026-01-15
 

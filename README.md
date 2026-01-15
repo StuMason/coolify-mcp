@@ -43,7 +43,7 @@ The server uses **85% fewer tokens** than a naive implementation (6,600 vs 43,00
 ### Prerequisites
 
 - Node.js >= 18
-- A running Coolify instance
+- A running Coolify instance (tested with v4.0.0-beta.460)
 - Coolify API access token (generate in Coolify Settings > API)
 
 ### Claude Desktop
