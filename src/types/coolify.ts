@@ -892,15 +892,6 @@ export interface GitHubApp {
   updated_at: string;
 }
 
-export interface GitHubAppSummary {
-  id: number;
-  uuid: string;
-  name: string;
-  organization: string | null;
-  is_public: boolean;
-  app_id: number | null;
-}
-
 export interface CreateGitHubAppRequest {
   name: string;
   api_url: string;
