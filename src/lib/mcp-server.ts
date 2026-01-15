@@ -1,5 +1,5 @@
 /**
- * Coolify MCP Server v2.3.0
+ * Coolify MCP Server v2.4.0
  * Consolidated tools for efficient token usage
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -16,7 +16,7 @@ import {
   type ServiceSummary,
   type GitHubAppSummary,
 } from './coolify-client.js';
-import type { CoolifyConfig } from '../types/coolify.js';
+import type { CoolifyConfig, GitHubApp } from '../types/coolify.js';
 
 const VERSION = '2.4.0';
 
@@ -738,9 +738,9 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'github_apps',
-      'Manage GitHub Apps: list/create/update/delete',
+      'Manage GitHub Apps: list/get/create/update/delete',
       {
-        action: z.enum(['list', 'create', 'update', 'delete']),
+        action: z.enum(['list', 'get', 'create', 'update', 'delete']),
         // GitHub apps use integer id, not uuid
         id: z.number().optional(),
         // Create/Update fields
@@ -767,6 +767,14 @@ export class CoolifyMcpServer extends McpServer {
                 summary: true,
               })) as GitHubAppSummary[];
               return apps;
+            });
+          case 'get':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(async () => {
+              const apps = (await this.client.listGitHubApps()) as GitHubApp[];
+              const app = apps.find((a) => a.id === id);
+              if (!app) throw new Error(`GitHub App with id ${id} not found`);
+              return app;
             });
           case 'create':
             if (

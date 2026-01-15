@@ -32,7 +32,7 @@ This MCP server provides **35 token-optimized tools** for **debugging, managemen
 | **Env Vars**         | `env_vars` (CRUD for application and service env vars)                                                                      |
 | **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                                                      |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                         |
-| **GitHub Apps**      | `github_apps` (list, create, update, delete via action param)                                                               |
+| **GitHub Apps**      | `github_apps` (list, get, create, update, delete via action param)                                                          |
 
 ### Token-Optimized Design
 

@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **GitHub Apps Management** - Full CRUD operations for GitHub App integrations (#75):
-  - `github_apps` tool with `list`, `create`, `update`, `delete` actions
-  - Uses integer ID (not UUID) for update/delete per Coolify API requirements
+  - `github_apps` tool with `list`, `get`, `create`, `update`, `delete` actions
+  - `get` action returns full details by filtering list (no single-item API endpoint exists)
+  - Uses integer ID (not UUID) for get/update/delete per Coolify API requirements
   - Token-optimized summary mode for list operations
   - Total tool count increased from 34 to 35 tools
 
