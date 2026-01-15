@@ -2,7 +2,6 @@
  * Coolify MCP Server v2.4.0
  * Consolidated tools for efficient token usage
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -16,7 +15,7 @@ import {
   type ServiceSummary,
   type GitHubAppSummary,
 } from './coolify-client.js';
-import type { CoolifyConfig, GitHubApp } from '../types/coolify.js';
+import type { CoolifyConfig, GitHubApp, BuildPack } from '../types/coolify.js';
 
 const VERSION = '2.4.0';
 
@@ -351,7 +350,21 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPublic(apiData as any));
+            return wrap(() =>
+              this.client.createApplicationPublic({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                git_repository: args.git_repository!,
+                git_branch: args.git_branch!,
+                build_pack: args.build_pack! as BuildPack,
+                ports_exposes: args.ports_exposes!,
+                environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                name: args.name,
+                description: args.description,
+                fqdn: args.fqdn,
+              }),
+            );
           case 'create_github':
             if (
               !args.project_uuid ||
@@ -369,7 +382,22 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPrivateGH(apiData as any));
+            return wrap(() =>
+              this.client.createApplicationPrivateGH({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                github_app_uuid: args.github_app_uuid!,
+                git_repository: args.git_repository!,
+                git_branch: args.git_branch!,
+                build_pack: args.build_pack as BuildPack | undefined,
+                ports_exposes: args.ports_exposes,
+                environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                name: args.name,
+                description: args.description,
+                fqdn: args.fqdn,
+              }),
+            );
           case 'create_key':
             if (
               !args.project_uuid ||
@@ -387,7 +415,22 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPrivateKey(apiData as any));
+            return wrap(() =>
+              this.client.createApplicationPrivateKey({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                private_key_uuid: args.private_key_uuid!,
+                git_repository: args.git_repository!,
+                git_branch: args.git_branch!,
+                build_pack: args.build_pack as BuildPack | undefined,
+                ports_exposes: args.ports_exposes,
+                environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                name: args.name,
+                description: args.description,
+                fqdn: args.fqdn,
+              }),
+            );
           case 'create_dockerimage':
             if (
               !args.project_uuid ||
@@ -404,7 +447,20 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationDockerImage(apiData as any));
+            return wrap(() =>
+              this.client.createApplicationDockerImage({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                docker_registry_image_name: args.docker_registry_image_name!,
+                ports_exposes: args.ports_exposes!,
+                docker_registry_image_tag: args.docker_registry_image_tag,
+                environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                name: args.name,
+                description: args.description,
+                fqdn: args.fqdn,
+              }),
+            );
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };

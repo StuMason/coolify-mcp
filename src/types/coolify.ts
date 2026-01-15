@@ -269,12 +269,22 @@ export interface CreateApplicationPublicRequest {
   instant_deploy?: boolean;
 }
 
-export interface CreateApplicationPrivateGHRequest extends CreateApplicationPublicRequest {
+export interface CreateApplicationPrivateGHRequest extends Omit<
+  CreateApplicationPublicRequest,
+  'build_pack' | 'ports_exposes'
+> {
   github_app_uuid: string;
+  build_pack?: BuildPack; // Optional for GitHub app deploys
+  ports_exposes?: string; // Optional for GitHub app deploys
 }
 
-export interface CreateApplicationPrivateKeyRequest extends CreateApplicationPublicRequest {
+export interface CreateApplicationPrivateKeyRequest extends Omit<
+  CreateApplicationPublicRequest,
+  'build_pack' | 'ports_exposes'
+> {
   private_key_uuid: string;
+  build_pack?: BuildPack; // Optional for private key deploys
+  ports_exposes?: string; // Optional for private key deploys
 }
 
 export interface CreateApplicationDockerfileRequest {
