@@ -303,7 +303,8 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
       },
       async (args) => {
-        const { action, uuid } = args;
+        // Strip MCP-internal fields before passing to API (fixes #76)
+        const { action, uuid, delete_volumes, ...apiData } = args;
         switch (action) {
           case 'create_public':
             if (
@@ -323,7 +324,7 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPublic(args as any));
+            return wrap(() => this.client.createApplicationPublic(apiData as any));
           case 'create_github':
             if (
               !args.project_uuid ||
@@ -341,7 +342,7 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPrivateGH(args as any));
+            return wrap(() => this.client.createApplicationPrivateGH(apiData as any));
           case 'create_key':
             if (
               !args.project_uuid ||
@@ -359,7 +360,7 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationPrivateKey(args as any));
+            return wrap(() => this.client.createApplicationPrivateKey(apiData as any));
           case 'create_dockerimage':
             if (
               !args.project_uuid ||
@@ -376,16 +377,16 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createApplicationDockerImage(args as any));
+            return wrap(() => this.client.createApplicationDockerImage(apiData as any));
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.updateApplication(uuid, args));
+            return wrap(() => this.client.updateApplication(uuid, apiData));
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return wrap(() =>
-              this.client.deleteApplication(uuid, { deleteVolumes: args.delete_volumes }),
+              this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
             );
         }
       },
@@ -522,7 +523,8 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
       },
       async (args) => {
-        const { action, uuid } = args;
+        // Strip MCP-internal fields before passing to API (fixes #76)
+        const { action, uuid, delete_volumes, ...apiData } = args;
         switch (action) {
           case 'create':
             if (!args.server_uuid || !args.project_uuid) {
@@ -532,17 +534,15 @@ export class CoolifyMcpServer extends McpServer {
                 ],
               };
             }
-            return wrap(() => this.client.createService(args as any));
+            return wrap(() => this.client.createService(apiData as any));
           case 'update':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.updateService(uuid, args));
+            return wrap(() => this.client.updateService(uuid, apiData));
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() =>
-              this.client.deleteService(uuid, { deleteVolumes: args.delete_volumes }),
-            );
+            return wrap(() => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }));
         }
       },
     );
