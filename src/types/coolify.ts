@@ -863,6 +863,73 @@ export interface UpdatePrivateKeyRequest {
 }
 
 // =============================================================================
+// GitHub App Types
+// =============================================================================
+
+export interface GitHubApp {
+  id: number;
+  uuid: string;
+  name: string;
+  organization: string | null;
+  api_url: string;
+  html_url: string;
+  custom_user: string;
+  custom_port: number;
+  app_id: number | null;
+  installation_id: number | null;
+  client_id: string | null;
+  is_system_wide: boolean;
+  is_public: boolean;
+  private_key_id: number | null;
+  team_id: number;
+  type: string;
+  // Permission fields
+  administration: string | null;
+  contents: string | null;
+  metadata: string | null;
+  pull_requests: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateGitHubAppRequest {
+  name: string;
+  api_url: string;
+  html_url: string;
+  app_id: number;
+  installation_id: number;
+  client_id: string;
+  client_secret: string;
+  private_key_uuid: string;
+  organization?: string;
+  custom_user?: string;
+  custom_port?: number;
+  webhook_secret?: string;
+  is_system_wide?: boolean;
+}
+
+export interface UpdateGitHubAppRequest {
+  name?: string;
+  organization?: string;
+  api_url?: string;
+  html_url?: string;
+  custom_user?: string;
+  custom_port?: number;
+  app_id?: number;
+  installation_id?: number;
+  client_id?: string;
+  client_secret?: string;
+  webhook_secret?: string;
+  private_key_uuid?: string;
+  is_system_wide?: boolean;
+}
+
+export interface GitHubAppUpdateResponse {
+  message: string;
+  data: GitHubApp;
+}
+
+// =============================================================================
 // Cloud Token Types (Hetzner, DigitalOcean)
 // =============================================================================
 
