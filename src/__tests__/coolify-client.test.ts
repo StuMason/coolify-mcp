@@ -498,6 +498,111 @@ describe('CoolifyClient', () => {
     });
   });
 
+  describe('github apps', () => {
+    const mockGitHubApp = {
+      id: 1,
+      uuid: 'gh-app-uuid',
+      name: 'my-github-app',
+      organization: null,
+      api_url: 'https://api.github.com',
+      html_url: 'https://github.com',
+      custom_user: 'git',
+      custom_port: 22,
+      app_id: 12345,
+      installation_id: 67890,
+      client_id: 'client-123',
+      is_system_wide: false,
+      is_public: false,
+      private_key_id: 1,
+      team_id: 0,
+      type: 'github',
+      administration: null,
+      contents: null,
+      metadata: null,
+      pull_requests: null,
+      created_at: '2024-01-01',
+      updated_at: '2024-01-01',
+    };
+
+    it('should list github apps', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockGitHubApp]));
+
+      const result = await client.listGitHubApps();
+
+      expect(result).toEqual([mockGitHubApp]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps',
+        expect.any(Object),
+      );
+    });
+
+    it('should list github apps with summary', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockGitHubApp]));
+
+      const result = await client.listGitHubApps({ summary: true });
+
+      expect(result).toEqual([
+        {
+          id: 1,
+          uuid: 'gh-app-uuid',
+          name: 'my-github-app',
+          organization: null,
+          is_public: false,
+          app_id: 12345,
+        },
+      ]);
+    });
+
+    it('should create a github app', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockGitHubApp));
+
+      const result = await client.createGitHubApp({
+        name: 'my-github-app',
+        api_url: 'https://api.github.com',
+        html_url: 'https://github.com',
+        app_id: 12345,
+        installation_id: 67890,
+        client_id: 'client-123',
+        client_secret: 'secret-456',
+        private_key_uuid: 'key-uuid',
+      });
+
+      expect(result).toEqual(mockGitHubApp);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should update a github app', async () => {
+      const updateResponse = { message: 'GitHub app updated successfully', data: mockGitHubApp };
+      mockFetch.mockResolvedValueOnce(mockResponse(updateResponse));
+
+      const result = await client.updateGitHubApp(1, { name: 'updated-app' });
+
+      expect(result).toEqual(updateResponse);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps/1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ name: 'updated-app' }),
+        }),
+      );
+    });
+
+    it('should delete a github app', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'GitHub app deleted successfully' }));
+
+      const result = await client.deleteGitHubApp(1);
+
+      expect(result).toEqual({ message: 'GitHub app deleted successfully' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps/1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
   describe('error handling', () => {
     it('should handle network errors', async () => {
       mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
