@@ -125,6 +125,12 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.updatePrivateKey).toBe('function');
       expect(typeof client.deletePrivateKey).toBe('function');
 
+      // GitHub App operations
+      expect(typeof client.listGitHubApps).toBe('function');
+      expect(typeof client.createGitHubApp).toBe('function');
+      expect(typeof client.updateGitHubApp).toBe('function');
+      expect(typeof client.deleteGitHubApp).toBe('function');
+
       // Backup operations
       expect(typeof client.listDatabaseBackups).toBe('function');
       expect(typeof client.getDatabaseBackup).toBe('function');

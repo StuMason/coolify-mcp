@@ -69,6 +69,11 @@ import type {
   PrivateKey,
   CreatePrivateKeyRequest,
   UpdatePrivateKeyRequest,
+  // GitHub App types
+  GitHubApp,
+  CreateGitHubAppRequest,
+  UpdateGitHubAppRequest,
+  GitHubAppUpdateResponse,
   // Cloud token types
   CloudToken,
   CreateCloudTokenRequest,
@@ -151,6 +156,15 @@ export interface ProjectSummary {
   description?: string;
 }
 
+export interface GitHubAppSummary {
+  id: number;
+  uuid: string;
+  name: string;
+  organization: string | null;
+  is_public: boolean;
+  app_id: number | null;
+}
+
 /**
  * Remove undefined values from an object.
  * Keeps explicit false values so features like HTTP Basic Auth can be disabled.
@@ -225,6 +239,17 @@ function toProjectSummary(proj: Project): ProjectSummary {
     uuid: proj.uuid,
     name: proj.name,
     description: proj.description,
+  };
+}
+
+function toGitHubAppSummary(app: GitHubApp): GitHubAppSummary {
+  return {
+    id: app.id,
+    uuid: app.uuid,
+    name: app.name,
+    organization: app.organization,
+    is_public: app.is_public,
+    app_id: app.app_id,
   };
 }
 
@@ -904,6 +929,38 @@ export class CoolifyClient {
 
   async deletePrivateKey(uuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/security/keys/${uuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // GitHub App endpoints
+  // ===========================================================================
+
+  async listGitHubApps(options?: ListOptions): Promise<GitHubApp[] | GitHubAppSummary[]> {
+    const apps = await this.request<GitHubApp[]>('/github-apps');
+    return options?.summary && Array.isArray(apps) ? apps.map(toGitHubAppSummary) : apps;
+  }
+
+  async createGitHubApp(data: CreateGitHubAppRequest): Promise<GitHubApp> {
+    return this.request<GitHubApp>('/github-apps', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateGitHubApp(
+    id: number,
+    data: UpdateGitHubAppRequest,
+  ): Promise<GitHubAppUpdateResponse> {
+    return this.request<GitHubAppUpdateResponse>(`/github-apps/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(cleanRequestData(data)),
+    });
+  }
+
+  async deleteGitHubApp(id: number): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/github-apps/${id}`, {
       method: 'DELETE',
     });
   }
