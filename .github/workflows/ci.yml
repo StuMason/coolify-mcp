@@ -50,3 +50,12 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
           verbose: true
+
+      - name: Upload test results to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/junit.xml
+          fail_ci_if_error: false
+          verbose: true

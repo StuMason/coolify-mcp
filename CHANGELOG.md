@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Codecov Test Analytics** - Enable test result tracking (#84):
+  - Added `jest-junit` reporter for JUnit XML output
+  - CI workflow now uploads test results to Codecov
+  - Enables flaky test detection and test performance tracking
+
 ### Fixed
 
 - **Deployment Logs Massive Payload** - Add character-based truncation (#82):
