@@ -24,6 +24,16 @@ export default {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'text-summary', 'lcov'],
+  reporters: [
+    'default',
+    [
+      'jest-junit',
+      {
+        outputDirectory: 'coverage',
+        outputName: 'junit.xml',
+      },
+    ],
+  ],
   coverageThreshold: {
     global: {
       statements: 80,
