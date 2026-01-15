@@ -1,5 +1,5 @@
 /**
- * Coolify MCP Server v2.3.0
+ * Coolify MCP Server v2.4.0
  * Consolidated tools for efficient token usage
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -14,10 +14,11 @@ import {
   type ApplicationSummary,
   type DatabaseSummary,
   type ServiceSummary,
+  type GitHubAppSummary,
 } from './coolify-client.js';
-import type { CoolifyConfig } from '../types/coolify.js';
+import type { CoolifyConfig, GitHubApp } from '../types/coolify.js';
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 
 /** Wrap handler with error handling */
 function wrap<T>(
@@ -728,6 +729,96 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return wrap(() => this.client.deletePrivateKey(uuid));
+        }
+      },
+    );
+
+    // =========================================================================
+    // GitHub Apps (1 tool - consolidated)
+    // =========================================================================
+    this.tool(
+      'github_apps',
+      'Manage GitHub Apps: list/get/create/update/delete',
+      {
+        action: z.enum(['list', 'get', 'create', 'update', 'delete']),
+        // GitHub apps use integer id, not uuid
+        id: z.number().optional(),
+        // Create/Update fields
+        name: z.string().optional(),
+        organization: z.string().optional(),
+        api_url: z.string().optional(),
+        html_url: z.string().optional(),
+        custom_user: z.string().optional(),
+        custom_port: z.number().optional(),
+        app_id: z.number().optional(),
+        installation_id: z.number().optional(),
+        client_id: z.string().optional(),
+        client_secret: z.string().optional(),
+        webhook_secret: z.string().optional(),
+        private_key_uuid: z.string().optional(),
+        is_system_wide: z.boolean().optional(),
+      },
+      async (args) => {
+        const { action, id, ...apiData } = args;
+        switch (action) {
+          case 'list':
+            return wrap(async () => {
+              const apps = (await this.client.listGitHubApps({
+                summary: true,
+              })) as GitHubAppSummary[];
+              return apps;
+            });
+          case 'get':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(async () => {
+              const apps = (await this.client.listGitHubApps()) as GitHubApp[];
+              const app = apps.find((a) => a.id === id);
+              if (!app) throw new Error(`GitHub App with id ${id} not found`);
+              return app;
+            });
+          case 'create':
+            if (
+              !apiData.name ||
+              !apiData.api_url ||
+              !apiData.html_url ||
+              !apiData.app_id ||
+              !apiData.installation_id ||
+              !apiData.client_id ||
+              !apiData.client_secret ||
+              !apiData.private_key_uuid
+            ) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: name, api_url, html_url, app_id, installation_id, client_id, client_secret, private_key_uuid required',
+                  },
+                ],
+              };
+            }
+            return wrap(() =>
+              this.client.createGitHubApp({
+                name: apiData.name!,
+                api_url: apiData.api_url!,
+                html_url: apiData.html_url!,
+                app_id: apiData.app_id!,
+                installation_id: apiData.installation_id!,
+                client_id: apiData.client_id!,
+                client_secret: apiData.client_secret!,
+                private_key_uuid: apiData.private_key_uuid!,
+                organization: apiData.organization,
+                custom_user: apiData.custom_user,
+                custom_port: apiData.custom_port,
+                webhook_secret: apiData.webhook_secret,
+                is_system_wide: apiData.is_system_wide,
+              }),
+            );
+          case 'update':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(() => this.client.updateGitHubApp(id, apiData));
+          case 'delete':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(() => this.client.deleteGitHubApp(id));
         }
       },
     );

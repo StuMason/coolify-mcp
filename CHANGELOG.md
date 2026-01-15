@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-01-15
+
+### Added
+
+- **GitHub Apps Management** - Full CRUD operations for GitHub App integrations (#75):
+  - `github_apps` tool with `list`, `get`, `create`, `update`, `delete` actions
+  - `get` action returns full details by filtering list (no single-item API endpoint exists)
+  - Uses integer ID (not UUID) for get/update/delete per Coolify API requirements
+  - Token-optimized summary mode for list operations
+  - Total tool count increased from 34 to 35 tools
+
+### Fixed
+
+- **MCP Tool Routing Fields Leak** - Strip `action` field before API calls (#76):
+  - `application` and `service` tools were passing MCP-internal `action` field to Coolify API
+  - Coolify API rejected with "action: This field is not allowed"
+  - Fix: Destructure `{ action, uuid, delete_volumes, ...apiData }` and use `apiData` for API calls
+
 ## [2.3.0] - 2026-01-14
 
 ### Added
