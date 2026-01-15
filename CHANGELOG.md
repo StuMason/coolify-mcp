@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Deployment Logs Massive Payload** - Add character-based truncation (#82):
+  - `deployment` tool's `lines` parameter only limited line count, not characters
+  - Giant log lines (base64, docker build output) could still return 900K+ chars
+  - Fix: Default to last 200 lines AND cap at 50K characters
+  - Added `max_chars` parameter for customization
+
 ## [2.4.0] - 2026-01-15
 
 ### Added
