@@ -18,7 +18,7 @@ import {
 } from './coolify-client.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 
 /** Wrap handler with error handling */
 function wrap<T>(
