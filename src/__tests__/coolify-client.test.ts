@@ -892,12 +892,97 @@ describe('CoolifyClient', () => {
       );
     });
 
+    /**
+     * Issue #76 - Client Layer Behavior Test
+     *
+     * This test documents that the client passes through whatever data it receives.
+     * The client itself is NOT buggy - it correctly sends all fields to the API.
+     *
+     * The FIX for #76 is in mcp-server.ts which now strips 'action' before
+     * calling client methods. This test ensures the client behavior remains
+     * predictable (pass-through) so the MCP server layer must handle filtering.
+     */
+    it('client passes through action field when included in create data (documents #76 fix location)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      // This simulates what mcp-server.ts does: passing full args with action
+      const argsFromMcpTool = {
+        action: 'create_public', // This should NOT be sent to the API
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        git_repository: 'https://github.com/user/repo',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '3000',
+      };
+
+      await client.createApplicationPublic(argsFromMcpTool as any);
+
+      // This assertion proves the bug: 'action' IS included in the request body
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/public',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"action":"create_public"'),
+        }),
+      );
+    });
+
     it('should update an application', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ ...mockApplication, name: 'updated-app' }));
 
       const result = await client.updateApplication('app-uuid', { name: 'updated-app' });
 
       expect(result.name).toBe('updated-app');
+    });
+
+    it('should update an application and verify request body', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ ...mockApplication, name: 'updated-app' }));
+
+      await client.updateApplication('app-uuid', { name: 'updated-app', description: 'new desc' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ name: 'updated-app', description: 'new desc' }),
+        }),
+      );
+    });
+
+    /**
+     * Issue #76 - Client Layer Behavior Test
+     *
+     * This test documents that the client passes through whatever data it receives.
+     * The client itself is NOT buggy - it correctly sends all fields to the API.
+     *
+     * The FIX for #76 is in mcp-server.ts which now strips 'action' before
+     * calling client methods. This test ensures the client behavior remains
+     * predictable (pass-through) so the MCP server layer must handle filtering.
+     */
+    it('client passes through action field when included in update data (documents #76 fix location)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ ...mockApplication, name: 'updated-app' }));
+
+      // This simulates what mcp-server.ts does: passing the full args object including 'action'
+      const argsFromMcpTool = {
+        action: 'update', // This should NOT be sent to the API
+        uuid: 'app-uuid', // This is extracted separately
+        name: 'updated-app',
+        description: 'new desc',
+      };
+
+      // The client passes whatever it receives to the API
+      await client.updateApplication('app-uuid', argsFromMcpTool as any);
+
+      // This assertion proves the bug: 'action' IS included in the request body
+      // The Coolify API will reject this with "action: This field is not allowed"
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining('"action":"update"'),
+        }),
+      );
     });
 
     it('should delete an application', async () => {
