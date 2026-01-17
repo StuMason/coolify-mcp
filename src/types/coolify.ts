@@ -1078,3 +1078,30 @@ export interface BatchOperationResult {
   succeeded: Array<{ uuid: string; name: string }>;
   failed: Array<{ uuid: string; name: string; error: string }>;
 }
+
+// =============================================================================
+// Extended Environment Types (for cross-referencing missing database types)
+// =============================================================================
+
+/**
+ * Environment with all database types.
+ * The Coolify API's environment endpoint doesn't include dragonflys, keydbs, and clickhouses
+ * in the response, even when they exist. This extended interface includes these missing
+ * database types, populated by cross-referencing with the list_databases endpoint.
+ * @see https://github.com/StuMason/coolify-mcp/issues/88
+ */
+export interface EnvironmentWithDatabases extends Environment {
+  // These arrays may be present in the API response
+  postgresqls?: Database[];
+  mysqls?: Database[];
+  mariadbs?: Database[];
+  mongodbs?: Database[];
+  redis?: Database[];
+  // These arrays are missing from the API but populated by cross-reference
+  dragonflys?: Database[];
+  keydbs?: Database[];
+  clickhouses?: Database[];
+  // Also include applications and services if present
+  applications?: Application[];
+  services?: Service[];
+}

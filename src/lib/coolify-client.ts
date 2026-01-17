@@ -22,6 +22,7 @@ import type {
   UpdateProjectRequest,
   // Environment types
   Environment,
+  EnvironmentWithDatabases,
   CreateEnvironmentRequest,
   // Application types
   Application,
@@ -488,6 +489,44 @@ export class CoolifyClient {
         method: 'DELETE',
       },
     );
+  }
+
+  /**
+   * Get a project environment with all database types populated.
+   * The Coolify API's environment endpoint doesn't include dragonflys, keydbs, and clickhouses
+   * in the response. This method cross-references with listDatabases to populate these.
+   * @see https://github.com/StuMason/coolify-mcp/issues/88
+   */
+  async getProjectEnvironmentWithDatabases(
+    projectUuid: string,
+    environmentNameOrUuid: string,
+  ): Promise<EnvironmentWithDatabases> {
+    // Fetch both in parallel for efficiency
+    const [environment, allDatabases] = await Promise.all([
+      this.request<EnvironmentWithDatabases>(`/projects/${projectUuid}/${environmentNameOrUuid}`),
+      this.listDatabases() as Promise<Database[]>,
+    ]);
+
+    // Filter databases that belong to this environment
+    const envDatabases = allDatabases.filter(
+      (db) => db.environment_uuid === environment.uuid || db.environment_name === environment.name,
+    );
+
+    // Group databases by type, focusing on the missing types
+    // The API may already populate postgresqls, mysqls, mariadbs, mongodbs, redis
+    // We need to add dragonflys, keydbs, clickhouses
+    const dragonflys = envDatabases.filter((db) => db.type?.includes('dragonfly'));
+    const keydbs = envDatabases.filter((db) => db.type?.includes('keydb'));
+    const clickhouses = envDatabases.filter((db) => db.type?.includes('clickhouse'));
+
+    // Return the environment with missing database types populated
+    return {
+      ...environment,
+      // Only add if the API didn't already include them and we found some
+      ...(dragonflys.length > 0 && !environment.dragonflys && { dragonflys }),
+      ...(keydbs.length > 0 && !environment.keydbs && { keydbs }),
+      ...(clickhouses.length > 0 && !environment.clickhouses && { clickhouses }),
+    };
   }
 
   // ===========================================================================

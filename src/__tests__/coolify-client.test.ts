@@ -847,6 +847,167 @@ describe('CoolifyClient', () => {
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
+
+    it('should get project environment with databases including missing types', async () => {
+      const mockEnvResponse = {
+        id: 1,
+        uuid: 'env-uuid',
+        name: 'production',
+        project_uuid: 'proj-uuid',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        postgresqls: [{ uuid: 'pg-uuid', name: 'pg-db', type: 'postgresql', status: 'running' }],
+        redis: [],
+      };
+
+      const mockDatabases = [
+        {
+          uuid: 'pg-uuid',
+          name: 'pg-db',
+          type: 'postgresql',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+          image: 'postgres:15',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          uuid: 'dragonfly-uuid',
+          name: 'dragonfly-cache',
+          type: 'standalone-dragonfly',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+          image: 'dragonfly:latest',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          uuid: 'keydb-uuid',
+          name: 'keydb-cache',
+          type: 'standalone-keydb',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+          image: 'keydb:latest',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          uuid: 'clickhouse-uuid',
+          name: 'clickhouse-analytics',
+          type: 'standalone-clickhouse',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+          image: 'clickhouse:latest',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+        {
+          uuid: 'other-env-db',
+          name: 'other-db',
+          type: 'standalone-dragonfly',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'other-env-uuid',
+          image: 'dragonfly:latest',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      // First call is for the environment, second is for list databases
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvResponse))
+        .mockResolvedValueOnce(mockResponse(mockDatabases));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.uuid).toBe('env-uuid');
+      expect(result.postgresqls).toEqual([
+        { uuid: 'pg-uuid', name: 'pg-db', type: 'postgresql', status: 'running' },
+      ]);
+      // Missing types should be populated
+      expect(result.dragonflys).toHaveLength(1);
+      expect(result.dragonflys![0].uuid).toBe('dragonfly-uuid');
+      expect(result.keydbs).toHaveLength(1);
+      expect(result.keydbs![0].uuid).toBe('keydb-uuid');
+      expect(result.clickhouses).toHaveLength(1);
+      expect(result.clickhouses![0].uuid).toBe('clickhouse-uuid');
+    });
+
+    it('should not add missing database types if none found', async () => {
+      const mockEnvResponse = {
+        id: 1,
+        uuid: 'env-uuid',
+        name: 'production',
+        project_uuid: 'proj-uuid',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        postgresqls: [],
+        redis: [],
+      };
+
+      const mockDatabases = [
+        {
+          uuid: 'pg-uuid',
+          name: 'pg-db',
+          type: 'postgresql',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'other-env-uuid',
+          image: 'postgres:15',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvResponse))
+        .mockResolvedValueOnce(mockResponse(mockDatabases));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.dragonflys).toBeUndefined();
+      expect(result.keydbs).toBeUndefined();
+      expect(result.clickhouses).toBeUndefined();
+    });
+
+    it('should match databases by environment_name if environment_uuid is missing', async () => {
+      const mockEnvResponse = {
+        id: 1,
+        uuid: 'env-uuid',
+        name: 'production',
+        project_uuid: 'proj-uuid',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+
+      const mockDatabases = [
+        {
+          uuid: 'dragonfly-uuid',
+          name: 'dragonfly-cache',
+          type: 'standalone-dragonfly',
+          status: 'running',
+          is_public: false,
+          environment_name: 'production', // matches by name instead of uuid
+          image: 'dragonfly:latest',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvResponse))
+        .mockResolvedValueOnce(mockResponse(mockDatabases));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.dragonflys).toHaveLength(1);
+      expect(result.dragonflys![0].uuid).toBe('dragonfly-uuid');
+    });
   });
 
   // =========================================================================
