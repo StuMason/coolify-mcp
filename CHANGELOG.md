@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Environment Endpoint Missing Database Types** - Cross-reference missing Dragonfly, KeyDB, and ClickHouse databases (#88):
+  - Coolify API's `/projects/{uuid}/{environment}` endpoint doesn't include `dragonflys`, `keydbs`, and `clickhouses` arrays
+  - The `environments` tool's `get` action now cross-references with `list_databases` to populate these missing types
+  - Databases are matched by `environment_uuid` or `environment_name`
+  - New `getProjectEnvironmentWithDatabases` client method added
+  - New `EnvironmentWithDatabases` type added to types
+  - This prevents invisible databases when auditing infrastructure or deleting projects
+
 ## [2.5.0] - 2026-01-15
 
 ### Added
