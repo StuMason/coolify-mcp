@@ -825,9 +825,8 @@ export class CoolifyMcpServer extends McpServer {
         key: z.string().optional(),
         value: z.string().optional(),
         env_uuid: z.string().optional(),
-        is_build_time: z.boolean().optional(),
       },
-      async ({ resource, action, uuid, key, value, env_uuid, is_build_time }) => {
+      async ({ resource, action, uuid, key, value, env_uuid }) => {
         if (resource === 'application') {
           switch (action) {
             case 'list':
@@ -835,9 +834,8 @@ export class CoolifyMcpServer extends McpServer {
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
-              return wrap(() =>
-                this.client.createApplicationEnvVar(uuid, { key, value, is_build_time }),
-              );
+              // Note: is_build_time is not passed - Coolify API rejects it for create action
+              return wrap(() => this.client.createApplicationEnvVar(uuid, { key, value }));
             case 'update':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
