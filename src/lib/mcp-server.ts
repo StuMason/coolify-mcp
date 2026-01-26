@@ -15,7 +15,14 @@ import {
   type ServiceSummary,
   type GitHubAppSummary,
 } from './coolify-client.js';
-import type { CoolifyConfig, GitHubApp, BuildPack } from '../types/coolify.js';
+import type {
+  CoolifyConfig,
+  GitHubApp,
+  BuildPack,
+  ResponseAction,
+  ResponsePagination,
+  Deployment,
+} from '../types/coolify.js';
 
 const VERSION = '2.5.0';
 
@@ -61,6 +68,97 @@ export function truncateLogs(
   }
 
   return truncatedLogs;
+}
+
+// =============================================================================
+// Action Generators for HATEOAS-style responses
+// =============================================================================
+
+/** Generate contextual actions for an application based on its status */
+export function getApplicationActions(uuid: string, status?: string): ResponseAction[] {
+  const actions: ResponseAction[] = [
+    { tool: 'application_logs', args: { uuid }, hint: 'View logs' },
+  ];
+  const s = (status || '').toLowerCase();
+  if (s.includes('running')) {
+    actions.push({
+      tool: 'control',
+      args: { resource: 'application', action: 'restart', uuid },
+      hint: 'Restart',
+    });
+    actions.push({
+      tool: 'control',
+      args: { resource: 'application', action: 'stop', uuid },
+      hint: 'Stop',
+    });
+  } else {
+    actions.push({
+      tool: 'control',
+      args: { resource: 'application', action: 'start', uuid },
+      hint: 'Start',
+    });
+  }
+  return actions;
+}
+
+/** Generate contextual actions for a deployment */
+export function getDeploymentActions(
+  uuid: string,
+  status: string,
+  appUuid?: string,
+): ResponseAction[] {
+  const actions: ResponseAction[] = [];
+  if (status === 'in_progress' || status === 'queued') {
+    actions.push({ tool: 'deployment', args: { action: 'cancel', uuid }, hint: 'Cancel' });
+  }
+  if (appUuid) {
+    actions.push({ tool: 'get_application', args: { uuid: appUuid }, hint: 'View app' });
+    actions.push({ tool: 'application_logs', args: { uuid: appUuid }, hint: 'App logs' });
+  }
+  return actions;
+}
+
+/** Generate pagination info for list endpoints */
+export function getPagination(
+  tool: string,
+  page?: number,
+  perPage?: number,
+  count?: number,
+): ResponsePagination | undefined {
+  const p = page ?? 1;
+  const pp = perPage ?? 50;
+  if (!count || count < pp) {
+    return p > 1 ? { prev: { tool, args: { page: p - 1, per_page: pp } } } : undefined;
+  }
+  return {
+    ...(p > 1 && { prev: { tool, args: { page: p - 1, per_page: pp } } }),
+    next: { tool, args: { page: p + 1, per_page: pp } },
+  };
+}
+
+/** Wrap handler with error handling and HATEOAS actions */
+function wrapWithActions<T>(
+  fn: () => Promise<T>,
+  getActions?: (result: T) => ResponseAction[],
+  getPaginationFn?: (result: T) => ResponsePagination | undefined,
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  return fn()
+    .then((result) => {
+      const actions = getActions?.(result) ?? [];
+      const pagination = getPaginationFn?.(result);
+      const response: Record<string, unknown> = { data: result };
+      if (actions.length > 0) response._actions = actions;
+      if (pagination) response._pagination = pagination;
+      return { content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }] };
+    })
+    .catch((error) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    }));
 }
 
 export class CoolifyMcpServer extends McpServer {
@@ -274,11 +372,19 @@ export class CoolifyMcpServer extends McpServer {
       'List apps (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
       async ({ page, per_page }) =>
-        wrap(() => this.client.listApplications({ page, per_page, summary: true })),
+        wrapWithActions(
+          () => this.client.listApplications({ page, per_page, summary: true }),
+          undefined,
+          (result) =>
+            getPagination('list_applications', page, per_page, (result as unknown[]).length),
+        ),
     );
 
     this.tool('get_application', 'App details', { uuid: z.string() }, async ({ uuid }) =>
-      wrap(() => this.client.getApplication(uuid)),
+      wrapWithActions(
+        () => this.client.getApplication(uuid),
+        (app) => getApplicationActions(app.uuid, app.status),
+      ),
     );
 
     this.tool(
@@ -657,7 +763,7 @@ export class CoolifyMcpServer extends McpServer {
         uuid: z.string(),
       },
       async ({ resource, action, uuid }) => {
-        const methods: Record<string, Record<string, (u: string) => Promise<any>>> = {
+        const methods: Record<string, Record<string, (u: string) => Promise<unknown>>> = {
           application: {
             start: (u) => this.client.startApplication(u),
             stop: (u) => this.client.stopApplication(u),
@@ -674,7 +780,35 @@ export class CoolifyMcpServer extends McpServer {
             restart: (u) => this.client.restartService(u),
           },
         };
-        return wrap(() => methods[resource][action](uuid));
+
+        // Generate contextual actions based on resource type and action taken
+        const getControlActions = (): ResponseAction[] => {
+          const actions: ResponseAction[] = [];
+          if (resource === 'application') {
+            actions.push({ tool: 'application_logs', args: { uuid }, hint: 'View logs' });
+            actions.push({ tool: 'get_application', args: { uuid }, hint: 'Check status' });
+            if (action === 'start' || action === 'restart') {
+              actions.push({
+                tool: 'control',
+                args: { resource: 'application', action: 'stop', uuid },
+                hint: 'Stop',
+              });
+            } else {
+              actions.push({
+                tool: 'control',
+                args: { resource: 'application', action: 'start', uuid },
+                hint: 'Start',
+              });
+            }
+          } else if (resource === 'database') {
+            actions.push({ tool: 'get_database', args: { uuid }, hint: 'Check status' });
+          } else if (resource === 'service') {
+            actions.push({ tool: 'get_service', args: { uuid }, hint: 'Check status' });
+          }
+          return actions;
+        };
+
+        return wrapWithActions(() => methods[resource][action](uuid), getControlActions);
       },
     );
 
@@ -744,7 +878,12 @@ export class CoolifyMcpServer extends McpServer {
       'List deployments (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
       async ({ page, per_page }) =>
-        wrap(() => this.client.listDeployments({ page, per_page, summary: true })),
+        wrapWithActions(
+          () => this.client.listDeployments({ page, per_page, summary: true }),
+          undefined,
+          (result) =>
+            getPagination('list_deployments', page, per_page, (result as unknown[]).length),
+        ),
     );
 
     this.tool(
@@ -752,30 +891,44 @@ export class CoolifyMcpServer extends McpServer {
       'Deploy by tag/UUID',
       { tag_or_uuid: z.string(), force: z.boolean().optional() },
       async ({ tag_or_uuid, force }) =>
-        wrap(() => this.client.deployByTagOrUuid(tag_or_uuid, force)),
+        wrapWithActions(
+          () => this.client.deployByTagOrUuid(tag_or_uuid, force),
+          () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
+        ),
     );
 
     this.tool(
       'deployment',
-      'Manage deployment: get/cancel/list_for_app (logs truncated to last 200 lines/50K chars by default)',
+      'Manage deployment: get/cancel/list_for_app (logs excluded by default, use lines param to include)',
       {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
-        lines: z.number().optional(), // Limit log output to last N lines (default: 200)
+        lines: z.number().optional(), // Include logs truncated to last N lines (omit for no logs)
         max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)
       },
       async ({ action, uuid, lines, max_chars }) => {
         switch (action) {
           case 'get':
-            return wrap(async () => {
-              const deployment = await this.client.getDeployment(uuid);
-
-              if (deployment.logs) {
-                deployment.logs = truncateLogs(deployment.logs, lines ?? 200, max_chars ?? 50000);
-              }
-
-              return deployment;
-            });
+            // If lines param specified, include logs and truncate
+            if (lines !== undefined) {
+              return wrapWithActions(
+                async () => {
+                  const deployment = (await this.client.getDeployment(uuid, {
+                    includeLogs: true,
+                  })) as Deployment;
+                  if (deployment.logs) {
+                    deployment.logs = truncateLogs(deployment.logs, lines, max_chars ?? 50000);
+                  }
+                  return deployment;
+                },
+                (dep) => getDeploymentActions(dep.uuid, dep.status, dep.application_uuid),
+              );
+            }
+            // Otherwise return essential info without logs
+            return wrapWithActions(
+              () => this.client.getDeployment(uuid),
+              (dep) => getDeploymentActions(dep.uuid, dep.status, dep.application_uuid),
+            );
           case 'cancel':
             return wrap(() => this.client.cancelDeployment(uuid));
           case 'list_for_app':

@@ -62,6 +62,7 @@ import type {
   ServiceCreateResponse,
   // Deployment types
   Deployment,
+  DeploymentEssential,
   // Team types
   Team,
   TeamMember,
@@ -231,6 +232,27 @@ function toDeploymentSummary(dep: Deployment): DeploymentSummary {
     application_name: dep.application_name,
     status: dep.status,
     created_at: dep.created_at,
+  };
+}
+
+function toDeploymentEssential(dep: Deployment): DeploymentEssential {
+  return {
+    uuid: dep.uuid,
+    deployment_uuid: dep.deployment_uuid,
+    application_uuid: dep.application_uuid,
+    application_name: dep.application_name,
+    server_name: dep.server_name,
+    status: dep.status,
+    commit: dep.commit,
+    force_rebuild: dep.force_rebuild,
+    is_webhook: dep.is_webhook,
+    is_api: dep.is_api,
+    created_at: dep.created_at,
+    updated_at: dep.updated_at,
+    logs_truncated: !!dep.logs,
+    logs_info: dep.logs
+      ? `Logs available (${dep.logs.length} chars). Use lines param to retrieve.`
+      : undefined,
   };
 }
 
@@ -862,13 +884,19 @@ export class CoolifyClient {
       : deployments;
   }
 
-  async getDeployment(uuid: string): Promise<Deployment> {
-    return this.request<Deployment>(`/deployments/${uuid}`);
+  async getDeployment(
+    uuid: string,
+    options?: { includeLogs?: boolean },
+  ): Promise<Deployment | DeploymentEssential> {
+    const deployment = await this.request<Deployment>(`/deployments/${uuid}`);
+    return options?.includeLogs ? deployment : toDeploymentEssential(deployment);
   }
 
   async deployByTagOrUuid(tagOrUuid: string, force: boolean = false): Promise<MessageResponse> {
+    // Detect if the value looks like a UUID or a tag name
+    const param = this.isLikelyUuid(tagOrUuid) ? 'uuid' : 'tag';
     return this.request<MessageResponse>(
-      `/deploy?tag=${encodeURIComponent(tagOrUuid)}&force=${force}`,
+      `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}`,
       { method: 'GET' },
     );
   }

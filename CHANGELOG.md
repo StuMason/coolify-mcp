@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **HATEOAS-style Response Actions** - Add `_actions` to responses (#98, #99):
+  - Responses now include contextual `_actions` array with suggested next tool calls
+  - `get_application` returns actions like "View logs", "Restart", "Stop" based on app status
+  - `deployment get` returns actions like "Cancel", "View app", "App logs"
+  - `control` tool returns follow-up actions after start/stop/restart
+  - `deploy` returns action to check deployment status
+  - List endpoints (`list_applications`, `list_deployments`) include `_pagination` for next/prev
+
+### Fixed
+
+- **Deploy by UUID Broken** - Fix `deploy` tool UUID detection (#99):
+  - Previously, `deployByTagOrUuid` always used `tag` query param
+  - Now correctly detects Coolify-style UUIDs (24 char alphanumeric) and standard UUIDs
+  - UUIDs use `uuid` query param, tag names use `tag` query param
+
+- **Deployment Response Size** - Reduce default response from ~13k to <1k tokens (#98):
+  - `deployment get` now returns essential fields by default (no logs)
+  - Use `lines` parameter to include truncated logs when needed
+  - Response includes `logs_info` field indicating log availability and size
+
 ## [2.5.0] - 2026-01-15
 
 ### Added

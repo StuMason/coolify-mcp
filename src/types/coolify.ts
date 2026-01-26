@@ -1078,3 +1078,36 @@ export interface BatchOperationResult {
   succeeded: Array<{ uuid: string; name: string }>;
   failed: Array<{ uuid: string; name: string; error: string }>;
 }
+
+// =============================================================================
+// Response Enhancement Types (HATEOAS-style actions)
+// =============================================================================
+
+export interface ResponseAction {
+  tool: string;
+  args: Record<string, string | number | boolean>;
+  hint: string;
+}
+
+export interface ResponsePagination {
+  next?: { tool: string; args: Record<string, number> };
+  prev?: { tool: string; args: Record<string, number> };
+}
+
+// Optimized deployment response (excludes logs by default)
+export interface DeploymentEssential {
+  uuid: string;
+  deployment_uuid: string;
+  application_uuid?: string;
+  application_name?: string;
+  server_name?: string;
+  status: string;
+  commit?: string;
+  force_rebuild: boolean;
+  is_webhook: boolean;
+  is_api: boolean;
+  created_at: string;
+  updated_at: string;
+  logs_truncated?: boolean;
+  logs_info?: string;
+}
