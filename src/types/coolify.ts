@@ -1108,6 +1108,6 @@ export interface DeploymentEssential {
   is_api: boolean;
   created_at: string;
   updated_at: string;
-  logs_truncated?: boolean;
+  logs_available?: boolean; // true if logs exist but were excluded
   logs_info?: string;
 }

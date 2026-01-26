@@ -249,7 +249,7 @@ function toDeploymentEssential(dep: Deployment): DeploymentEssential {
     is_api: dep.is_api,
     created_at: dep.created_at,
     updated_at: dep.updated_at,
-    logs_truncated: !!dep.logs,
+    logs_available: !!dep.logs,
     logs_info: dep.logs
       ? `Logs available (${dep.logs.length} chars). Use lines param to retrieve.`
       : undefined,

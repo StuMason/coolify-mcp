@@ -95,6 +95,10 @@ describe('CoolifyClient', () => {
     deployment_uuid: 'dep-123',
     application_name: 'test-app',
     status: 'finished',
+    force_rebuild: false,
+    is_webhook: false,
+    is_api: true,
+    restart_only: false,
     created_at: '2024-01-01',
     updated_at: '2024-01-01',
   };
@@ -1769,12 +1773,12 @@ describe('CoolifyClient', () => {
         server_name: undefined,
         status: 'finished',
         commit: undefined,
-        force_rebuild: undefined,
-        is_webhook: undefined,
-        is_api: undefined,
+        force_rebuild: false,
+        is_webhook: false,
+        is_api: true,
         created_at: '2024-01-01',
         updated_at: '2024-01-01',
-        logs_truncated: false,
+        logs_available: false,
         logs_info: undefined,
       });
       expect(mockFetch).toHaveBeenCalledWith(
@@ -1806,7 +1810,7 @@ describe('CoolifyClient', () => {
       // Should have logs_info indicating logs are available
       expect(result).toMatchObject({
         uuid: 'dep-uuid',
-        logs_truncated: true,
+        logs_available: true,
         logs_info: 'Logs available (16 chars). Use lines param to retrieve.',
       });
     });
