@@ -63,6 +63,7 @@ describe('CoolifyMcpServer v2', () => {
       // Environment operations
       expect(typeof client.listProjectEnvironments).toBe('function');
       expect(typeof client.getProjectEnvironment).toBe('function');
+      expect(typeof client.getProjectEnvironmentWithDatabases).toBe('function');
       expect(typeof client.createProjectEnvironment).toBe('function');
       expect(typeof client.deleteProjectEnvironment).toBe('function');
 

@@ -133,6 +133,8 @@ export interface DatabaseSummary {
   type: string;
   status: string;
   is_public: boolean;
+  environment_uuid?: string;
+  environment_name?: string;
 }
 
 export interface ServiceSummary {
@@ -212,6 +214,8 @@ function toDatabaseSummary(db: Database): DatabaseSummary {
     type: db.type,
     status: db.status,
     is_public: db.is_public,
+    environment_uuid: db.environment_uuid,
+    environment_name: db.environment_name,
   };
 }
 
@@ -488,6 +492,43 @@ export class CoolifyClient {
     environmentNameOrUuid: string,
   ): Promise<Environment> {
     return this.request<Environment>(`/projects/${projectUuid}/${environmentNameOrUuid}`);
+  }
+
+  /**
+   * Get environment with missing database types (dragonfly, keydb, clickhouse).
+   * Coolify API omits these from the environment endpoint - we cross-reference
+   * with listDatabases using lightweight summaries.
+   * @see https://github.com/StuMason/coolify-mcp/issues/88
+   */
+  async getProjectEnvironmentWithDatabases(
+    projectUuid: string,
+    environmentNameOrUuid: string,
+  ): Promise<
+    Environment & {
+      dragonflys?: DatabaseSummary[];
+      keydbs?: DatabaseSummary[];
+      clickhouses?: DatabaseSummary[];
+    }
+  > {
+    const [environment, dbSummaries] = await Promise.all([
+      this.getProjectEnvironment(projectUuid, environmentNameOrUuid),
+      this.listDatabases({ summary: true }) as Promise<DatabaseSummary[]>,
+    ]);
+
+    // Filter for this environment's missing database types
+    const envDbs = dbSummaries.filter(
+      (db) => db.environment_uuid === environment.uuid || db.environment_name === environment.name,
+    );
+    const dragonflys = envDbs.filter((db) => db.type?.includes('dragonfly'));
+    const keydbs = envDbs.filter((db) => db.type?.includes('keydb'));
+    const clickhouses = envDbs.filter((db) => db.type?.includes('clickhouse'));
+
+    return {
+      ...environment,
+      ...(dragonflys.length > 0 && { dragonflys }),
+      ...(keydbs.length > 0 && { keydbs }),
+      ...(clickhouses.length > 0 && { clickhouses }),
+    };
   }
 
   async createProjectEnvironment(

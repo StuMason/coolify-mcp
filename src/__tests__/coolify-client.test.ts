@@ -852,6 +852,46 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should get project environment with missing database types', async () => {
+      const mockDbSummaries = [
+        {
+          uuid: 'pg-uuid',
+          name: 'pg-db',
+          type: 'postgresql',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+        },
+        {
+          uuid: 'dragonfly-uuid',
+          name: 'dragonfly-cache',
+          type: 'standalone-dragonfly',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid',
+        },
+        {
+          uuid: 'other-env-db',
+          name: 'other-db',
+          type: 'standalone-keydb',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'other-env-uuid',
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvironment))
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.uuid).toBe('env-uuid');
+      expect(result.dragonflys).toHaveLength(1);
+      expect(result.dragonflys![0].uuid).toBe('dragonfly-uuid');
+      expect(result.keydbs).toBeUndefined(); // other-env-db is in different env
+    });
+
     it('should create a project environment', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-env-uuid' }));
 

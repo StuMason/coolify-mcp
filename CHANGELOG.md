@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Coolify API rejects `is_build_time` on env var create despite OpenAPI docs
   - Removed parameter from schema to avoid misleading users
 
+- **Environment Missing Database Types** - Include dragonfly/keydb/clickhouse in `environments get` (#88):
+  - Coolify API omits these newer database types from environment endpoint
+  - Cross-references with `list_databases` using lightweight summaries
+  - Only adds fields if databases of those types exist in the environment
+
 ## [2.5.0] - 2026-01-15
 
 ### Added
