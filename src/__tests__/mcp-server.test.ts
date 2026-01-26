@@ -6,7 +6,13 @@
  * These tests verify MCP server instantiation and structure.
  */
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { CoolifyMcpServer, truncateLogs } from '../lib/mcp-server.js';
+import {
+  CoolifyMcpServer,
+  truncateLogs,
+  getApplicationActions,
+  getDeploymentActions,
+  getPagination,
+} from '../lib/mcp-server.js';
 
 describe('CoolifyMcpServer v2', () => {
   let server: CoolifyMcpServer;
@@ -214,5 +220,143 @@ describe('truncateLogs', () => {
     const logs = 'x'.repeat(1000);
     const result = truncateLogs(logs, 200, 100);
     expect(result.length).toBe(100);
+  });
+});
+
+// =============================================================================
+// Action Generators Tests
+// =============================================================================
+
+describe('getApplicationActions', () => {
+  it('should return view logs action for all apps', () => {
+    const actions = getApplicationActions('app-uuid', 'stopped');
+    expect(actions).toContainEqual({
+      tool: 'application_logs',
+      args: { uuid: 'app-uuid' },
+      hint: 'View logs',
+    });
+  });
+
+  it('should return restart/stop actions for running apps', () => {
+    const actions = getApplicationActions('app-uuid', 'running');
+    expect(actions).toContainEqual({
+      tool: 'control',
+      args: { resource: 'application', action: 'restart', uuid: 'app-uuid' },
+      hint: 'Restart',
+    });
+    expect(actions).toContainEqual({
+      tool: 'control',
+      args: { resource: 'application', action: 'stop', uuid: 'app-uuid' },
+      hint: 'Stop',
+    });
+  });
+
+  it('should return start action for stopped apps', () => {
+    const actions = getApplicationActions('app-uuid', 'stopped');
+    expect(actions).toContainEqual({
+      tool: 'control',
+      args: { resource: 'application', action: 'start', uuid: 'app-uuid' },
+      hint: 'Start',
+    });
+  });
+
+  it('should handle running:healthy status', () => {
+    const actions = getApplicationActions('app-uuid', 'running:healthy');
+    expect(actions.some((a) => a.hint === 'Restart')).toBe(true);
+    expect(actions.some((a) => a.hint === 'Stop')).toBe(true);
+  });
+
+  it('should handle undefined status', () => {
+    const actions = getApplicationActions('app-uuid', undefined);
+    expect(actions).toContainEqual({
+      tool: 'control',
+      args: { resource: 'application', action: 'start', uuid: 'app-uuid' },
+      hint: 'Start',
+    });
+  });
+});
+
+describe('getDeploymentActions', () => {
+  it('should return cancel action for in_progress deployments', () => {
+    const actions = getDeploymentActions('dep-uuid', 'in_progress', 'app-uuid');
+    expect(actions).toContainEqual({
+      tool: 'deployment',
+      args: { action: 'cancel', uuid: 'dep-uuid' },
+      hint: 'Cancel',
+    });
+  });
+
+  it('should return cancel action for queued deployments', () => {
+    const actions = getDeploymentActions('dep-uuid', 'queued', 'app-uuid');
+    expect(actions).toContainEqual({
+      tool: 'deployment',
+      args: { action: 'cancel', uuid: 'dep-uuid' },
+      hint: 'Cancel',
+    });
+  });
+
+  it('should return app actions when appUuid provided', () => {
+    const actions = getDeploymentActions('dep-uuid', 'finished', 'app-uuid');
+    expect(actions).toContainEqual({
+      tool: 'get_application',
+      args: { uuid: 'app-uuid' },
+      hint: 'View app',
+    });
+    expect(actions).toContainEqual({
+      tool: 'application_logs',
+      args: { uuid: 'app-uuid' },
+      hint: 'App logs',
+    });
+  });
+
+  it('should not return cancel for finished deployments', () => {
+    const actions = getDeploymentActions('dep-uuid', 'finished', 'app-uuid');
+    expect(actions.some((a) => a.hint === 'Cancel')).toBe(false);
+  });
+
+  it('should return empty actions when no appUuid and not in_progress', () => {
+    const actions = getDeploymentActions('dep-uuid', 'finished', undefined);
+    expect(actions).toEqual([]);
+  });
+});
+
+describe('getPagination', () => {
+  it('should return undefined when count is less than perPage and page is 1', () => {
+    const result = getPagination('list_apps', 1, 50, 30);
+    expect(result).toBeUndefined();
+  });
+
+  it('should return next when count equals or exceeds perPage', () => {
+    const result = getPagination('list_apps', 1, 50, 50);
+    expect(result).toEqual({
+      next: { tool: 'list_apps', args: { page: 2, per_page: 50 } },
+    });
+  });
+
+  it('should return both prev and next for middle pages', () => {
+    const result = getPagination('list_apps', 2, 50, 50);
+    expect(result).toEqual({
+      prev: { tool: 'list_apps', args: { page: 1, per_page: 50 } },
+      next: { tool: 'list_apps', args: { page: 3, per_page: 50 } },
+    });
+  });
+
+  it('should return prev when page > 1 and count < perPage', () => {
+    const result = getPagination('list_apps', 3, 50, 20);
+    expect(result).toEqual({
+      prev: { tool: 'list_apps', args: { page: 2, per_page: 50 } },
+    });
+  });
+
+  it('should use default page and perPage when undefined', () => {
+    const result = getPagination('list_apps', undefined, undefined, 100);
+    expect(result).toEqual({
+      next: { tool: 'list_apps', args: { page: 2, per_page: 50 } },
+    });
+  });
+
+  it('should return undefined when count is undefined', () => {
+    const result = getPagination('list_apps', 1, 50, undefined);
+    expect(result).toBeUndefined();
   });
 });

@@ -95,6 +95,10 @@ describe('CoolifyClient', () => {
     deployment_uuid: 'dep-123',
     application_name: 'test-app',
     status: 'finished',
+    force_rebuild: false,
+    is_webhook: false,
+    is_api: true,
+    restart_only: false,
     created_at: '2024-01-01',
     updated_at: '2024-01-01',
   };
@@ -471,6 +475,30 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Deployed' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/deploy?tag=my-tag&force=true',
+        expect.any(Object),
+      );
+    });
+
+    it('should deploy by Coolify UUID (24 char alphanumeric)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
+
+      // Coolify-style UUID: 24 lowercase alphanumeric chars
+      await client.deployByTagOrUuid('xs0sgs4gog044s4k4c88kgsc', false);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deploy?uuid=xs0sgs4gog044s4k4c88kgsc&force=false',
+        expect.any(Object),
+      );
+    });
+
+    it('should deploy by standard UUID format', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
+
+      // Standard UUID format with hyphens
+      await client.deployByTagOrUuid('a1b2c3d4-e5f6-7890-abcd-ef1234567890', true);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deploy?uuid=a1b2c3d4-e5f6-7890-abcd-ef1234567890&force=true',
         expect.any(Object),
       );
     });
@@ -1731,16 +1759,60 @@ describe('CoolifyClient', () => {
       ]);
     });
 
-    it('should get a deployment', async () => {
+    it('should get a deployment (essential by default, no logs)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(mockDeployment));
 
       const result = await client.getDeployment('dep-uuid');
 
-      expect(result).toEqual(mockDeployment);
+      // By default, returns DeploymentEssential without logs
+      expect(result).toEqual({
+        uuid: 'dep-uuid',
+        deployment_uuid: 'dep-123',
+        application_uuid: undefined,
+        application_name: 'test-app',
+        server_name: undefined,
+        status: 'finished',
+        commit: undefined,
+        force_rebuild: false,
+        is_webhook: false,
+        is_api: true,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        logs_available: false,
+        logs_info: undefined,
+      });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/deployments/dep-uuid',
         expect.any(Object),
       );
+    });
+
+    it('should get a deployment with logs when includeLogs is true', async () => {
+      const deploymentWithLogs = { ...mockDeployment, logs: 'Build started...' };
+      mockFetch.mockResolvedValueOnce(mockResponse(deploymentWithLogs));
+
+      const result = await client.getDeployment('dep-uuid', { includeLogs: true });
+
+      // With includeLogs: true, returns full Deployment with logs
+      expect(result).toEqual(deploymentWithLogs);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deployments/dep-uuid',
+        expect.any(Object),
+      );
+    });
+
+    it('should include logs_info when deployment has logs but includeLogs is false', async () => {
+      const deploymentWithLogs = { ...mockDeployment, logs: 'Build started...' };
+      mockFetch.mockResolvedValueOnce(mockResponse(deploymentWithLogs));
+
+      const result = await client.getDeployment('dep-uuid');
+
+      // Should have logs_info indicating logs are available
+      expect(result).toMatchObject({
+        uuid: 'dep-uuid',
+        logs_available: true,
+        logs_info: 'Logs available (16 chars). Use lines param to retrieve.',
+      });
     });
 
     it('should list application deployments', async () => {

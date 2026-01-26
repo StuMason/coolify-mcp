@@ -106,6 +106,28 @@ The Coolify API returns extremely verbose responses - a single application can c
 | list_services         | ~367KB        | ~1.2KB           | **99%**   |
 | list_servers          | ~4KB          | ~0.4KB           | **90%**   |
 | list_application_envs | ~3KB/var      | ~0.1KB/var       | **97%**   |
+| deployment get        | ~13KB         | ~1KB             | **92%**   |
+
+### HATEOAS-style Response Actions
+
+Responses include contextual `_actions` suggesting relevant next steps:
+
+```json
+{
+  "data": { "uuid": "abc123", "status": "running" },
+  "_actions": [
+    { "tool": "application_logs", "args": { "uuid": "abc123" }, "hint": "View logs" },
+    {
+      "tool": "control",
+      "args": { "resource": "application", "action": "restart", "uuid": "abc123" },
+      "hint": "Restart"
+    }
+  ],
+  "_pagination": { "next": { "tool": "list_applications", "args": { "page": 2 } } }
+}
+```
+
+This helps AI assistants understand logical next steps without consuming extra tokens.
 
 ### Recommended Workflow
 
