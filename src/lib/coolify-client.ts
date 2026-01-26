@@ -135,6 +135,7 @@ export interface DatabaseSummary {
   is_public: boolean;
   environment_uuid?: string;
   environment_name?: string;
+  environment_id?: number;
 }
 
 export interface ServiceSummary {
@@ -208,14 +209,17 @@ function toApplicationSummary(app: Application): ApplicationSummary {
 }
 
 function toDatabaseSummary(db: Database): DatabaseSummary {
+  // API returns database_type not type, and environment_id not environment_uuid
+  const raw = db as unknown as Record<string, unknown>;
   return {
     uuid: db.uuid,
     name: db.name,
-    type: db.type,
+    type: db.type || (raw.database_type as string),
     status: db.status,
     is_public: db.is_public,
     environment_uuid: db.environment_uuid,
     environment_name: db.environment_name,
+    environment_id: raw.environment_id as number | undefined,
   };
 }
 
@@ -516,8 +520,12 @@ export class CoolifyClient {
     ]);
 
     // Filter for this environment's missing database types
+    // API uses environment_id, not environment_uuid
     const envDbs = dbSummaries.filter(
-      (db) => db.environment_uuid === environment.uuid || db.environment_name === environment.name,
+      (db) =>
+        db.environment_id === environment.id ||
+        db.environment_uuid === environment.uuid ||
+        db.environment_name === environment.name,
     );
     const dragonflys = envDbs.filter((db) => db.type?.includes('dragonfly'));
     const keydbs = envDbs.filter((db) => db.type?.includes('keydb'));

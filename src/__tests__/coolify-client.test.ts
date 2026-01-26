@@ -853,6 +853,7 @@ describe('CoolifyClient', () => {
     });
 
     it('should get project environment with missing database types', async () => {
+      // Use environment_id to match (what real API uses)
       const mockDbSummaries = [
         {
           uuid: 'pg-uuid',
@@ -860,7 +861,7 @@ describe('CoolifyClient', () => {
           type: 'postgresql',
           status: 'running',
           is_public: false,
-          environment_uuid: 'env-uuid',
+          environment_id: 1,
         },
         {
           uuid: 'dragonfly-uuid',
@@ -868,7 +869,7 @@ describe('CoolifyClient', () => {
           type: 'standalone-dragonfly',
           status: 'running',
           is_public: false,
-          environment_uuid: 'env-uuid',
+          environment_id: 1,
         },
         {
           uuid: 'other-env-db',
@@ -876,7 +877,7 @@ describe('CoolifyClient', () => {
           type: 'standalone-keydb',
           status: 'running',
           is_public: false,
-          environment_uuid: 'other-env-uuid',
+          environment_id: 999, // different env
         },
       ];
 
