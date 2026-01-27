@@ -335,7 +335,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'environments',
-      'Manage environments: list/get/create/delete',
+      'Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API)',
       {
         action: z.enum(['list', 'get', 'create', 'delete']),
         project_uuid: z.string(),
@@ -349,7 +349,8 @@ export class CoolifyMcpServer extends McpServer {
           case 'get':
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
-            return wrap(() => this.client.getProjectEnvironment(project_uuid, name));
+            // Use enhanced method that includes missing DB types (#88)
+            return wrap(() => this.client.getProjectEnvironmentWithDatabases(project_uuid, name));
           case 'create':
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
