@@ -893,6 +893,73 @@ describe('CoolifyClient', () => {
       expect(result.keydbs).toBeUndefined(); // other-env-db is in different env
     });
 
+    it('should match databases by environment_uuid fallback', async () => {
+      const mockDbSummaries = [
+        {
+          uuid: 'keydb-uuid',
+          name: 'keydb-cache',
+          type: 'standalone-keydb',
+          status: 'running',
+          is_public: false,
+          environment_uuid: 'env-uuid', // matching by uuid
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvironment))
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.keydbs).toHaveLength(1);
+      expect(result.keydbs![0].uuid).toBe('keydb-uuid');
+    });
+
+    it('should match databases by environment_name fallback', async () => {
+      const mockDbSummaries = [
+        {
+          uuid: 'clickhouse-uuid',
+          name: 'clickhouse-analytics',
+          type: 'standalone-clickhouse',
+          status: 'running',
+          is_public: false,
+          environment_name: 'production', // matching by name
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvironment))
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.clickhouses).toHaveLength(1);
+      expect(result.clickhouses![0].uuid).toBe('clickhouse-uuid');
+    });
+
+    it('should not add empty arrays when no missing DB types exist', async () => {
+      const mockDbSummaries = [
+        {
+          uuid: 'pg-uuid',
+          name: 'pg-db',
+          type: 'postgresql', // not a "missing" type
+          status: 'running',
+          is_public: false,
+          environment_id: 1,
+        },
+      ];
+
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockEnvironment))
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+
+      const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
+
+      expect(result.dragonflys).toBeUndefined();
+      expect(result.keydbs).toBeUndefined();
+      expect(result.clickhouses).toBeUndefined();
+    });
+
     it('should create a project environment', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-env-uuid' }));
 
