@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Use `lines` parameter to include truncated logs when needed
   - Response includes `logs_info` field indicating log availability and size
 
+- **env_vars Create Validation Error** - Remove `is_build_time` parameter (#97):
+  - Coolify API rejects `is_build_time` on env var create despite OpenAPI docs
+  - Removed parameter from schema to avoid misleading users
+
 ## [2.5.0] - 2026-01-15
 
 ### Added
