@@ -1,5 +1,5 @@
 /**
- * Coolify MCP Server v2.4.0
+ * Coolify MCP Server
  * Consolidated tools for efficient token usage
  */
 

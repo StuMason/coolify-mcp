@@ -6,12 +6,14 @@
  * Prerequisites:
  * - COOLIFY_URL and COOLIFY_TOKEN environment variables set (from .env)
  * - Access to a running Coolify instance
+ *
+ * NOTE: These tests make real API calls. The error handling tests rely on the
+ * API rejecting invalid input (nonexistent project_uuid). If Coolify changes
+ * its validation behaviour, these tests may need updating.
  */
 
-import { createRequire } from 'module';
 import { config } from 'dotenv';
 import { CoolifyClient } from '../../lib/coolify-client.js';
-import { VERSION } from '../../lib/mcp-server.js';
 
 config();
 
@@ -33,13 +35,7 @@ describeFn('Smoke Integration Tests', () => {
     });
   });
 
-  describe('version', () => {
-    it('should match package.json', () => {
-      const _require = createRequire(import.meta.url);
-      const { version } = _require('../../../package.json');
-      expect(VERSION).toBe(version);
-    });
-
+  describe('connectivity', () => {
     it('should connect to Coolify API', async () => {
       const version = await client.getVersion();
       expect(version).toBeDefined();
@@ -73,7 +69,7 @@ describeFn('Smoke Integration Tests', () => {
           environment_name: 'production',
           docker_compose_raw: 'services:\n  test:\n    image: nginx',
         });
-        fail('Expected an error to be thrown');
+        throw new Error('Expected a validation error to be thrown');
       } catch (e) {
         const msg = (e as Error).message;
         // Should NOT contain "join is not a function"

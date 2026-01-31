@@ -1828,6 +1828,16 @@ describe('CoolifyClient', () => {
       expect(result.name).toBe('updated-service');
     });
 
+    it('should auto base64-encode docker_compose_raw in updateService', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockService));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.updateService('test-uuid', { docker_compose_raw: rawYaml });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
+    });
+
     it('should start a service', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Started' }));
 
