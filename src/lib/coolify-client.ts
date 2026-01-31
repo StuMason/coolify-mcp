@@ -638,16 +638,24 @@ export class CoolifyClient {
   async createApplicationDockerCompose(
     data: CreateApplicationDockerComposeRequest,
   ): Promise<UuidResponse> {
+    const payload = { ...data };
+    if (payload.docker_compose_raw) {
+      payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
+    }
     return this.request<UuidResponse>('/applications/dockercompose', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   }
 
   async updateApplication(uuid: string, data: UpdateApplicationRequest): Promise<Application> {
+    const payload = { ...data };
+    if (payload.docker_compose_raw) {
+      payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
+    }
     return this.request<Application>(`/applications/${uuid}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   }
 

@@ -1195,6 +1195,20 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should auto base64-encode docker_compose_raw in createApplicationDockerCompose', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.createApplicationDockerCompose({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: rawYaml,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
+    });
+
     /**
      * Issue #76 - Client Layer Behavior Test
      *
@@ -1251,6 +1265,16 @@ describe('CoolifyClient', () => {
           body: JSON.stringify({ name: 'updated-app', description: 'new desc' }),
         }),
       );
+    });
+
+    it('should auto base64-encode docker_compose_raw in updateApplication', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.updateApplication('app-uuid', { docker_compose_raw: rawYaml });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
     });
 
     /**
