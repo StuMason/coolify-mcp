@@ -5,9 +5,11 @@
  * CoolifyClient methods are fully tested in coolify-client.test.ts (174 tests).
  * These tests verify MCP server instantiation and structure.
  */
+import { createRequire } from 'module';
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {
   CoolifyMcpServer,
+  VERSION,
   truncateLogs,
   getApplicationActions,
   getDeploymentActions,
@@ -31,6 +33,12 @@ describe('CoolifyMcpServer v2', () => {
 
     it('should be an MCP server with connect method', () => {
       expect(typeof server.connect).toBe('function');
+    });
+
+    it('should report version matching package.json', () => {
+      const _require = createRequire(import.meta.url);
+      const { version } = _require('../../package.json');
+      expect(VERSION).toBe(version);
     });
   });
 

@@ -3,6 +3,7 @@
  * Consolidated tools for efficient token usage
  */
 
+import { createRequire } from 'module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
@@ -24,7 +25,8 @@ import type {
   Deployment,
 } from '../types/coolify.js';
 
-const VERSION = '2.5.0';
+const _require = createRequire(import.meta.url);
+export const VERSION: string = _require('../../package.json').version;
 
 /** Wrap handler with error handling */
 function wrap<T>(

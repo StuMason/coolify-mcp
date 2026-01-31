@@ -20,7 +20,7 @@ export interface ErrorResponse {
   error?: string;
   message: string;
   status?: number;
-  errors?: Record<string, string[]>; // Validation errors by field
+  errors?: Record<string, string[] | string>; // Validation errors by field
 }
 
 export interface DeleteOptions {

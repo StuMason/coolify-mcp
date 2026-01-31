@@ -674,6 +674,45 @@ describe('CoolifyClient', () => {
         'Validation failed. - name: The name field is required.; email: The email must be valid., The email is already taken.',
       );
     });
+
+    it('should handle validation errors with string messages', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          {
+            message: 'Validation failed.',
+            errors: {
+              docker_compose_raw: 'The docker compose raw field is required.',
+            },
+          },
+          false,
+          422,
+        ),
+      );
+
+      await expect(client.listServers()).rejects.toThrow(
+        'Validation failed. - docker_compose_raw: The docker compose raw field is required.',
+      );
+    });
+
+    it('should handle validation errors with mixed array and string messages', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          {
+            message: 'Validation failed.',
+            errors: {
+              name: ['The name field is required.'],
+              docker_compose_raw: 'The docker compose raw field is required.',
+            },
+          },
+          false,
+          422,
+        ),
+      );
+
+      await expect(client.listServers()).rejects.toThrow(
+        'Validation failed. - name: The name field is required.; docker_compose_raw: The docker compose raw field is required.',
+      );
+    });
   });
 
   // =========================================================================

@@ -337,7 +337,10 @@ export class CoolifyClient {
         let errorMessage = error.message || `HTTP ${response.status}: ${response.statusText}`;
         if (error.errors && Object.keys(error.errors).length > 0) {
           const validationDetails = Object.entries(error.errors)
-            .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+            .map(
+              ([field, messages]) =>
+                `${field}: ${Array.isArray(messages) ? messages.join(', ') : String(messages)}`,
+            )
             .join('; ');
           errorMessage = `${errorMessage} - ${validationDetails}`;
         }
