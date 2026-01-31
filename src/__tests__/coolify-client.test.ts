@@ -299,19 +299,20 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('should create a service with docker_compose_raw instead of type', async () => {
+    it('should pass through already base64-encoded docker_compose_raw', async () => {
       const responseData = {
         uuid: 'compose-uuid',
         domains: ['custom.example.com'],
       };
       mockFetch.mockResolvedValueOnce(mockResponse(responseData));
 
+      const base64Value = 'dmVyc2lvbjogIjMiCnNlcnZpY2VzOgogIGFwcDoKICAgIGltYWdlOiBuZ2lueA==';
       const createData: CreateServiceRequest = {
         name: 'custom-compose-service',
         project_uuid: 'project-uuid',
         environment_uuid: 'env-uuid',
         server_uuid: 'server-uuid',
-        docker_compose_raw: 'dmVyc2lvbjogIjMiCnNlcnZpY2VzOgogIGFwcDoKICAgIGltYWdlOiBuZ2lueA==',
+        docker_compose_raw: base64Value,
       };
 
       const result = await client.createService(createData);
@@ -324,6 +325,28 @@ describe('CoolifyClient', () => {
           body: JSON.stringify(createData),
         }),
       );
+    });
+
+    it('should auto base64-encode raw YAML docker_compose_raw', async () => {
+      const responseData = { uuid: 'compose-uuid', domains: ['test.com'] };
+      mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+      const rawYaml = 'services:\n  test:\n    image: nginx';
+      const createData: CreateServiceRequest = {
+        name: 'raw-compose',
+        project_uuid: 'project-uuid',
+        environment_uuid: 'env-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: rawYaml,
+      };
+
+      await client.createService(createData);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      // Should be base64-encoded in the request
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
+      // Should NOT be the raw YAML
+      expect(callBody.docker_compose_raw).not.toBe(rawYaml);
     });
   });
 
@@ -672,6 +695,45 @@ describe('CoolifyClient', () => {
 
       await expect(client.listServers()).rejects.toThrow(
         'Validation failed. - name: The name field is required.; email: The email must be valid., The email is already taken.',
+      );
+    });
+
+    it('should handle validation errors with string messages', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          {
+            message: 'Validation failed.',
+            errors: {
+              docker_compose_raw: 'The docker compose raw field is required.',
+            },
+          },
+          false,
+          422,
+        ),
+      );
+
+      await expect(client.listServers()).rejects.toThrow(
+        'Validation failed. - docker_compose_raw: The docker compose raw field is required.',
+      );
+    });
+
+    it('should handle validation errors with mixed array and string messages', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          {
+            message: 'Validation failed.',
+            errors: {
+              name: ['The name field is required.'],
+              docker_compose_raw: 'The docker compose raw field is required.',
+            },
+          },
+          false,
+          422,
+        ),
+      );
+
+      await expect(client.listServers()).rejects.toThrow(
+        'Validation failed. - name: The name field is required.; docker_compose_raw: The docker compose raw field is required.',
       );
     });
   });
@@ -1133,6 +1195,20 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should auto base64-encode docker_compose_raw in createApplicationDockerCompose', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.createApplicationDockerCompose({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: rawYaml,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
+    });
+
     /**
      * Issue #76 - Client Layer Behavior Test
      *
@@ -1189,6 +1265,16 @@ describe('CoolifyClient', () => {
           body: JSON.stringify({ name: 'updated-app', description: 'new desc' }),
         }),
       );
+    });
+
+    it('should auto base64-encode docker_compose_raw in updateApplication', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.updateApplication('app-uuid', { docker_compose_raw: rawYaml });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
     });
 
     /**
@@ -1740,6 +1826,16 @@ describe('CoolifyClient', () => {
       const result = await client.updateService('test-uuid', { name: 'updated-service' });
 
       expect(result.name).toBe('updated-service');
+    });
+
+    it('should auto base64-encode docker_compose_raw in updateService', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockService));
+
+      const rawYaml = 'services:\n  app:\n    image: nginx';
+      await client.updateService('test-uuid', { docker_compose_raw: rawYaml });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
     });
 
     it('should start a service', async () => {

@@ -86,6 +86,21 @@ it('should call client method', async () => {
 });
 ```
 
+### Smoke Testing Against Live Server
+
+After fixing bugs, always verify fixes work against the real Coolify instance — not just unit tests.
+
+- **`/smoke-test`** — Slash command that builds the project and runs integration smoke tests against the live server. Use this after any bug fix to confirm the fix works end-to-end.
+- **`npm run test:integration`** — Runs all integration tests (requires `.env` with `COOLIFY_URL` and `COOLIFY_TOKEN`).
+- Integration test files live in `src/__tests__/integration/` and are excluded from `npm test` (CI). Add new smoke tests there when fixing bugs that involve API interaction.
+
+### Coolify API Gotchas
+
+The Coolify OpenAPI docs are unreliable — always test against the real API. Known issues:
+
+- **`docker_compose_raw` requires base64** — The API expects base64-encoded YAML, but the field name suggests raw content. The client auto-encodes this field so models and callers can pass plain YAML.
+- **Validation errors vary in format** — The `errors` field in API error responses can contain `string[]` or plain `string` values. The client handles both.
+
 ## TypeScript Standards
 
 - Always include explicit return types on functions
