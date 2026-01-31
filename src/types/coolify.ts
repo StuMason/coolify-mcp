@@ -747,7 +747,7 @@ export interface CreateServiceRequest {
   server_uuid: string;
   destination_uuid?: string;
   instant_deploy?: boolean;
-  docker_compose_raw?: string; // Base64 encoded docker-compose YAML (alternative to type)
+  docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
 }
 
 /**
@@ -763,19 +763,17 @@ export interface CreateServiceRequest {
  *    - Wrong: "user:$apr1$hash$here"
  *    - Docker Compose processes $$ → $ for Traefik
  *
- * 3. docker_compose_raw must be base64 encoded when sent to API
- *    - Example: Buffer.from(yamlString).toString('base64')
+ * 3. docker_compose_raw is auto base64-encoded by the client — pass raw YAML
  *
  * Summary for htpasswd with basic auth:
  *   - Generate hash: htpasswd -nb username password
  *   - Replace $ with $$ in the hash
  *   - Disable label escaping in Coolify UI (manual step!)
- *   - Base64 encode the entire docker-compose YAML
  */
 export interface UpdateServiceRequest {
   name?: string;
   description?: string;
-  docker_compose_raw?: string; // Base64 encoded docker-compose YAML
+  docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
 }
 
 export interface ServiceCreateResponse {

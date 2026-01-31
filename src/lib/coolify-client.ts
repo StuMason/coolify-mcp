@@ -183,6 +183,19 @@ function cleanRequestData<T extends object>(data: T): Partial<T> {
   return cleaned;
 }
 
+/** Base64-encode a string, passing through values that are already base64. */
+function toBase64(value: string): string {
+  try {
+    const decoded = Buffer.from(value, 'base64').toString('utf-8');
+    if (Buffer.from(decoded, 'utf-8').toString('base64') === value) {
+      return value; // Already valid base64
+    }
+  } catch {
+    // Not base64, encode it
+  }
+  return Buffer.from(value, 'utf-8').toString('base64');
+}
+
 // =============================================================================
 // Summary Transformers - reduce full objects to essential fields
 // =============================================================================
@@ -850,16 +863,24 @@ export class CoolifyClient {
   }
 
   async createService(data: CreateServiceRequest): Promise<ServiceCreateResponse> {
+    const payload = { ...data };
+    if (payload.docker_compose_raw) {
+      payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
+    }
     return this.request<ServiceCreateResponse>('/services', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   }
 
   async updateService(uuid: string, data: UpdateServiceRequest): Promise<Service> {
+    const payload = { ...data };
+    if (payload.docker_compose_raw) {
+      payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
+    }
     return this.request<Service>(`/services/${uuid}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   }
 

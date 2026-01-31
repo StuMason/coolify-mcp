@@ -713,7 +713,10 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
         instant_deploy: z.boolean().optional(),
-        docker_compose_raw: z.string().optional(),
+        docker_compose_raw: z
+          .string()
+          .optional()
+          .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
         delete_volumes: z.boolean().optional(),
       },
       async (args) => {

@@ -299,19 +299,20 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('should create a service with docker_compose_raw instead of type', async () => {
+    it('should pass through already base64-encoded docker_compose_raw', async () => {
       const responseData = {
         uuid: 'compose-uuid',
         domains: ['custom.example.com'],
       };
       mockFetch.mockResolvedValueOnce(mockResponse(responseData));
 
+      const base64Value = 'dmVyc2lvbjogIjMiCnNlcnZpY2VzOgogIGFwcDoKICAgIGltYWdlOiBuZ2lueA==';
       const createData: CreateServiceRequest = {
         name: 'custom-compose-service',
         project_uuid: 'project-uuid',
         environment_uuid: 'env-uuid',
         server_uuid: 'server-uuid',
-        docker_compose_raw: 'dmVyc2lvbjogIjMiCnNlcnZpY2VzOgogIGFwcDoKICAgIGltYWdlOiBuZ2lueA==',
+        docker_compose_raw: base64Value,
       };
 
       const result = await client.createService(createData);
@@ -324,6 +325,28 @@ describe('CoolifyClient', () => {
           body: JSON.stringify(createData),
         }),
       );
+    });
+
+    it('should auto base64-encode raw YAML docker_compose_raw', async () => {
+      const responseData = { uuid: 'compose-uuid', domains: ['test.com'] };
+      mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+      const rawYaml = 'services:\n  test:\n    image: nginx';
+      const createData: CreateServiceRequest = {
+        name: 'raw-compose',
+        project_uuid: 'project-uuid',
+        environment_uuid: 'env-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: rawYaml,
+      };
+
+      await client.createService(createData);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      // Should be base64-encoded in the request
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(rawYaml, 'utf-8').toString('base64'));
+      // Should NOT be the raw YAML
+      expect(callBody.docker_compose_raw).not.toBe(rawYaml);
     });
   });
 
