@@ -1,7 +1,7 @@
 {
   "name": "@masonator/coolify-mcp",
   "scope": "@masonator",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "MCP server implementation for Coolify",
   "type": "module",
   "main": "./dist/index.js",
@@ -45,7 +45,7 @@
     "url": "https://github.com/StuMason/coolify-mcp.git"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {

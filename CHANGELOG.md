@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-01-31
+
+### Fixed
+
+- **Zod v4 Compatibility** - Require MCP SDK >=1.23.0 (#109):
+  - SDK versions below 1.23.0 call `._parse()` which doesn't exist on Zod v4 schemas
+  - Causes `keyValidator._parse is not a function` on all tools with parameters
+  - Bumped SDK floor from `^1.6.1` to `^1.23.0` (first version with Zod v4 support)
+
+## [2.6.1] - 2026-01-31
+
+### Fixed
+
+- **Version Mismatch** - Read VERSION dynamically from package.json (#106):
+  - `get_mcp_version` was returning hardcoded `2.5.0` instead of `2.6.0`
+  - VERSION is now read from `package.json` at runtime via `createRequire`
+  - Added regression test to prevent future drift
+
+- **Validation Error Crash** - Handle string validation errors from Coolify API (#107):
+  - `messages.join is not a function` when creating services with `docker_compose_raw`
+  - Coolify returns validation errors as plain strings for some fields, not arrays
+  - Added `Array.isArray` guard before `.join()`
+  - Widened `ErrorResponse.errors` type to `Record<string, string[] | string>`
+
+- **Auto Base64 Encoding** - Encode `docker_compose_raw` automatically (#107):
+  - Coolify API requires base64-encoded YAML but field name implies raw content
+  - Client now auto-encodes in `createService`, `updateService`, `createApplicationDockerCompose`, and `updateApplication`
+  - Passes through values that are already base64
+
+### Added
+
+- **Smoke Test Command** - `/smoke-test` slash command for live server verification
+- **Integration Tests** - Smoke tests against real Coolify instance in `src/__tests__/integration/`
+
 ## [2.6.0] - 2026-01-27
 
 ### Added
