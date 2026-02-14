@@ -100,6 +100,23 @@ The Coolify OpenAPI docs are unreliable — always test against the real API. Kn
 
 - **`docker_compose_raw` requires base64** — The API expects base64-encoded YAML, but the field name suggests raw content. The client auto-encodes this field so models and callers can pass plain YAML.
 - **Validation errors vary in format** — The `errors` field in API error responses can contain `string[]` or plain `string` values. The client handles both.
+- **Endpoint paths can be misleading** — Some endpoints have unconventional paths (e.g., `/deployments/applications/{uuid}` not `/applications/{uuid}/deployments`). Always verify against `docs/coolify-openapi.yaml`.
+- **OpenAPI chunks may be incomplete** — The chunked files in `docs/openapi-chunks/` may not include all endpoints. The main `docs/coolify-openapi.yaml` is the source of truth.
+
+### Endpoint Verification Workflow
+
+Before adding or modifying client methods:
+
+1. **Search the main OpenAPI spec** — Use grep to find the exact endpoint path in `docs/coolify-openapi.yaml`:
+   ```bash
+   grep -n "operationId: your-operation" docs/coolify-openapi.yaml
+   ```
+
+2. **Verify the path pattern** — Coolify doesn't always follow REST conventions. Resource paths can be inverted (e.g., `/deployments/applications/{uuid}` instead of `/applications/{uuid}/deployments`).
+
+3. **Test against live server** — After implementation, use `/smoke-test` or `npm run test:integration` to verify the endpoint works against a real Coolify instance. Unit tests with mocked responses won't catch path errors.
+
+4. **Document non-obvious paths** — If an endpoint path is surprising, add a comment in the client method explaining the correct path and why.
 
 ## TypeScript Standards
 
