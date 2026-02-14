@@ -983,7 +983,7 @@ export class CoolifyClient {
   }
 
   async listApplicationDeployments(appUuid: string): Promise<Deployment[]> {
-    return this.request<Deployment[]>(`/applications/${appUuid}/deployments`);
+    return this.request<Deployment[]>(`/deployments/applications/${appUuid}`);
   }
 
   // ===========================================================================
