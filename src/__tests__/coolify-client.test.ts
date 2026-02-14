@@ -2026,7 +2026,7 @@ describe('CoolifyClient', () => {
 
       expect(result).toEqual([mockDeployment]);
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/v1/applications/app-uuid/deployments',
+        'http://localhost:3000/api/v1/deployments/applications/app-uuid',
         expect.any(Object),
       );
     });
