@@ -196,6 +196,21 @@ function toBase64(value: string): string {
   return Buffer.from(value, 'utf-8').toString('base64');
 }
 
+/**
+ * Map 'fqdn' to 'domains' for Coolify API compatibility.
+ * Coolify API uses 'domains' field for setting application domain, not 'fqdn'.
+ * This provides backward compatibility for callers using 'fqdn'.
+ */
+function mapFqdnToDomains<T extends { fqdn?: string }>(
+  data: T,
+): Omit<T, 'fqdn'> & { domains?: string } {
+  if (data.fqdn === undefined) {
+    return data as Omit<T, 'fqdn'> & { domains?: string };
+  }
+  const { fqdn, ...rest } = data;
+  return { ...rest, domains: fqdn };
+}
+
 // =============================================================================
 // Summary Transformers - reduce full objects to essential fields
 // =============================================================================
@@ -597,14 +612,14 @@ export class CoolifyClient {
   async createApplicationPublic(data: CreateApplicationPublicRequest): Promise<UuidResponse> {
     return this.request<UuidResponse>('/applications/public', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(mapFqdnToDomains(data)),
     });
   }
 
   async createApplicationPrivateGH(data: CreateApplicationPrivateGHRequest): Promise<UuidResponse> {
     return this.request<UuidResponse>('/applications/private-github-app', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(mapFqdnToDomains(data)),
     });
   }
 
@@ -613,7 +628,7 @@ export class CoolifyClient {
   ): Promise<UuidResponse> {
     return this.request<UuidResponse>('/applications/private-deploy-key', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(mapFqdnToDomains(data)),
     });
   }
 
@@ -649,9 +664,10 @@ export class CoolifyClient {
   }
 
   async updateApplication(uuid: string, data: UpdateApplicationRequest): Promise<Application> {
-    const payload = { ...data };
-    if (payload.docker_compose_raw) {
-      payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
+    const mapped = mapFqdnToDomains(data);
+    const payload = { ...mapped };
+    if (data.docker_compose_raw) {
+      (payload as Record<string, unknown>).docker_compose_raw = toBase64(data.docker_compose_raw);
     }
     return this.request<Application>(`/applications/${uuid}`, {
       method: 'PATCH',

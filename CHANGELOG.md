@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.3] - 2026-02-23
+
+### Fixed
+
+- **fqdn → domains mapping** - Map `fqdn` field to `domains` for Coolify API compatibility:
+  - Coolify API uses `domains` field for setting application domain, not `fqdn`
+  - Added `mapFqdnToDomains` helper that transparently converts `fqdn` to `domains`
+  - Applied to `createApplicationPublic`, `createApplicationPrivateGH`, `createApplicationPrivateKey`, and `updateApplication`
+  - Callers using `fqdn` field now work correctly without breaking changes
+
 ## [2.6.2] - 2026-01-31
 
 ### Fixed
