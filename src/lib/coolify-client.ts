@@ -204,10 +204,10 @@ function toBase64(value: string): string {
 function mapFqdnToDomains<T extends { fqdn?: string }>(
   data: T,
 ): Omit<T, 'fqdn'> & { domains?: string } {
-  if (data.fqdn === undefined) {
-    return data as Omit<T, 'fqdn'> & { domains?: string };
-  }
   const { fqdn, ...rest } = data;
+  if (fqdn === undefined) {
+    return rest;
+  }
   return { ...rest, domains: fqdn };
 }
 
@@ -666,8 +666,8 @@ export class CoolifyClient {
   async updateApplication(uuid: string, data: UpdateApplicationRequest): Promise<Application> {
     const mapped = mapFqdnToDomains(data);
     const payload = { ...mapped };
-    if (data.docker_compose_raw) {
-      (payload as Record<string, unknown>).docker_compose_raw = toBase64(data.docker_compose_raw);
+    if (mapped.docker_compose_raw) {
+      (payload as Record<string, unknown>).docker_compose_raw = toBase64(mapped.docker_compose_raw);
     }
     return this.request<Application>(`/applications/${uuid}`, {
       method: 'PATCH',

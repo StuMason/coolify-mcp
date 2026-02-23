@@ -1212,6 +1212,22 @@ describe('CoolifyClient', () => {
       expect(callBody.fqdn).toBeUndefined();
     });
 
+    it('should handle fqdn and docker_compose_raw together in updateApplication', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      const compose = 'version: "3"\nservices:\n  app:\n    image: nginx';
+
+      await client.updateApplication('app-uuid', {
+        fqdn: 'https://combo.example.com',
+        docker_compose_raw: compose,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://combo.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(compose).toString('base64'));
+    });
+
     it('should not modify request body when fqdn is not provided', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 
