@@ -1146,6 +1146,105 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should map fqdn to domains in createApplicationPublic', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPublic({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        git_repository: 'https://github.com/user/repo',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '3000',
+        fqdn: 'https://app.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://app.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should map fqdn to domains in createApplicationPrivateGH', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPrivateGH({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        github_app_uuid: 'gh-app-uuid',
+        git_repository: 'user/repo',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '3000',
+        fqdn: 'https://app.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://app.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should map fqdn to domains in createApplicationPrivateKey', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPrivateKey({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        private_key_uuid: 'key-uuid',
+        git_repository: 'git@github.com:user/repo.git',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '22',
+        fqdn: 'https://app.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://app.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should map fqdn to domains in updateApplication', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      await client.updateApplication('app-uuid', { fqdn: 'https://new.example.com' });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://new.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should handle fqdn and docker_compose_raw together in updateApplication', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      const compose = 'version: "3"\nservices:\n  app:\n    image: nginx';
+
+      await client.updateApplication('app-uuid', {
+        fqdn: 'https://combo.example.com',
+        docker_compose_raw: compose,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://combo.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+      expect(callBody.docker_compose_raw).toBe(Buffer.from(compose).toString('base64'));
+    });
+
+    it('should not modify request body when fqdn is not provided', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPublic({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        git_repository: 'https://github.com/user/repo',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '3000',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.fqdn).toBeUndefined();
+      expect(callBody.domains).toBeUndefined();
+    });
+
     it('should create application from dockerfile', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 
