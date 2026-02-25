@@ -1,8 +1,9 @@
 {
   "name": "@masonator/coolify-mcp",
   "scope": "@masonator",
-  "version": "2.7.1",
-  "description": "MCP server implementation for Coolify",
+  "version": "2.7.2",
+  "mcpName": "io.github.StuMason/coolify",
+  "description": "MCP server for Coolify — 38 optimized tools for infrastructure management, diagnostics, and documentation search",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.StuMason/coolify",
+  "description": "38 optimized tools for managing Coolify infrastructure, diagnostics, and docs search",
+  "repository": {
+    "url": "https://github.com/StuMason/coolify-mcp",
+    "source": "github"
+  },
+  "version": "2.7.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@masonator/coolify-mcp",
+      "version": "2.7.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Your Coolify API access token",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true,
+          "name": "COOLIFY_ACCESS_TOKEN"
+        },
+        {
+          "description": "Your Coolify instance URL",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "COOLIFY_BASE_URL"
+        }
+      ]
+    }
+  ]
+}

@@ -20,6 +20,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# MCP Registry tokens
+.mcpregistry_*
+
 # Logs
 logs/
 *.log

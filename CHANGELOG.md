@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-02-25
+
+### Added
+
+- **MCP Registry publishing** - Added `mcpName` field and `server.json` for publishing to the official MCP Registry as `io.github.StuMason/coolify`
+
 ## [2.7.1] - 2026-02-25
 
 ### Fixed
