@@ -48,28 +48,77 @@ function wrap<T>(
 
 const TRUNCATION_PREFIX = '...[truncated]...\n';
 
+interface LogEntry {
+  output?: string;
+  timestamp?: string;
+  type?: string;
+  hidden?: boolean;
+  command?: string | null;
+}
+
+export interface TruncatedLogsResult {
+  logs: string;
+  total: number;
+  showing_start: number;
+  showing_end: number;
+}
+
 /**
- * Truncate logs by line count and character count.
+ * Truncate logs by entry count with pagination support.
+ * Handles both JSON array format (Coolify deployment logs) and plain text.
+ * Page 1 = most recent entries, page 2 = next older batch, etc.
  * Exported for testing.
  */
 export function truncateLogs(
   logs: string,
   lineLimit: number = 200,
   charLimit: number = 50000,
-): string {
-  // First: limit by lines
-  const logLines = logs.split('\n');
-  const limitedLines = logLines.slice(-lineLimit);
-  let truncatedLogs = limitedLines.join('\n');
-
-  // Second: limit by characters (safety net for huge lines)
-  if (truncatedLogs.length > charLimit) {
-    // Account for prefix length to stay within limit
-    const prefixLen = TRUNCATION_PREFIX.length;
-    truncatedLogs = TRUNCATION_PREFIX + truncatedLogs.slice(-(charLimit - prefixLen));
+  page: number = 1,
+): TruncatedLogsResult {
+  // Try parsing as JSON array (Coolify deployment log format)
+  let lines: string[];
+  let total: number;
+  try {
+    const entries: LogEntry[] = JSON.parse(logs);
+    if (Array.isArray(entries)) {
+      const visible = entries.filter((e) => !e.hidden);
+      total = visible.length;
+      const end = total - (page - 1) * lineLimit;
+      const start = Math.max(0, end - lineLimit);
+      const slice = visible.slice(start, end);
+      lines = slice.map((e) => `[${e.timestamp ?? ''}] ${e.output ?? ''}`);
+    } else {
+      const allLines = logs.split('\n');
+      total = allLines.length;
+      const end = total - (page - 1) * lineLimit;
+      const start = Math.max(0, end - lineLimit);
+      lines = allLines.slice(start, end);
+    }
+  } catch {
+    // Plain text logs — split by newlines
+    const allLines = logs.split('\n');
+    total = allLines.length;
+    const end = total - (page - 1) * lineLimit;
+    const start = Math.max(0, end - lineLimit);
+    lines = allLines.slice(start, end);
   }
 
-  return truncatedLogs;
+  const end = total - (page - 1) * lineLimit;
+  const start = Math.max(0, end - lineLimit);
+  let result = lines.join('\n');
+
+  // Safety net: limit by characters
+  if (result.length > charLimit) {
+    const prefixLen = TRUNCATION_PREFIX.length;
+    result = TRUNCATION_PREFIX + result.slice(-(charLimit - prefixLen));
+  }
+
+  return {
+    logs: result,
+    total,
+    showing_start: start + 1,
+    showing_end: Math.min(end, total),
+  };
 }
 
 // =============================================================================
@@ -907,25 +956,52 @@ export class CoolifyMcpServer extends McpServer {
       {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
-        lines: z.number().optional(), // Include logs truncated to last N lines (omit for no logs)
+        lines: z.number().optional(), // Include logs truncated to last N entries (omit for no logs)
+        page: z.number().optional(), // Log page (1=most recent, 2=older, etc.)
         max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)
       },
-      async ({ action, uuid, lines, max_chars }) => {
+      async ({ action, uuid, lines, page, max_chars }) => {
         switch (action) {
           case 'get':
             // If lines param specified, include logs and truncate
             if (lines !== undefined) {
+              const p = page ?? 1;
+              const ll = lines;
               return wrapWithActions(
                 async () => {
                   const deployment = (await this.client.getDeployment(uuid, {
                     includeLogs: true,
                   })) as Deployment;
                   if (deployment.logs) {
-                    deployment.logs = truncateLogs(deployment.logs, lines, max_chars ?? 50000);
+                    const result = truncateLogs(deployment.logs, ll, max_chars ?? 50000, p);
+                    deployment.logs = result.logs;
+                    return {
+                      ...deployment,
+                      logs_meta: {
+                        total_entries: result.total,
+                        showing: `${result.showing_start}-${result.showing_end} of ${result.total}`,
+                      },
+                    };
                   }
-                  return deployment;
+                  return { ...deployment, logs_meta: undefined };
                 },
                 (dep) => getDeploymentActions(dep.uuid, dep.status, dep.application_uuid),
+                (dep) => {
+                  const total = dep.logs_meta?.total_entries ?? 0;
+                  const hasOlder = p * ll < total;
+                  const pagination: ResponsePagination = {};
+                  if (hasOlder)
+                    pagination.next = {
+                      tool: 'deployment',
+                      args: { action: 'get', uuid, lines: ll, page: p + 1 },
+                    };
+                  if (p > 1)
+                    pagination.prev = {
+                      tool: 'deployment',
+                      args: { action: 'get', uuid, lines: ll, page: p - 1 },
+                    };
+                  return Object.keys(pagination).length > 0 ? pagination : undefined;
+                },
               );
             }
             // Otherwise return essential info without logs

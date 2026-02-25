@@ -1088,8 +1088,8 @@ export interface ResponseAction {
 }
 
 export interface ResponsePagination {
-  next?: { tool: string; args: Record<string, number> };
-  prev?: { tool: string; args: Record<string, number> };
+  next?: { tool: string; args: Record<string, string | number> };
+  prev?: { tool: string; args: Record<string, string | number> };
 }
 
 // Optimized deployment response (excludes logs by default)

@@ -179,47 +179,52 @@ describe('CoolifyMcpServer v2', () => {
 });
 
 describe('truncateLogs', () => {
+  // Plain text log tests
   it('should return logs unchanged when within limits', () => {
     const logs = 'line1\nline2\nline3';
     const result = truncateLogs(logs, 200, 50000);
-    expect(result).toBe(logs);
+    expect(result.logs).toBe(logs);
+    expect(result.total).toBe(3);
   });
 
   it('should truncate to last N lines', () => {
     const logs = 'line1\nline2\nline3\nline4\nline5';
     const result = truncateLogs(logs, 3, 50000);
-    expect(result).toBe('line3\nline4\nline5');
+    expect(result.logs).toBe('line3\nline4\nline5');
+    expect(result.total).toBe(5);
+    expect(result.showing_start).toBe(3);
+    expect(result.showing_end).toBe(5);
   });
 
   it('should truncate by character limit when lines are huge', () => {
     const hugeLine = 'x'.repeat(100);
     const logs = `${hugeLine}\n${hugeLine}\n${hugeLine}`;
     const result = truncateLogs(logs, 200, 50);
-    expect(result.length).toBeLessThanOrEqual(50);
-    expect(result.startsWith('...[truncated]...')).toBe(true);
+    expect(result.logs.length).toBeLessThanOrEqual(50);
+    expect(result.logs.startsWith('...[truncated]...')).toBe(true);
   });
 
   it('should not add truncation prefix when under char limit', () => {
     const logs = 'line1\nline2\nline3';
     const result = truncateLogs(logs, 200, 50000);
-    expect(result.startsWith('...[truncated]...')).toBe(false);
+    expect(result.logs.startsWith('...[truncated]...')).toBe(false);
   });
 
   it('should handle empty logs', () => {
     const result = truncateLogs('', 200, 50000);
-    expect(result).toBe('');
+    expect(result.logs).toBe('');
   });
 
   it('should use default limits when not specified', () => {
     const logs = 'line1\nline2';
     const result = truncateLogs(logs);
-    expect(result).toBe(logs);
+    expect(result.logs).toBe(logs);
   });
 
   it('should respect custom line limit', () => {
     const lines = Array.from({ length: 300 }, (_, i) => `line${i + 1}`).join('\n');
     const result = truncateLogs(lines, 50, 50000);
-    const resultLines = result.split('\n');
+    const resultLines = result.logs.split('\n');
     expect(resultLines.length).toBe(50);
     expect(resultLines[0]).toBe('line251');
     expect(resultLines[49]).toBe('line300');
@@ -228,7 +233,96 @@ describe('truncateLogs', () => {
   it('should respect custom char limit', () => {
     const logs = 'x'.repeat(1000);
     const result = truncateLogs(logs, 200, 100);
-    expect(result.length).toBe(100);
+    expect(result.logs.length).toBe(100);
+  });
+
+  // Pagination tests (plain text)
+  it('should paginate plain text logs (page 2 = older entries)', () => {
+    const logs = Array.from({ length: 30 }, (_, i) => `line${i + 1}`).join('\n');
+    const page1 = truncateLogs(logs, 10, 50000, 1);
+    const page2 = truncateLogs(logs, 10, 50000, 2);
+    const page3 = truncateLogs(logs, 10, 50000, 3);
+    expect(page1.logs).toContain('line30');
+    expect(page1.logs).toContain('line21');
+    expect(page1.logs).not.toContain('line20');
+    expect(page2.logs).toContain('line20');
+    expect(page2.logs).toContain('line11');
+    expect(page2.logs).not.toContain('line10');
+    expect(page3.logs).toContain('line10');
+    expect(page3.logs).toContain('line1');
+    expect(page1.showing_start).toBe(21);
+    expect(page1.showing_end).toBe(30);
+  });
+
+  // JSON array format tests (Coolify deployment logs)
+  it('should parse JSON array logs and return last N visible entries', () => {
+    const entries = [
+      { output: 'Building...', timestamp: '2026-01-01T00:00:01Z', hidden: false },
+      { output: 'docker pull', timestamp: '2026-01-01T00:00:02Z', hidden: true },
+      { output: 'Compiling...', timestamp: '2026-01-01T00:00:03Z', hidden: false },
+      { output: 'Done.', timestamp: '2026-01-01T00:00:04Z', hidden: false },
+    ];
+    const result = truncateLogs(JSON.stringify(entries), 2, 50000);
+    expect(result.logs).toContain('Compiling...');
+    expect(result.logs).toContain('Done.');
+    expect(result.logs).not.toContain('Building...');
+    expect(result.logs).not.toContain('docker pull');
+    expect(result.total).toBe(3); // 3 visible entries
+  });
+
+  it('should filter hidden entries from JSON logs', () => {
+    const entries = [
+      { output: 'visible1', timestamp: '2026-01-01T00:00:01Z', hidden: false },
+      { output: 'hidden1', timestamp: '2026-01-01T00:00:02Z', hidden: true },
+      { output: 'hidden2', timestamp: '2026-01-01T00:00:03Z', hidden: true },
+      { output: 'visible2', timestamp: '2026-01-01T00:00:04Z', hidden: false },
+    ];
+    const result = truncateLogs(JSON.stringify(entries), 200, 50000);
+    expect(result.logs).toContain('visible1');
+    expect(result.logs).toContain('visible2');
+    expect(result.logs).not.toContain('hidden1');
+    expect(result.logs).not.toContain('hidden2');
+  });
+
+  it('should format JSON log entries with timestamp and output', () => {
+    const entries = [
+      { output: 'Starting deploy', timestamp: '2026-01-01T10:00:00Z', hidden: false },
+    ];
+    const result = truncateLogs(JSON.stringify(entries), 200, 50000);
+    expect(result.logs).toBe('[2026-01-01T10:00:00Z] Starting deploy');
+  });
+
+  it('should paginate JSON logs (page 2 = older entries)', () => {
+    const entries = Array.from({ length: 30 }, (_, i) => ({
+      output: `step ${i + 1}`,
+      timestamp: `2026-01-01T00:00:${String(i).padStart(2, '0')}Z`,
+      hidden: false,
+    }));
+    const page1 = truncateLogs(JSON.stringify(entries), 10, 50000, 1);
+    const page2 = truncateLogs(JSON.stringify(entries), 10, 50000, 2);
+    expect(page1.logs).toContain('step 30');
+    expect(page1.logs).toContain('step 21');
+    expect(page1.logs).not.toContain('step 20');
+    expect(page2.logs).toContain('step 20');
+    expect(page2.logs).toContain('step 11');
+    expect(page2.logs).not.toContain('step 10');
+    expect(page1.total).toBe(30);
+    expect(page1.showing_start).toBe(21);
+    expect(page1.showing_end).toBe(30);
+    expect(page2.showing_start).toBe(11);
+    expect(page2.showing_end).toBe(20);
+  });
+
+  it('should return metadata with total and showing range', () => {
+    const entries = Array.from({ length: 50 }, (_, i) => ({
+      output: `step ${i}`,
+      timestamp: `2026-01-01T00:00:${String(i).padStart(2, '0')}Z`,
+      hidden: false,
+    }));
+    const result = truncateLogs(JSON.stringify(entries), 10, 50000);
+    expect(result.total).toBe(50);
+    expect(result.showing_start).toBe(41);
+    expect(result.showing_end).toBe(50);
   });
 });
 
