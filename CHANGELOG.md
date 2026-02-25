@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-02-25
+
+### Fixed
+
+- **Documentation overhaul** - Comprehensive update to all project documentation:
+  - Fixed stale tool counts across README.md and CLAUDE.md (35 → 38)
+  - Fixed incorrect tool names in README (`get_server_resources` → `server_resources`, `get_server_domains` → `server_domains`)
+  - Added detailed Available Tools entries for `teams`, `cloud_tokens`, `search_docs`, `github_apps`
+  - Added deployment log `page` param and `logs_meta` to deployment tool docs
+  - Added example prompts for documentation search, teams, and cloud provider management
+  - Removed hardcoded tool count references from CLAUDE.md documentation standards
+
 ## [2.7.0] - 2026-02-25
 
 ### Added
