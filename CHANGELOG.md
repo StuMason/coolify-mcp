@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.6.3] - 2026-02-23
+## [2.6.4] - 2026-02-25
 
 ### Fixed
 
+- **Application deployments API path** - Correct endpoint path for listing application deployments (#120)
 - **fqdn → domains mapping** - Map `fqdn` field to `domains` for Coolify API compatibility:
   - Coolify API uses `domains` field for setting application domain, not `fqdn`
   - Added `mapFqdnToDomains` helper that transparently converts `fqdn` to `domains`
