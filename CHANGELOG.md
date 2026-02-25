@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.6] - 2026-02-25
+
+### Fixed
+
+- **Deployment log truncation** - `lines` param now works correctly (#115):
+  - Coolify returns deployment logs as a JSON array in a single line — `truncateLogs` was splitting on newlines and finding none
+  - Now parses JSON array format, filters hidden entries (docker internals), formats as readable `[timestamp] output` lines
+  - 96KB raw JSON → 771 chars for `lines: 10` (99.2% reduction)
+
+### Added
+
+- **Log pagination** - `page` param on deployment get with logs (#115):
+  - Page 1 = most recent entries, page 2 = older batch, etc.
+  - Returns `logs_meta` with `total_entries` and `showing` range
+  - `_pagination` hints with `next`/`prev` tool calls, consistent with list endpoints
+
 ## [2.6.5] - 2026-02-25
 
 ### Changed
