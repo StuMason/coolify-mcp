@@ -24,6 +24,7 @@ import type {
   ResponsePagination,
   Deployment,
 } from '../types/coolify.js';
+import { DocsSearchEngine } from './docs-search.js';
 
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
@@ -214,6 +215,7 @@ function wrapWithActions<T>(
 
 export class CoolifyMcpServer extends McpServer {
   private readonly client: CoolifyClient;
+  private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
 
   constructor(config: CoolifyConfig) {
     super({ name: 'coolify', version: VERSION });
@@ -1227,6 +1229,97 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() => this.client.deleteDatabaseBackup(database_uuid, backup_uuid));
         }
       },
+    );
+
+    // =========================================================================
+    // Teams (1 tool - consolidated)
+    // =========================================================================
+    this.tool(
+      'teams',
+      'Manage teams: list/get/get_members/get_current/get_current_members',
+      {
+        action: z.enum(['list', 'get', 'get_members', 'get_current', 'get_current_members']),
+        id: z.number().optional(),
+      },
+      async ({ action, id }) => {
+        switch (action) {
+          case 'list':
+            return wrap(() => this.client.listTeams());
+          case 'get':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(() => this.client.getTeam(id));
+          case 'get_members':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(() => this.client.getTeamMembers(id));
+          case 'get_current':
+            return wrap(() => this.client.getCurrentTeam());
+          case 'get_current_members':
+            return wrap(() => this.client.getCurrentTeamMembers());
+        }
+      },
+    );
+
+    // =========================================================================
+    // Cloud Tokens (1 tool - consolidated)
+    // =========================================================================
+    this.tool(
+      'cloud_tokens',
+      'Manage cloud provider tokens (Hetzner/DigitalOcean): list/get/create/update/delete/validate',
+      {
+        action: z.enum(['list', 'get', 'create', 'update', 'delete', 'validate']),
+        uuid: z.string().optional(),
+        provider: z.enum(['hetzner', 'digitalocean']).optional(),
+        token: z.string().optional(),
+        name: z.string().optional(),
+      },
+      async ({ action, uuid, provider, token, name }) => {
+        switch (action) {
+          case 'list':
+            return wrap(() => this.client.listCloudTokens());
+          case 'get':
+            if (!uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+            return wrap(() => this.client.getCloudToken(uuid));
+          case 'create':
+            if (!provider || !token || !name)
+              return {
+                content: [{ type: 'text' as const, text: 'Error: provider, token, name required' }],
+              };
+            return wrap(() => this.client.createCloudToken({ provider, token, name }));
+          case 'update':
+            if (!uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+            return wrap(() => this.client.updateCloudToken(uuid, { name }));
+          case 'delete':
+            if (!uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+            return wrap(() => this.client.deleteCloudToken(uuid));
+          case 'validate':
+            if (!uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+            return wrap(() => this.client.validateCloudToken(uuid));
+        }
+      },
+    );
+
+    // =========================================================================
+    // Documentation Search (1 tool)
+    // =========================================================================
+    this.tool(
+      'search_docs',
+      'Search Coolify documentation for how-to guides, configuration, troubleshooting',
+      {
+        query: z.string().describe('Search query'),
+        limit: z.number().optional().describe('Max results (default 5)'),
+      },
+      async ({ query, limit }) =>
+        wrap(async () => {
+          const results = await this.docsSearch.search(query, limit ?? 5);
+          if (results.length === 0) {
+            return { results: [], hint: 'No matches. Try broader or different keywords.' };
+          }
+          return { results };
+        }),
     );
 
     // =========================================================================

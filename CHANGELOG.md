@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-02-25
+
+### Added
+
+- **`teams` tool** - Manage teams: list, get, get_members, get_current, get_current_members
+- **`cloud_tokens` tool** - Manage cloud provider tokens (Hetzner/DigitalOcean): list, get, create, update, delete, validate
+- **`search_docs` tool** - Search Coolify documentation using local full-text search (BM25 via MiniSearch). Fetches docs from coolify.io on first search, indexes 1500+ chunks, returns token-efficient results (~849 tokens for 5 results)
+- **Version caching** - Cache Coolify server version on first API call, reducing redundant requests
+
 ## [2.6.6] - 2026-02-25
 
 ### Fixed

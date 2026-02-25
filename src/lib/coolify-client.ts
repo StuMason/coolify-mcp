@@ -326,6 +326,7 @@ function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
 export class CoolifyClient {
   private readonly baseUrl: string;
   private readonly accessToken: string;
+  private cachedVersion: string | null = null;
 
   constructor(config: CoolifyConfig) {
     if (!config.baseUrl) {
@@ -402,6 +403,9 @@ export class CoolifyClient {
   // ===========================================================================
 
   async getVersion(): Promise<Version> {
+    if (this.cachedVersion) {
+      return { version: this.cachedVersion };
+    }
     // The /version endpoint returns plain text, not JSON
     const url = `${this.baseUrl}/api/v1/version`;
     const response = await fetch(url, {
@@ -415,7 +419,12 @@ export class CoolifyClient {
     }
 
     const version = await response.text();
-    return { version: version.trim() };
+    this.cachedVersion = version.trim();
+    return { version: this.cachedVersion };
+  }
+
+  getCachedVersion(): string | null {
+    return this.cachedVersion;
   }
 
   async validateConnection(): Promise<void> {
