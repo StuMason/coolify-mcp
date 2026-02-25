@@ -2309,6 +2309,57 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ version: 'v4.0.0-beta.123' });
     });
 
+    it('should cache version after first call', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => 'v4.0.0-beta.462',
+      } as Response);
+
+      const first = await client.getVersion();
+      const second = await client.getVersion();
+
+      expect(first).toEqual({ version: 'v4.0.0-beta.462' });
+      expect(second).toEqual({ version: 'v4.0.0-beta.462' });
+      // Only one fetch call — second was served from cache
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return null from getCachedVersion before first call', () => {
+      expect(client.getCachedVersion()).toBeNull();
+    });
+
+    it('should return version from getCachedVersion after first call', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => 'v4.0.0-beta.462',
+      } as Response);
+
+      await client.getVersion();
+      expect(client.getCachedVersion()).toBe('v4.0.0-beta.462');
+    });
+
+    it('should not cache version on error and retry on next call', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      } as Response);
+
+      await expect(client.getVersion()).rejects.toThrow();
+      expect(client.getCachedVersion()).toBeNull();
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => 'v4.0.0-beta.462',
+      } as Response);
+
+      const result = await client.getVersion();
+      expect(result).toEqual({ version: 'v4.0.0-beta.462' });
+    });
+
     it('should handle version errors', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

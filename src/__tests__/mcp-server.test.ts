@@ -165,6 +165,24 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.bulkEnvUpdate).toBe('function');
       expect(typeof client.stopAllApps).toBe('function');
       expect(typeof client.redeployProjectApps).toBe('function');
+
+      // Team operations
+      expect(typeof client.listTeams).toBe('function');
+      expect(typeof client.getTeam).toBe('function');
+      expect(typeof client.getTeamMembers).toBe('function');
+      expect(typeof client.getCurrentTeam).toBe('function');
+      expect(typeof client.getCurrentTeamMembers).toBe('function');
+
+      // Cloud token operations
+      expect(typeof client.listCloudTokens).toBe('function');
+      expect(typeof client.getCloudToken).toBe('function');
+      expect(typeof client.createCloudToken).toBe('function');
+      expect(typeof client.updateCloudToken).toBe('function');
+      expect(typeof client.deleteCloudToken).toBe('function');
+      expect(typeof client.validateCloudToken).toBe('function');
+
+      // Version caching
+      expect(typeof client.getCachedVersion).toBe('function');
     });
   });
 

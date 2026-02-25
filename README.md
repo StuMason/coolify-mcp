@@ -15,7 +15,7 @@ A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabli
 
 ## Features
 
-This MCP server provides **35 token-optimized tools** for **debugging, management, and deployment**:
+This MCP server provides **38 token-optimized tools** for **debugging, management, and deployment**:
 
 | Category             | Tools                                                                                                                       |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -33,6 +33,9 @@ This MCP server provides **35 token-optimized tools** for **debugging, managemen
 | **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                                                      |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                         |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete via action param)                                                          |
+| **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                          |
+| **Cloud Tokens**     | `cloud_tokens` (Hetzner/DigitalOcean: list, get, create, update, delete, validate)                                          |
+| **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                        |
 
 ### Token-Optimized Design
 
