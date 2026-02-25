@@ -1,7 +1,7 @@
 {
   "name": "@masonator/coolify-mcp",
   "scope": "@masonator",
-  "version": "2.7.2",
+  "version": "2.7.3",
   "mcpName": "io.github.StuMason/coolify",
   "description": "MCP server for Coolify — 38 optimized tools for infrastructure management, diagnostics, and documentation search",
   "type": "module",
@@ -37,13 +37,26 @@
   "keywords": [
     "coolify",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "infrastructure",
+    "deployment",
+    "self-hosted",
+    "paas",
+    "ai",
+    "devops"
   ],
-  "author": "Stuart Mason",
+  "author": {
+    "name": "Stuart Mason",
+    "url": "https://stumason.dev"
+  },
   "license": "MIT",
+  "homepage": "https://stumason.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/StuMason/coolify-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/StuMason/coolify-mcp/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",

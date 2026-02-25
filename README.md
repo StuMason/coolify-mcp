@@ -343,9 +343,10 @@ Power user tools for operating on multiple resources at once:
 
 ## Related Links
 
+- [stumason.dev](https://stumason.dev) - Author's site
+- [MCP Registry](https://registry.modelcontextprotocol.io) - Find this server as `io.github.StuMason/coolify`
 - [Coolify](https://coolify.io/) - The open-source & self-hostable Heroku/Netlify/Vercel alternative
 - [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol powering AI tool integrations
-- [MCP Server Registry](https://github.com/modelcontextprotocol/servers) - Official MCP server directory
 
 ## Contributing
 
@@ -363,5 +364,5 @@ MIT - see [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <strong>If you find this useful, please ⭐ star the repo!</strong>
+  Built by <a href="https://stumason.dev">Stu Mason</a> · If you find this useful, please ⭐ star the repo!
 </p>

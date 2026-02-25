@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] - 2026-02-25
+
+### Changed
+
+- **Repository metadata** - Updated GitHub repo description, homepage (stumason.dev), and topics
+- **Package metadata** - Added author URL, homepage, bugs URL, and expanded keywords in package.json
+- **MCP Registry** - Added `websiteUrl` to server.json
+- **README** - Added stumason.dev to Related Links, MCP Registry link, author attribution in footer
+
 ## [2.7.2] - 2026-02-25
 
 ### Added
