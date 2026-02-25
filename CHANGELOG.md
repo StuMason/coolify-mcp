@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.5] - 2026-02-25
+
+### Changed
+
+- **ESLint 10** - Upgraded from ESLint 9 to ESLint 10, added `@eslint/js` as explicit dependency (#123)
+- **Dependency updates** - Bumped minor/patch dependencies (#127)
+
 ## [2.6.4] - 2026-02-25
 
 ### Fixed
