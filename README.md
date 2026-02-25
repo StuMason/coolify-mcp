@@ -9,7 +9,7 @@
 [![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
 
-> **The most comprehensive MCP server for Coolify** - 35 optimized tools, smart diagnostics, and batch operations for managing your self-hosted PaaS through AI assistants.
+> **The most comprehensive MCP server for Coolify** - 38 optimized tools, smart diagnostics, documentation search, and batch operations for managing your self-hosted PaaS through AI assistants.
 
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
@@ -191,6 +191,24 @@ Deploy nginx:latest from Docker Hub
 Deploy from public repo https://github.com/org/repo
 ```
 
+### Documentation & Help
+
+```text
+How do I set up Docker Compose with Coolify?
+Search the docs for health check configuration
+How do I fix a 502 Bad Gateway error?
+What are Coolify environment variables?
+```
+
+### Teams & Cloud Providers
+
+```text
+Who has access to my Coolify instance?
+Show me the current team members
+List my cloud provider tokens
+Validate my Hetzner API token
+```
+
 ## Environment Variables
 
 | Variable               | Required | Default                 | Description               |
@@ -238,8 +256,8 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 
 - `list_servers` - List all servers (returns summary)
 - `get_server` - Get server details
-- `get_server_resources` - Get resources running on a server
-- `get_server_domains` - Get domains configured on a server
+- `server_resources` - Get resources running on a server
+- `server_domains` - Get domains configured on a server
 - `validate_server` - Validate server connection
 
 ### Projects
@@ -284,11 +302,27 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 
 - `list_deployments` - List running deployments (returns summary)
 - `deploy` - Deploy by tag or UUID
-- `deployment` - Manage deployments with `action: get|cancel|list_for_app` (supports `lines` param to limit log output)
+- `deployment` - Manage deployments with `action: get|cancel|list_for_app` (supports `lines` and `page` params for paginated log output with `logs_meta`)
 
 ### Private Keys
 
 - `private_keys` - Manage SSH keys with `action: list|get|create|update|delete`
+
+### GitHub Apps
+
+- `github_apps` - Manage GitHub App integrations with `action: list|get|create|update|delete`
+
+### Teams
+
+- `teams` - Manage teams with `action: list|get|get_members|get_current|get_current_members`
+
+### Cloud Tokens
+
+- `cloud_tokens` - Manage cloud provider tokens (Hetzner/DigitalOcean) with `action: list|get|create|update|delete|validate`
+
+### Documentation
+
+- `search_docs` - Search Coolify documentation using full-text search. Indexes 1,500+ doc chunks on first call, returns ranked results with titles, URLs, and snippets (~849 tokens for 5 results)
 
 ### Batch Operations
 
@@ -303,9 +337,9 @@ Power user tools for operating on multiple resources at once:
 
 - **Context-Optimized**: Responses are 90-99% smaller than raw API, preventing context window exhaustion
 - **Smart Lookup**: Find apps by domain (`stuartmason.co.uk`), servers by IP, not just UUIDs
+- **Docs Search**: Built-in full-text search across Coolify documentation — your AI assistant can look up how-tos and troubleshooting without leaving the conversation
 - **Batch Operations**: Restart entire projects, bulk update env vars, emergency stop all apps
 - **Production Ready**: 98%+ test coverage, TypeScript strict mode, comprehensive error handling
-- **Always Current**: Weekly OpenAPI drift detection ensures the server stays in sync with Coolify
 
 ## Related Links
 
