@@ -381,6 +381,7 @@ export class CoolifyClient {
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error(
           `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible.`,
+          { cause: error },
         );
       }
       throw error;
@@ -433,6 +434,7 @@ export class CoolifyClient {
     } catch (error) {
       throw new Error(
         `Failed to connect to Coolify server: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error },
       );
     }
   }
