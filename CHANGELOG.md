@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`env_vars` is_build_time support** - Added `is_build_time` optional parameter to `create` and `update` actions (#135):
+  - Set `is_build_time: false` to create runtime-only environment variables
+  - Fixes issue where multiline values (e.g., PEM keys) broke Dockerfile builds when injected as `ARG` directives
+  - Defaults to Coolify's default behavior (both build-time and runtime) if not specified
+
 ## [2.7.3] - 2026-02-25
 
 ### Changed

@@ -874,7 +874,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'env_vars',
-      'Manage env vars for app or service',
+      'Manage env vars for app or service. Use is_build_time=false for runtime-only vars (e.g., multiline secrets like PEM keys)',
       {
         resource: z.enum(['application', 'service']),
         action: z.enum(['list', 'create', 'update', 'delete']),
@@ -882,8 +882,9 @@ export class CoolifyMcpServer extends McpServer {
         key: z.string().optional(),
         value: z.string().optional(),
         env_uuid: z.string().optional(),
+        is_build_time: z.boolean().optional(), // Set false for runtime-only vars to avoid Dockerfile ARG issues with multiline values
       },
-      async ({ resource, action, uuid, key, value, env_uuid }) => {
+      async ({ resource, action, uuid, key, value, env_uuid, is_build_time }) => {
         if (resource === 'application') {
           switch (action) {
             case 'list':
@@ -891,12 +892,15 @@ export class CoolifyMcpServer extends McpServer {
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
-              // Note: is_build_time is not passed - Coolify API rejects it for create action
-              return wrap(() => this.client.createApplicationEnvVar(uuid, { key, value }));
+              return wrap(() =>
+                this.client.createApplicationEnvVar(uuid, { key, value, is_build_time }),
+              );
             case 'update':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
-              return wrap(() => this.client.updateApplicationEnvVar(uuid, { key, value }));
+              return wrap(() =>
+                this.client.updateApplicationEnvVar(uuid, { key, value, is_build_time }),
+              );
             case 'delete':
               if (!env_uuid)
                 return { content: [{ type: 'text' as const, text: 'Error: env_uuid required' }] };
@@ -909,7 +913,9 @@ export class CoolifyMcpServer extends McpServer {
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
-              return wrap(() => this.client.createServiceEnvVar(uuid, { key, value }));
+              return wrap(() =>
+                this.client.createServiceEnvVar(uuid, { key, value, is_build_time }),
+              );
             case 'update':
               return {
                 content: [
