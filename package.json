@@ -87,6 +87,9 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "handlebars": "^4.7.9"
+  },
   "lint-staged": {
     "*.{ts,js,json,md,yaml,yml}": "prettier --write",
     "*.ts": "eslint --fix"
