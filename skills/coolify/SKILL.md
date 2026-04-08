@@ -53,7 +53,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 - `list_applications`, `get_application`
 - `application` — dispatcher: `create_public`, `create_github`, `create_key`, `create_dockerimage`, `update`, `delete`
 - `application_logs` — fetch app stdout/stderr
-- `env_vars` — list/create/update/delete env vars
+- `env_vars` — requires `resource: "application" | "service"`. For `application`: list/create/update/delete. For `service`: list/create/delete (no `update` — service env update is not supported).
 - `control` — start / stop / restart
 
 ### Databases
@@ -65,7 +65,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 
 ### Services
 
-`list_services`, `get_service`, `service` (create/update/delete), `env_vars`, `control`.
+`list_services`, `get_service`, `service` (create/update/delete), `env_vars` (with `resource: "service"` — list/create/delete only), `control`.
 
 ### Deployments
 
@@ -77,7 +77,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 
 - `private_keys` — SSH key CRUD
 - `github_apps` — GitHub integration CRUD
-- `teams` — list / get / get_members / get_current
+- `teams` — list / get / get_members / get_current / get_current_members
 - `cloud_tokens` — Hetzner / DigitalOcean credential CRUD + `validate`
 
 ### Docs
@@ -94,10 +94,10 @@ Keep responses focused on what changed, the current state, and any issues. Don't
 
 ### Example 1 — "my-api is throwing 500s"
 
-1. `diagnose_app` with `identifier: "my-api"` → read status, last deployment, tail of logs, env vars.
-2. If a recent deploy failed: `deployment` with the failed deployment id for full logs.
-3. If env var or config is wrong: fix with `env_vars` (action `update`) then `deploy` to redeploy.
-4. After redeploy: `deployment` to watch status, then confirm with `diagnose_app` again.
+1. `diagnose_app` with `query: "my-api"` → read status, last deployment, tail of logs, env vars.
+2. If a recent deploy failed: `deployment` (action `get`) with the failed deployment id and `lines` (optionally `page`) — logs are excluded by default unless `lines` is set.
+3. If env var or config is wrong: fix with `env_vars` (`resource: "application"`, action `update`) then `deploy` to redeploy.
+4. After redeploy: `deployment` with the new deployment id and `lines` to watch status/log output, then confirm with `diagnose_app` again.
 
 ### Example 2 — "what's broken across my infra"
 
@@ -107,9 +107,9 @@ Keep responses focused on what changed, the current state, and any issues. Don't
 
 ### Example 3 — "spin up a new postgres for the staging project"
 
-1. `projects` (action `list`) → find the staging project UUID.
-2. `environments` (action `list`) → confirm the target environment.
-3. `database` (action `create`, type `postgresql`) inside that environment.
+1. `projects` (action `list`) → find the staging project and record its `project_uuid` and associated `server_uuid`.
+2. `environments` (action `list`) → confirm the target environment name (for example, `staging`).
+3. `database` (action `create`, type `postgresql`, `server_uuid: "<server_uuid>"`, `project_uuid: "<project_uuid>"`, `environment_name: "staging"`) → create the database in that project/environment.
 4. `control` (action `start`) if it doesn't auto-start, then `get_database` to return connection details to the user.
 
 ## Setup (only if the MCP server isn't already configured)
