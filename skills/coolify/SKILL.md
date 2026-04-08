@@ -59,7 +59,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 ### Databases
 
 - `list_databases`, `get_database`
-- `database` — create/delete. Supported engines: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, KeyDB, ClickHouse, Dragonfly.
+- `database` — create/delete. Supported `type` values: `postgresql`, `mysql`, `mariadb`, `mongodb`, `redis`, `keydb`, `clickhouse`, `dragonfly`.
 - `database_backups` — schedule + execution tracking
 - `control` — start / stop / restart
 
@@ -69,7 +69,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 
 ### Deployments
 
-- `list_deployments` — currently running deployments
+- `list_deployments` — list deployments (summary)
 - `deploy` — trigger a deploy by tag or UUID
 - `deployment` — status, cancel, list-by-app, paginated logs
 
