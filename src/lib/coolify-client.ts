@@ -1009,8 +1009,29 @@ export class CoolifyClient {
     );
   }
 
-  async listApplicationDeployments(appUuid: string): Promise<Deployment[]> {
-    return this.request<Deployment[]>(`/deployments/applications/${appUuid}`);
+  /**
+   * List deployments for an application.
+   *
+   * Coolify returns `{ count, deployments: Deployment[] }` for this endpoint
+   * (NOT a raw array — upstream @masonator type was incorrect).
+   *
+   * By default returns a DeploymentEssential summary (no `logs` field) because
+   * each deployment's log blob can be 30–100KB, and a typical list has 20–35
+   * deployments — exceeding MCP response token limits. Pass `includeLogs: true`
+   * to get raw Deployment objects with full build logs.
+   */
+  async listApplicationDeployments(
+    appUuid: string,
+    options?: { includeLogs?: boolean },
+  ): Promise<{ count: number; deployments: Deployment[] | DeploymentEssential[] }> {
+    const envelope = await this.request<{ count: number; deployments: Deployment[] }>(
+      `/deployments/applications/${appUuid}`,
+    );
+    const deployments = Array.isArray(envelope?.deployments) ? envelope.deployments : [];
+    return {
+      count: typeof envelope?.count === 'number' ? envelope.count : deployments.length,
+      deployments: options?.includeLogs ? deployments : deployments.map(toDeploymentEssential),
+    };
   }
 
   // ===========================================================================
@@ -1334,7 +1355,10 @@ export class CoolifyClient {
     const app = extract(results[0], 'application');
     const logs = extract(results[1], 'logs');
     const envVars = extract(results[2], 'environment_variables');
-    const deployments = extract(results[3], 'deployments');
+    // listApplicationDeployments now returns { count, deployments: [...] } —
+    // flatten back to the array that the diagnostics consumer expects.
+    const deploymentsEnvelope = extract(results[3], 'deployments');
+    const deployments = deploymentsEnvelope?.deployments ?? [];
 
     // Determine health status and issues
     const issues: string[] = [];

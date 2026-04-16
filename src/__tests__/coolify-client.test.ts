@@ -2118,16 +2118,46 @@ describe('CoolifyClient', () => {
       });
     });
 
-    it('should list application deployments', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse([mockDeployment]));
+    it('should list application deployments as essential by default (no logs)', async () => {
+      const withLogs = { ...mockDeployment, logs: 'x'.repeat(30000) };
+      // Real Coolify wraps the list in an envelope: { count, deployments: [...] }
+      mockFetch.mockResolvedValueOnce(mockResponse({ count: 1, deployments: [withLogs] }));
 
       const result = await client.listApplicationDeployments('app-uuid');
 
-      expect(result).toEqual([mockDeployment]);
+      expect(result.count).toBe(1);
+      expect(result.deployments).toHaveLength(1);
+      const [first] = result.deployments as Array<{
+        logs?: unknown;
+        logs_available?: boolean;
+        id?: unknown;
+      }>;
+      // Essential projection: no raw logs, but a `logs_available` breadcrumb.
+      expect(first.logs).toBeUndefined();
+      expect(first.logs_available).toBe(true);
+      // Essential also drops fields like `id`
+      expect(first.id).toBeUndefined();
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/deployments/applications/app-uuid',
         expect.any(Object),
       );
+    });
+
+    it('should return full deployments when includeLogs is true', async () => {
+      const withLogs = { ...mockDeployment, logs: 'build log stream' };
+      mockFetch.mockResolvedValueOnce(mockResponse({ count: 1, deployments: [withLogs] }));
+
+      const result = await client.listApplicationDeployments('app-uuid', { includeLogs: true });
+
+      expect(result).toEqual({ count: 1, deployments: [withLogs] });
+    });
+
+    it('should tolerate a malformed envelope (missing deployments array)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({}));
+
+      const result = await client.listApplicationDeployments('app-uuid');
+
+      expect(result).toEqual({ count: 0, deployments: [] });
     });
   });
 
@@ -2752,7 +2782,9 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockApp))
           .mockResolvedValueOnce(mockResponse(mockLogs))
           .mockResolvedValueOnce(mockResponse(mockEnvVars))
-          .mockResolvedValueOnce(mockResponse(mockDeployments));
+          .mockResolvedValueOnce(
+            mockResponse({ count: mockDeployments.length, deployments: mockDeployments }),
+          );
 
         const result = await client.diagnoseApplication(testAppUuid);
 
@@ -2781,7 +2813,7 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(unhealthyApp))
           .mockResolvedValueOnce(mockResponse(mockLogs))
           .mockResolvedValueOnce(mockResponse(mockEnvVars))
-          .mockResolvedValueOnce(mockResponse([]));
+          .mockResolvedValueOnce(mockResponse({ count: 0, deployments: [] }));
 
         const result = await client.diagnoseApplication(testAppUuid);
 
@@ -2798,7 +2830,9 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockApp))
           .mockResolvedValueOnce(mockResponse(mockLogs))
           .mockResolvedValueOnce(mockResponse(mockEnvVars))
-          .mockResolvedValueOnce(mockResponse(failedDeployments));
+          .mockResolvedValueOnce(
+            mockResponse({ count: failedDeployments.length, deployments: failedDeployments }),
+          );
 
         const result = await client.diagnoseApplication(testAppUuid);
 
@@ -2810,7 +2844,9 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockApp))
           .mockRejectedValueOnce(new Error('Logs unavailable'))
           .mockResolvedValueOnce(mockResponse(mockEnvVars))
-          .mockResolvedValueOnce(mockResponse(mockDeployments));
+          .mockResolvedValueOnce(
+            mockResponse({ count: mockDeployments.length, deployments: mockDeployments }),
+          );
 
         const result = await client.diagnoseApplication(testAppUuid);
 
