@@ -961,8 +961,9 @@ export class CoolifyMcpServer extends McpServer {
         lines: z.number().optional(), // Include logs truncated to last N entries (omit for no logs)
         page: z.number().optional(), // Log page (1=most recent, 2=older, etc.)
         max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)
+        include_logs: z.boolean().optional(), // list_for_app only: include raw build logs (default false; upstream returns ~30KB per deployment)
       },
-      async ({ action, uuid, lines, page, max_chars }) => {
+      async ({ action, uuid, lines, page, max_chars, include_logs }) => {
         switch (action) {
           case 'get':
             // If lines param specified, include logs and truncate
@@ -1014,7 +1015,9 @@ export class CoolifyMcpServer extends McpServer {
           case 'cancel':
             return wrap(() => this.client.cancelDeployment(uuid));
           case 'list_for_app':
-            return wrap(() => this.client.listApplicationDeployments(uuid));
+            return wrap(() =>
+              this.client.listApplicationDeployments(uuid, { includeLogs: include_logs }),
+            );
         }
       },
     );
