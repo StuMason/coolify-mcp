@@ -954,7 +954,7 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'deployment',
-      'Manage deployment: get/cancel/list_for_app (logs excluded by default, use lines param to include)',
+      'Manage deployment: get/cancel/list_for_app. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs.',
       {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
