@@ -473,6 +473,10 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
         fqdn: z.string().optional(),
+        domains: z.string().optional(),
+        custom_docker_run_options: z.string().optional(),
+        custom_labels: z.string().optional(),
+        instant_deploy: z.boolean().optional(),
         // Health check fields
         health_check_enabled: z.boolean().optional(),
         health_check_path: z.string().optional(),
@@ -524,6 +528,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_github':
@@ -558,6 +566,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_key':
@@ -592,6 +604,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_dockerimage':
@@ -623,6 +639,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'update': {
