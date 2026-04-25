@@ -1202,6 +1202,23 @@ describe('CoolifyClient', () => {
       expect(callBody.fqdn).toBeUndefined();
     });
 
+    it('should pass destination_uuid through in createApplicationPublic', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPublic({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        destination_uuid: 'dest-uuid',
+        git_repository: 'https://github.com/user/repo',
+        git_branch: 'main',
+        build_pack: 'nixpacks',
+        ports_exposes: '3000',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.destination_uuid).toBe('dest-uuid');
+    });
+
     it('should map fqdn to domains in updateApplication', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
 
