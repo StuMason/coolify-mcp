@@ -201,10 +201,16 @@ function toBase64(value: string): string {
  * Coolify API uses 'domains' field for setting application domain, not 'fqdn'.
  * This provides backward compatibility for callers using 'fqdn'.
  */
-function mapFqdnToDomains<T extends { fqdn?: string }>(
+function mapFqdnToDomains<T extends { fqdn?: string; domains?: string }>(
   data: T,
 ): Omit<T, 'fqdn'> & { domains?: string } {
   const { fqdn, ...rest } = data;
+  // Explicit `domains` always wins. `fqdn` is only used when `domains` was
+  // not provided — kept for backward compatibility because `get_application`
+  // surfaces the field as `fqdn` in responses.
+  if (rest.domains !== undefined) {
+    return rest;
+  }
   if (fqdn === undefined) {
     return rest;
   }
@@ -648,7 +654,7 @@ export class CoolifyClient {
   ): Promise<UuidResponse> {
     return this.request<UuidResponse>('/applications/dockerfile', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(mapFqdnToDomains(data)),
     });
   }
 
@@ -657,14 +663,15 @@ export class CoolifyClient {
   ): Promise<UuidResponse> {
     return this.request<UuidResponse>('/applications/dockerimage', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(mapFqdnToDomains(data)),
     });
   }
 
   async createApplicationDockerCompose(
     data: CreateApplicationDockerComposeRequest,
   ): Promise<UuidResponse> {
-    const payload = { ...data };
+    const mapped = mapFqdnToDomains(data);
+    const payload = { ...mapped };
     if (payload.docker_compose_raw) {
       payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
     }

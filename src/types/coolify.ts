@@ -255,6 +255,7 @@ export interface CreateApplicationPublicRequest {
   name?: string;
   description?: string;
   fqdn?: string;
+  domains?: string;
   git_repository: string;
   git_branch: string;
   git_commit_sha?: string;
@@ -266,6 +267,8 @@ export interface CreateApplicationPublicRequest {
   install_command?: string;
   build_command?: string;
   start_command?: string;
+  custom_docker_run_options?: string;
+  custom_labels?: string;
   instant_deploy?: boolean;
 }
 
@@ -296,11 +299,14 @@ export interface CreateApplicationDockerfileRequest {
   name?: string;
   description?: string;
   fqdn?: string;
+  domains?: string;
   dockerfile: string;
   dockerfile_location?: string;
   ports_exposes?: string;
   ports_mappings?: string;
   base_directory?: string;
+  custom_docker_run_options?: string;
+  custom_labels?: string;
   instant_deploy?: boolean;
 }
 
@@ -313,10 +319,13 @@ export interface CreateApplicationDockerImageRequest {
   name?: string;
   description?: string;
   fqdn?: string;
+  domains?: string;
   docker_registry_image_name: string;
   docker_registry_image_tag?: string;
   ports_exposes: string;
   ports_mappings?: string;
+  custom_docker_run_options?: string;
+  custom_labels?: string;
   instant_deploy?: boolean;
 }
 
@@ -328,10 +337,14 @@ export interface CreateApplicationDockerComposeRequest {
   destination_uuid?: string;
   name?: string;
   description?: string;
+  fqdn?: string;
+  domains?: string;
   docker_compose_raw: string;
   docker_compose_location?: string;
   docker_compose_custom_start_command?: string;
   docker_compose_custom_build_command?: string;
+  custom_docker_run_options?: string;
+  custom_labels?: string;
   instant_deploy?: boolean;
 }
 
@@ -339,6 +352,9 @@ export interface UpdateApplicationRequest {
   name?: string;
   description?: string;
   fqdn?: string;
+  domains?: string;
+  custom_docker_run_options?: string;
+  custom_labels?: string;
   git_repository?: string;
   git_branch?: string;
   git_commit_sha?: string;

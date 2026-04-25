@@ -459,6 +459,7 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         github_app_uuid: z.string().optional(),
         private_key_uuid: z.string().optional(),
+        destination_uuid: z.string().optional(),
         git_repository: z.string().optional(),
         git_branch: z.string().optional(),
         environment_name: z.string().optional(),
@@ -472,6 +473,10 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
         fqdn: z.string().optional(),
+        domains: z.string().optional(),
+        custom_docker_run_options: z.string().optional(),
+        custom_labels: z.string().optional(),
+        instant_deploy: z.boolean().optional(),
         // Health check fields
         health_check_enabled: z.boolean().optional(),
         health_check_path: z.string().optional(),
@@ -513,6 +518,7 @@ export class CoolifyMcpServer extends McpServer {
               this.client.createApplicationPublic({
                 project_uuid: args.project_uuid!,
                 server_uuid: args.server_uuid!,
+                destination_uuid: args.destination_uuid,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
                 build_pack: args.build_pack! as BuildPack,
@@ -522,6 +528,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_github':
@@ -546,6 +556,7 @@ export class CoolifyMcpServer extends McpServer {
                 project_uuid: args.project_uuid!,
                 server_uuid: args.server_uuid!,
                 github_app_uuid: args.github_app_uuid!,
+                destination_uuid: args.destination_uuid,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
                 build_pack: args.build_pack as BuildPack | undefined,
@@ -555,6 +566,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_key':
@@ -579,6 +594,7 @@ export class CoolifyMcpServer extends McpServer {
                 project_uuid: args.project_uuid!,
                 server_uuid: args.server_uuid!,
                 private_key_uuid: args.private_key_uuid!,
+                destination_uuid: args.destination_uuid,
                 git_repository: args.git_repository!,
                 git_branch: args.git_branch!,
                 build_pack: args.build_pack as BuildPack | undefined,
@@ -588,6 +604,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'create_dockerimage':
@@ -610,6 +630,7 @@ export class CoolifyMcpServer extends McpServer {
               this.client.createApplicationDockerImage({
                 project_uuid: args.project_uuid!,
                 server_uuid: args.server_uuid!,
+                destination_uuid: args.destination_uuid,
                 docker_registry_image_name: args.docker_registry_image_name!,
                 ports_exposes: args.ports_exposes!,
                 docker_registry_image_tag: args.docker_registry_image_tag,
@@ -618,6 +639,10 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 fqdn: args.fqdn,
+                domains: args.domains,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
               }),
             );
           case 'update': {
