@@ -1202,6 +1202,88 @@ describe('CoolifyClient', () => {
       expect(callBody.fqdn).toBeUndefined();
     });
 
+    it('should map fqdn to domains in createApplicationDockerImage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerImage({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_registry_image_name: 'traefik/whoami',
+        ports_exposes: '80',
+        fqdn: 'https://whoami.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://whoami.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should map fqdn to domains in createApplicationDockerfile', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerfile({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        dockerfile: 'FROM nginx',
+        fqdn: 'https://app.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://app.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should map fqdn to domains in createApplicationDockerCompose', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerCompose({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_compose_raw: 'version: "3"\n',
+        fqdn: 'https://compose.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://compose.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should accept explicit domains and prefer it over fqdn', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerImage({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_registry_image_name: 'traefik/whoami',
+        ports_exposes: '80',
+        fqdn: 'https://from-fqdn.example.com',
+        domains: 'https://from-domains.example.com',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.domains).toBe('https://from-domains.example.com');
+      expect(callBody.fqdn).toBeUndefined();
+    });
+
+    it('should pass instant_deploy and custom_* fields through createApplicationDockerImage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerImage({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_registry_image_name: 'traefik/whoami',
+        ports_exposes: '80',
+        instant_deploy: true,
+        custom_docker_run_options: '--network=my-net',
+        custom_labels: 'dHJhZWZpaw==',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.instant_deploy).toBe(true);
+      expect(callBody.custom_docker_run_options).toBe('--network=my-net');
+      expect(callBody.custom_labels).toBe('dHJhZWZpaw==');
+    });
+
     it('should pass destination_uuid through in createApplicationPublic', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 
