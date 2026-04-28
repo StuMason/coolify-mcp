@@ -43,7 +43,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
-            --model claude-opus-4-5
+            --model claude-opus-4-7
             --allowedTools "Bash(gh:*),Bash(npm:*),Bash(composer:*)"
             --system-prompt "You can create PRs with 'gh pr create', merge with 'gh pr merge', and comment with 'gh issue comment'. Use gh CLI for all GitHub operations."
