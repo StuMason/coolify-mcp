@@ -2,12 +2,16 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CoolifyMcpServer } from './lib/mcp-server.js';
+import { parseHeaders } from './lib/parse-headers.js';
 import type { CoolifyConfig } from './types/coolify.js';
 
 async function main(): Promise<void> {
+  const customHeaders = parseHeaders(process.argv);
+
   const config: CoolifyConfig = {
     baseUrl: process.env.COOLIFY_BASE_URL || 'http://localhost:3000',
     accessToken: process.env.COOLIFY_ACCESS_TOKEN || '',
+    customHeaders: Object.keys(customHeaders).length > 0 ? customHeaders : undefined,
   };
 
   if (!config.accessToken) {

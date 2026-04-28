@@ -332,6 +332,7 @@ function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
 export class CoolifyClient {
   private readonly baseUrl: string;
   private readonly accessToken: string;
+  private readonly customHeaders: Record<string, string>;
   private cachedVersion: string | null = null;
 
   constructor(config: CoolifyConfig) {
@@ -343,6 +344,18 @@ export class CoolifyClient {
     }
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.accessToken = config.accessToken;
+
+    const reserved = new Set(['authorization', 'content-type']);
+    const raw = config.customHeaders ?? {};
+    const filtered: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (reserved.has(key.toLowerCase())) {
+        console.warn(`Custom header "${key}" ignored: reserved by the Coolify client`);
+      } else {
+        filtered[key] = value;
+      }
+    }
+    this.customHeaders = filtered;
   }
 
   // ===========================================================================
@@ -358,6 +371,7 @@ export class CoolifyClient {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.accessToken}`,
+          ...this.customHeaders,
           ...options.headers,
         },
       });
@@ -418,6 +432,7 @@ export class CoolifyClient {
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
+        ...this.customHeaders,
       },
     });
 

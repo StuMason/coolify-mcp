@@ -10,6 +10,7 @@
 export interface CoolifyConfig {
   baseUrl: string;
   accessToken: string;
+  customHeaders?: Record<string, string>;
 }
 
 // =============================================================================

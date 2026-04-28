@@ -150,6 +150,51 @@ describe('CoolifyClient', () => {
         expect.any(Object),
       );
     });
+
+    it('should merge customHeaders into outgoing requests', async () => {
+      const c = new CoolifyClient({
+        baseUrl: 'http://localhost:3000',
+        accessToken: 'test-token',
+        customHeaders: { 'CF-Access-Client-Id': 'abc', 'CF-Access-Client-Secret': 'xyz' },
+      });
+      mockFetch.mockResolvedValueOnce(mockResponse([{ uuid: 's1', name: 'srv' }]));
+
+      await c.listServers();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'CF-Access-Client-Id': 'abc',
+            'CF-Access-Client-Secret': 'xyz',
+            Authorization: 'Bearer test-token',
+          }),
+        }),
+      );
+    });
+
+    it('should filter reserved headers from customHeaders', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const c = new CoolifyClient({
+        baseUrl: 'http://localhost:3000',
+        accessToken: 'test-token',
+        customHeaders: {
+          Authorization: 'Bearer override',
+          'Content-Type': 'text/plain',
+          'X-Safe-Header': 'allowed',
+        },
+      });
+      mockFetch.mockResolvedValueOnce(mockResponse([{ uuid: 's1', name: 'srv' }]));
+
+      await c.listServers();
+
+      const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers['Authorization']).toBe('Bearer test-token');
+      expect(headers['Content-Type']).toBe('application/json');
+      expect(headers['X-Safe-Header']).toBe('allowed');
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+      warnSpy.mockRestore();
+    });
   });
 
   describe('listServers', () => {
