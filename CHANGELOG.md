@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-04-28
+
+### Added
+
+- **`destination_uuid` on application create** (#161, thanks @barbe1bc) — Specify which Docker network destination on multi-destination Coolify hosts. Without it, hosts with multiple destinations silently fell back to the default destination.
+- **`domains` field accepted on application create** (#162, thanks @barbe1bc) — Pass `domains` directly alongside the existing `fqdn` alias. Explicit `domains` wins when both are set.
+- **`instant_deploy`, `custom_docker_run_options`, `custom_labels` on application create** (#162, thanks @barbe1bc) — All three were already accepted by Coolify; now exposed on the MCP tool surface.
+- **`include_logs` opt-in on `deployment list_for_app`** (#158, thanks @kashik0i) — Set `include_logs: true` to retrieve raw build logs (default: false).
+
+### Fixed
+
+- **Silent drop of `fqdn` on dockerfile/dockerimage/dockercompose creates** (#162, thanks @barbe1bc) — `mapFqdnToDomains()` was applied on public/github/key paths but not on the docker-\* paths. Calls passing `fqdn` got an app with no domain and no error surfaced.
+- **`listApplicationDeployments` response shape** (#158, thanks @kashik0i) — Now correctly parses Coolify's actual `{ count, deployments: [] }` envelope. Previously typed as `Promise<Deployment[]>` which was wrong-at-runtime — any caller using `.length` / `.map()` would crash against a real Coolify server.
+- **MCP token budget on deployment listing** (#158, thanks @kashik0i) — `list_for_app` now returns `DeploymentEssential` summaries by default (no raw `logs` blobs). A typical 35-deployment response shrinks from ~1 MB to ~4 KB (~250×). Pass `include_logs: true` to opt back in.
+
+### Changed (breaking, typed-only)
+
+- **`listApplicationDeployments` signature** (#158): `Promise<Deployment[]>` → `Promise<{ count: number; deployments: Deployment[] | DeploymentEssential[] }>`. Programmatic consumers of `@masonator/coolify-mcp` will need to update destructuring. Note: the previous type was wrong-at-runtime against real Coolify, so any caller that worked end-to-end was already accommodating the envelope shape.
+
+### Internal
+
+- Fixed Claude Code workflows broken on OIDC token fetch (#165) — explicit `github_token`, current model IDs.
+- Dependency bumps: dependabot/fetch-metadata 3, actions/github-script 9, action-gh-release 3 (#154, #155, #156); npm minor-and-patch group of 9 dev-deps (#160).
+
 ## [2.7.3] - 2026-02-25
 
 ### Changed
