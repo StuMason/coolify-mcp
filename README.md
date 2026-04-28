@@ -85,6 +85,34 @@ claude mcp add coolify \
 env COOLIFY_ACCESS_TOKEN=your-api-token COOLIFY_BASE_URL=https://your-coolify-instance.com npx -y @masonator/coolify-mcp
 ```
 
+### Custom HTTP Headers (Cloudflare Zero Trust, Auth Proxies)
+
+If your Coolify instance sits behind a Cloudflare Access tunnel or other auth-proxy middleware, pass extra headers on every outbound request with `--header`:
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@masonator/coolify-mcp",
+        "--header",
+        "CF-Access-Client-Id: abc123.access",
+        "--header",
+        "CF-Access-Client-Secret: your-secret"
+      ],
+      "env": {
+        "COOLIFY_ACCESS_TOKEN": "your-api-token",
+        "COOLIFY_BASE_URL": "https://your-coolify-instance.com"
+      }
+    }
+  }
+}
+```
+
+Multiple `--header` flags can be combined. The reserved headers `Authorization` and `Content-Type` are filtered (with a warning) to prevent silently overriding the Coolify bearer token.
+
 ## Context-Optimized Responses
 
 ### Why This Matters

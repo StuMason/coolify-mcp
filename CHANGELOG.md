@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-04-28
+
+### Added
+
+- **`--header` CLI flag for custom HTTP headers** (#167, thanks @imantsk) — Inject extra headers (e.g. `--header "CF-Access-Client-Id: ..." --header "CF-Access-Client-Secret: ..."`) on every outbound request. Useful for Cloudflare Zero Trust, custom auth proxies, and other middleware sitting in front of Coolify. Multiple `--header` flags can be combined. Reserved headers (`Authorization`, `Content-Type`) are filtered with a warning to prevent silently overriding the Coolify bearer token.
+
 ## [2.8.0] - 2026-04-28
 
 ### Added
