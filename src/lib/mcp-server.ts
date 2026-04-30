@@ -983,10 +983,10 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'env_vars',
-      "Manage env vars for app or service. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
+      "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
       {
-        resource: z.enum(['application', 'service']),
-        action: z.enum(['list', 'create', 'update', 'delete']),
+        resource: z.enum(['application', 'service', 'database']),
+        action: z.enum(['list', 'create', 'update', 'delete', 'bulk_update']),
         uuid: z.string(),
         key: z.string().optional(),
         value: z.string().optional(),
@@ -994,18 +994,22 @@ export class CoolifyMcpServer extends McpServer {
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
         reveal: z.boolean().optional(),
+        data: z
+          .array(
+            z.object({
+              key: z.string(),
+              value: z.string(),
+              is_preview: z.boolean().optional(),
+              is_buildtime: z.boolean().optional(),
+              is_runtime: z.boolean().optional(),
+              is_literal: z.boolean().optional(),
+              is_multiline: z.boolean().optional(),
+              is_shown_once: z.boolean().optional(),
+            }),
+          )
+          .optional(),
       },
-      async ({
-        resource,
-        action,
-        uuid,
-        key,
-        value,
-        env_uuid,
-        is_buildtime,
-        is_runtime,
-        reveal,
-      }) => {
+      async ({ resource, action, uuid, key, value, env_uuid, is_buildtime, is_runtime, reveal, data }) => {
         if (resource === 'application') {
           switch (action) {
             case 'list':
@@ -1038,8 +1042,12 @@ export class CoolifyMcpServer extends McpServer {
               if (!env_uuid)
                 return { content: [{ type: 'text' as const, text: 'Error: env_uuid required' }] };
               return wrap(() => this.client.deleteApplicationEnvVar(uuid, env_uuid));
+            case 'bulk_update':
+              if (!data)
+                return { content: [{ type: 'text' as const, text: 'Error: data array required' }] };
+              return wrap(() => this.client.bulkUpdateApplicationEnvVars(uuid, { data }));
           }
-        } else {
+        } else if (resource === 'service') {
           switch (action) {
             case 'list':
               return wrap(() => this.client.listServiceEnvVars(uuid, { reveal }));
@@ -1047,23 +1055,47 @@ export class CoolifyMcpServer extends McpServer {
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
               return wrap(() =>
-                this.client.createServiceEnvVar(uuid, {
-                  key,
-                  value,
-                  is_buildtime,
-                  is_runtime,
-                }),
+                this.client.createServiceEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
               );
             case 'update':
-              return {
-                content: [
-                  { type: 'text' as const, text: 'Error: service env update not supported' },
-                ],
-              };
+              if (!key || !value)
+                return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
+              return wrap(() =>
+                this.client.updateServiceEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+              );
             case 'delete':
               if (!env_uuid)
                 return { content: [{ type: 'text' as const, text: 'Error: env_uuid required' }] };
               return wrap(() => this.client.deleteServiceEnvVar(uuid, env_uuid));
+            case 'bulk_update':
+              if (!data)
+                return { content: [{ type: 'text' as const, text: 'Error: data array required' }] };
+              return wrap(() => this.client.bulkUpdateServiceEnvVars(uuid, { data }));
+          }
+        } else {
+          switch (action) {
+            case 'list':
+              return wrap(() => this.client.listDatabaseEnvVars(uuid));
+            case 'create':
+              if (!key || !value)
+                return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
+              return wrap(() =>
+                this.client.createDatabaseEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+              );
+            case 'update':
+              if (!key || !value)
+                return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
+              return wrap(() =>
+                this.client.updateDatabaseEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+              );
+            case 'delete':
+              if (!env_uuid)
+                return { content: [{ type: 'text' as const, text: 'Error: env_uuid required' }] };
+              return wrap(() => this.client.deleteDatabaseEnvVar(uuid, env_uuid));
+            case 'bulk_update':
+              if (!data)
+                return { content: [{ type: 'text' as const, text: 'Error: data array required' }] };
+              return wrap(() => this.client.bulkUpdateDatabaseEnvVars(uuid, { data }));
           }
         }
       },
@@ -1216,11 +1248,22 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'github_apps',
-      'Manage GitHub Apps: list/get/create/update/delete',
+      'Manage GitHub Apps: list/get/create/update/delete/list_repos/list_branches',
       {
-        action: z.enum(['list', 'get', 'create', 'update', 'delete']),
+        action: z.enum([
+          'list',
+          'get',
+          'create',
+          'update',
+          'delete',
+          'list_repos',
+          'list_branches',
+        ]),
         // GitHub apps use integer id, not uuid
         id: z.number().optional(),
+        // Repo/branch browsing
+        owner: z.string().optional(),
+        repo: z.string().optional(),
         // Create/Update fields
         name: z.string().optional(),
         organization: z.string().optional(),
@@ -1297,6 +1340,15 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
             return wrap(() => this.client.deleteGitHubApp(id));
+          case 'list_repos':
+            if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
+            return wrap(() => this.client.listGitHubAppRepositories(id));
+          case 'list_branches':
+            if (!id || !args.owner || !args.repo)
+              return {
+                content: [{ type: 'text' as const, text: 'Error: id, owner, repo required' }],
+              };
+            return wrap(() => this.client.listGitHubAppBranches(id, args.owner!, args.repo!));
         }
       },
     );
@@ -1306,7 +1358,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'database_backups',
-      'Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete',
+      'Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete/delete_execution',
       {
         action: z.enum([
           'list_schedules',
@@ -1316,6 +1368,7 @@ export class CoolifyMcpServer extends McpServer {
           'create',
           'update',
           'delete',
+          'delete_execution',
         ]),
         database_uuid: z.string(),
         backup_uuid: z.string().optional(),
@@ -1374,6 +1427,16 @@ export class CoolifyMcpServer extends McpServer {
             if (!backup_uuid)
               return { content: [{ type: 'text' as const, text: 'Error: backup_uuid required' }] };
             return wrap(() => this.client.deleteDatabaseBackup(database_uuid, backup_uuid));
+          case 'delete_execution':
+            if (!backup_uuid || !execution_uuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: backup_uuid, execution_uuid required' },
+                ],
+              };
+            return wrap(() =>
+              this.client.deleteBackupExecution(database_uuid, backup_uuid, execution_uuid),
+            );
         }
       },
     );
@@ -1447,6 +1510,288 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() => this.client.validateCloudToken(uuid));
         }
       },
+    );
+
+    // =========================================================================
+    // Storages (1 tool - consolidated for app/db/service)
+    // =========================================================================
+    this.tool(
+      'storages',
+      'Manage persistent/file storages for app, database, or service: list/create/update/delete',
+      {
+        resource: z.enum(['application', 'database', 'service']),
+        action: z.enum(['list', 'create', 'update', 'delete']),
+        uuid: z.string(),
+        storage_uuid: z.string().optional(),
+        type: z.enum(['persistent', 'file']).optional(),
+        mount_path: z.string().optional(),
+        name: z.string().optional(),
+        host_path: z.string().optional(),
+        content: z.string().optional(),
+        is_directory: z.boolean().optional(),
+        fs_path: z.string().optional(),
+        is_preview_suffix_enabled: z.boolean().optional(),
+      },
+      async (args) => {
+        const { resource, action, uuid, storage_uuid } = args;
+        const createData = {
+          type: args.type!,
+          mount_path: args.mount_path!,
+          name: args.name,
+          host_path: args.host_path,
+          content: args.content,
+          is_directory: args.is_directory,
+          fs_path: args.fs_path,
+          is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+        };
+        const updateData = {
+          uuid: storage_uuid,
+          type: args.type!,
+          is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+          name: args.name,
+          mount_path: args.mount_path,
+          host_path: args.host_path,
+          content: args.content,
+          is_directory: args.is_directory,
+        };
+        const methods: Record<string, Record<string, () => Promise<unknown>>> = {
+          application: {
+            list: () => this.client.listApplicationStorages(uuid),
+            create: () => this.client.createApplicationStorage(uuid, createData),
+            update: () => this.client.updateApplicationStorage(uuid, updateData),
+            delete: () => this.client.deleteApplicationStorage(uuid, storage_uuid!),
+          },
+          database: {
+            list: () => this.client.listDatabaseStorages(uuid),
+            create: () => this.client.createDatabaseStorage(uuid, createData),
+            update: () => this.client.updateDatabaseStorage(uuid, updateData),
+            delete: () => this.client.deleteDatabaseStorage(uuid, storage_uuid!),
+          },
+          service: {
+            list: () => this.client.listServiceStorages(uuid),
+            create: () => this.client.createServiceStorage(uuid, createData),
+            update: () => this.client.updateServiceStorage(uuid, updateData),
+            delete: () => this.client.deleteServiceStorage(uuid, storage_uuid!),
+          },
+        };
+        if (action === 'create' && (!args.type || !args.mount_path))
+          return { content: [{ type: 'text' as const, text: 'Error: type, mount_path required' }] };
+        if (action === 'update' && !args.type)
+          return { content: [{ type: 'text' as const, text: 'Error: type required' }] };
+        if (action === 'delete' && !storage_uuid)
+          return { content: [{ type: 'text' as const, text: 'Error: storage_uuid required' }] };
+        return wrap(() => methods[resource][action]());
+      },
+    );
+
+    // =========================================================================
+    // Scheduled Tasks (1 tool - consolidated for app/service)
+    // =========================================================================
+    this.tool(
+      'scheduled_tasks',
+      'Manage scheduled tasks for app or service: list/create/update/delete/list_executions',
+      {
+        resource: z.enum(['application', 'service']),
+        action: z.enum(['list', 'create', 'update', 'delete', 'list_executions']),
+        uuid: z.string(),
+        task_uuid: z.string().optional(),
+        name: z.string().optional(),
+        command: z.string().optional(),
+        frequency: z.string().optional(),
+        container: z.string().optional(),
+        timeout: z.number().optional(),
+        enabled: z.boolean().optional(),
+      },
+      async (args) => {
+        const { resource, action, uuid, task_uuid } = args;
+        const isApp = resource === 'application';
+        switch (action) {
+          case 'list':
+            return wrap(() =>
+              isApp
+                ? this.client.listApplicationScheduledTasks(uuid)
+                : this.client.listServiceScheduledTasks(uuid),
+            );
+          case 'create':
+            if (!args.name || !args.command || !args.frequency)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: name, command, frequency required' },
+                ],
+              };
+            return wrap(() => {
+              const data = {
+                name: args.name!,
+                command: args.command!,
+                frequency: args.frequency!,
+                container: args.container,
+                timeout: args.timeout,
+                enabled: args.enabled,
+              };
+              return isApp
+                ? this.client.createApplicationScheduledTask(uuid, data)
+                : this.client.createServiceScheduledTask(uuid, data);
+            });
+          case 'update':
+            if (!task_uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: task_uuid required' }] };
+            return wrap(() => {
+              const data = {
+                name: args.name,
+                command: args.command,
+                frequency: args.frequency,
+                container: args.container,
+                timeout: args.timeout,
+                enabled: args.enabled,
+              };
+              return isApp
+                ? this.client.updateApplicationScheduledTask(uuid, task_uuid, data)
+                : this.client.updateServiceScheduledTask(uuid, task_uuid, data);
+            });
+          case 'delete':
+            if (!task_uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: task_uuid required' }] };
+            return wrap(() =>
+              isApp
+                ? this.client.deleteApplicationScheduledTask(uuid, task_uuid)
+                : this.client.deleteServiceScheduledTask(uuid, task_uuid),
+            );
+          case 'list_executions':
+            if (!task_uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: task_uuid required' }] };
+            return wrap(() =>
+              isApp
+                ? this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
+                : this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
+            );
+        }
+      },
+    );
+
+    // =========================================================================
+    // Application Previews (1 tool)
+    // =========================================================================
+    this.tool(
+      'delete_preview',
+      'Delete a preview deployment for an application',
+      { uuid: z.string(), pull_request_id: z.number() },
+      async ({ uuid, pull_request_id }) =>
+        wrap(() => this.client.deleteApplicationPreview(uuid, pull_request_id)),
+    );
+
+    // =========================================================================
+    // Hetzner Cloud (1 tool - consolidated)
+    // =========================================================================
+    this.tool(
+      'hetzner',
+      'Hetzner cloud: list_locations/list_server_types/list_images/list_ssh_keys/create_server',
+      {
+        action: z.enum([
+          'list_locations',
+          'list_server_types',
+          'list_images',
+          'list_ssh_keys',
+          'create_server',
+        ]),
+        cloud_provider_token_uuid: z.string().optional(),
+        location: z.string().optional(),
+        server_type: z.string().optional(),
+        image: z.number().optional(),
+        name: z.string().optional(),
+        private_key_uuid: z.string().optional(),
+        enable_ipv4: z.boolean().optional(),
+        enable_ipv6: z.boolean().optional(),
+        hetzner_ssh_key_ids: z.array(z.number()).optional(),
+        cloud_init_script: z.string().optional(),
+        instant_validate: z.boolean().optional(),
+      },
+      async (args) => {
+        const { action, cloud_provider_token_uuid: tokenUuid } = args;
+        switch (action) {
+          case 'list_locations':
+            if (!tokenUuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: cloud_provider_token_uuid required' },
+                ],
+              };
+            return wrap(() => this.client.listHetznerLocations(tokenUuid));
+          case 'list_server_types':
+            if (!tokenUuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: cloud_provider_token_uuid required' },
+                ],
+              };
+            return wrap(() => this.client.listHetznerServerTypes(tokenUuid));
+          case 'list_images':
+            if (!tokenUuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: cloud_provider_token_uuid required' },
+                ],
+              };
+            return wrap(() => this.client.listHetznerImages(tokenUuid));
+          case 'list_ssh_keys':
+            if (!tokenUuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: cloud_provider_token_uuid required' },
+                ],
+              };
+            return wrap(() => this.client.listHetznerSSHKeys(tokenUuid));
+          case 'create_server':
+            if (!args.location || !args.server_type || !args.image || !args.private_key_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: location, server_type, image, private_key_uuid required',
+                  },
+                ],
+              };
+            return wrap(() =>
+              this.client.createHetznerServer({
+                cloud_provider_token_uuid: tokenUuid,
+                location: args.location!,
+                server_type: args.server_type!,
+                image: args.image!,
+                name: args.name,
+                private_key_uuid: args.private_key_uuid!,
+                enable_ipv4: args.enable_ipv4,
+                enable_ipv6: args.enable_ipv6,
+                hetzner_ssh_key_ids: args.hetzner_ssh_key_ids,
+                cloud_init_script: args.cloud_init_script,
+                instant_validate: args.instant_validate,
+              }),
+            );
+        }
+      },
+    );
+
+    // =========================================================================
+    // Resources (1 tool)
+    // =========================================================================
+    this.tool('list_resources', 'List all resources across infrastructure', {}, async () =>
+      wrap(() => this.client.listResources()),
+    );
+
+    // =========================================================================
+    // Health (1 tool)
+    // =========================================================================
+    this.tool('health', 'Check Coolify API health', {}, async () =>
+      wrap(() => this.client.getHealth()),
+    );
+
+    // =========================================================================
+    // API Enable/Disable (1 tool)
+    // =========================================================================
+    this.tool(
+      'api_control',
+      'Enable or disable the Coolify API (requires root)',
+      { action: z.enum(['enable', 'disable']) },
+      async ({ action }) =>
+        wrap(() => (action === 'enable' ? this.client.enableApi() : this.client.disableApi())),
     );
 
     // =========================================================================

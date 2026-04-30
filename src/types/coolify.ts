@@ -1129,6 +1129,176 @@ export interface BatchOperationResult {
 }
 
 // =============================================================================
+// Storage Types (Persistent & File Storages)
+// =============================================================================
+
+export interface Storage {
+  id: number;
+  uuid: string;
+  name?: string;
+  mount_path: string;
+  host_path?: string;
+  content?: string;
+  is_directory?: boolean;
+  fs_path?: string;
+  type: 'persistent' | 'file';
+  is_preview_suffix_enabled?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StorageListResponse {
+  persistent_storages: Storage[];
+  file_storages: Storage[];
+}
+
+export interface CreateStorageRequest {
+  type: 'persistent' | 'file';
+  mount_path: string;
+  name?: string;
+  host_path?: string;
+  content?: string;
+  is_directory?: boolean;
+  fs_path?: string;
+  is_preview_suffix_enabled?: boolean;
+}
+
+export interface UpdateStorageRequest {
+  uuid?: string;
+  id?: number;
+  type: 'persistent' | 'file';
+  is_preview_suffix_enabled?: boolean;
+  name?: string;
+  mount_path?: string;
+  host_path?: string;
+  content?: string;
+  is_directory?: boolean;
+}
+
+// =============================================================================
+// Scheduled Task Types
+// =============================================================================
+
+export interface ScheduledTask {
+  id: number;
+  uuid: string;
+  enabled: boolean;
+  name: string;
+  command: string;
+  frequency: string;
+  container?: string;
+  timeout: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledTaskExecution {
+  uuid: string;
+  status: 'success' | 'failed' | 'running';
+  message?: string;
+  retry_count: number;
+  duration?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateScheduledTaskRequest {
+  name: string;
+  command: string;
+  frequency: string;
+  container?: string;
+  timeout?: number;
+  enabled?: boolean;
+}
+
+export interface UpdateScheduledTaskRequest {
+  name?: string;
+  command?: string;
+  frequency?: string;
+  container?: string;
+  timeout?: number;
+  enabled?: boolean;
+}
+
+// =============================================================================
+// Hetzner Cloud Types
+// =============================================================================
+
+export interface HetznerLocation {
+  id: number;
+  name: string;
+  description: string;
+  country: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface HetznerServerType {
+  id: number;
+  name: string;
+  description: string;
+  cores: number;
+  memory: number;
+  disk: number;
+  architecture: string;
+}
+
+export interface HetznerImage {
+  id: number;
+  name: string;
+  description: string;
+  type: string;
+  os_flavor: string;
+  os_version: string;
+  architecture: string;
+}
+
+export interface HetznerSSHKey {
+  id: number;
+  name: string;
+  fingerprint: string;
+  public_key: string;
+}
+
+export interface CreateHetznerServerRequest {
+  cloud_provider_token_uuid?: string;
+  location: string;
+  server_type: string;
+  image: number;
+  name?: string;
+  private_key_uuid: string;
+  enable_ipv4?: boolean;
+  enable_ipv6?: boolean;
+  hetzner_ssh_key_ids?: number[];
+  cloud_init_script?: string;
+  instant_validate?: boolean;
+}
+
+export interface CreateHetznerServerResponse {
+  uuid: string;
+  hetzner_server_id: number;
+  ip: string;
+}
+
+// =============================================================================
+// GitHub App Repository Types
+// =============================================================================
+
+export interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  html_url: string;
+  default_branch: string;
+}
+
+export interface GitHubBranch {
+  name: string;
+}
+
+// =============================================================================
 // Response Enhancement Types (HATEOAS-style actions)
 // =============================================================================
 
