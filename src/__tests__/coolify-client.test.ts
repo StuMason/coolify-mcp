@@ -3622,6 +3622,22 @@ describe('CoolifyClient', () => {
           }),
         );
       });
+
+      it('should send only is_runtime when buildtime is left undefined', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
+
+        await client.bulkEnvUpdate(['app-1'], 'API_KEY', 'val', undefined, false);
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/applications/app-1/envs',
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({ key: 'API_KEY', value: 'val', is_runtime: false }),
+          }),
+        );
+      });
     });
 
     describe('stopAllApps', () => {
