@@ -409,7 +409,8 @@ export interface EnvironmentVariable {
   uuid: string;
   key: string;
   value: string;
-  is_build_time: boolean;
+  is_buildtime: boolean;
+  is_runtime: boolean;
   is_literal: boolean;
   is_multiline: boolean;
   is_preview: boolean;
@@ -431,7 +432,8 @@ export interface CreateEnvVarRequest {
   is_literal?: boolean;
   is_multiline?: boolean;
   is_shown_once?: boolean;
-  is_build_time?: boolean;
+  is_buildtime?: boolean;
+  is_runtime?: boolean;
 }
 
 export interface UpdateEnvVarRequest {
@@ -441,7 +443,8 @@ export interface UpdateEnvVarRequest {
   is_literal?: boolean;
   is_multiline?: boolean;
   is_shown_once?: boolean;
-  is_build_time?: boolean;
+  is_buildtime?: boolean;
+  is_runtime?: boolean;
 }
 
 export interface BulkUpdateEnvVarsRequest {
@@ -453,7 +456,8 @@ export interface EnvVarSummary {
   uuid: string;
   key: string;
   value: string;
-  is_build_time: boolean;
+  is_buildtime: boolean;
+  is_runtime: boolean;
 }
 
 // =============================================================================
@@ -1021,7 +1025,7 @@ export interface ApplicationDiagnostic {
   logs: string | null;
   environment_variables: {
     count: number;
-    variables: Array<{ key: string; is_build_time: boolean }>;
+    variables: Array<{ key: string; is_buildtime: boolean; is_runtime: boolean }>;
   };
   recent_deployments: Array<{
     uuid: string;

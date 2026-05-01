@@ -1612,7 +1612,8 @@ describe('CoolifyClient', () => {
       uuid: 'env-var-uuid',
       key: 'API_KEY',
       value: 'secret123',
-      is_build_time: false,
+      is_buildtime: false,
+      is_runtime: true,
     };
 
     it('should list application env vars', async () => {
@@ -1633,7 +1634,8 @@ describe('CoolifyClient', () => {
         uuid: 'env-var-uuid',
         key: 'API_KEY',
         value: 'secret123',
-        is_build_time: false,
+        is_buildtime: false,
+        is_runtime: true,
         is_literal: true,
         is_multiline: false,
         is_preview: false,
@@ -1647,13 +1649,14 @@ describe('CoolifyClient', () => {
 
       const result = await client.listApplicationEnvVars('app-uuid', { summary: true });
 
-      // Summary should only include uuid, key, value, is_build_time
+      // Summary should only include uuid, key, value, is_buildtime, is_runtime
       expect(result).toEqual([
         {
           uuid: 'env-var-uuid',
           key: 'API_KEY',
           value: 'secret123',
-          is_build_time: false,
+          is_buildtime: false,
+          is_runtime: true,
         },
       ]);
     });
@@ -1664,10 +1667,37 @@ describe('CoolifyClient', () => {
       const result = await client.createApplicationEnvVar('app-uuid', {
         key: 'NEW_VAR',
         value: 'new-value',
-        is_build_time: true,
+        is_buildtime: true,
       });
 
       expect(result).toEqual({ uuid: 'new-env-uuid' });
+    });
+
+    it('should create runtime-only env var (no Dockerfile ARG injection)', async () => {
+      // Regression for #135: setting is_buildtime=false avoids multiline values
+      // (PEM keys, etc.) being injected as Dockerfile ARG and breaking the build.
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-env-uuid' }));
+
+      await client.createApplicationEnvVar('app-uuid', {
+        key: 'PASSPORT_PRIVATE_KEY',
+        value: '-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/envs',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"is_buildtime":false'),
+        }),
+      );
+      const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body);
+      expect(body).toMatchObject({
+        key: 'PASSPORT_PRIVATE_KEY',
+        is_buildtime: false,
+        is_runtime: true,
+      });
     });
 
     it('should update application env var', async () => {
@@ -1679,6 +1709,25 @@ describe('CoolifyClient', () => {
       });
 
       expect(result).toEqual({ message: 'Updated' });
+    });
+
+    it('should update env var to runtime-only (flip is_buildtime=false)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
+
+      await client.updateApplicationEnvVar('app-uuid', {
+        key: 'NODE_ENV',
+        value: 'production',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+
+      const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body);
+      expect(body).toEqual({
+        key: 'NODE_ENV',
+        value: 'production',
+        is_buildtime: false,
+        is_runtime: true,
+      });
     });
 
     it('should bulk update application env vars', async () => {
@@ -2889,9 +2938,17 @@ describe('CoolifyClient', () => {
           uuid: 'env-1',
           key: 'DATABASE_URL',
           value: 'postgres://...',
-          is_build_time: false,
+          is_buildtime: false,
+          is_runtime: true,
         },
-        { id: 2, uuid: 'env-2', key: 'NODE_ENV', value: 'production', is_build_time: true },
+        {
+          id: 2,
+          uuid: 'env-2',
+          key: 'NODE_ENV',
+          value: 'production',
+          is_buildtime: true,
+          is_runtime: true,
+        },
       ];
 
       const mockDeployments = [
@@ -2944,8 +3001,8 @@ describe('CoolifyClient', () => {
         expect(result.logs).toBe(mockLogs);
         expect(result.environment_variables.count).toBe(2);
         expect(result.environment_variables.variables).toEqual([
-          { key: 'DATABASE_URL', is_build_time: false },
-          { key: 'NODE_ENV', is_build_time: true },
+          { key: 'DATABASE_URL', is_buildtime: false, is_runtime: true },
+          { key: 'NODE_ENV', is_buildtime: true, is_runtime: true },
         ]);
         expect(result.recent_deployments).toHaveLength(2);
         expect(result.errors).toBeUndefined();
@@ -3528,19 +3585,40 @@ describe('CoolifyClient', () => {
         expect(mockFetch).not.toHaveBeenCalled();
       });
 
-      it('should send build time flag when specified', async () => {
+      it('should send buildtime flag when specified', async () => {
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
 
         await client.bulkEnvUpdate(['app-1'], 'BUILD_VAR', 'value', true);
 
-        // Verify the PATCH call was made with is_build_time
+        // Verify the PATCH call was made with is_buildtime (one word — Coolify API field name)
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:3000/api/v1/applications/app-1/envs',
           expect.objectContaining({
             method: 'PATCH',
-            body: JSON.stringify({ key: 'BUILD_VAR', value: 'value', is_build_time: true }),
+            body: JSON.stringify({ key: 'BUILD_VAR', value: 'value', is_buildtime: true }),
+          }),
+        );
+      });
+
+      it('should send both buildtime and runtime flags for runtime-only vars', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
+
+        await client.bulkEnvUpdate(['app-1'], 'PEM_KEY', 'multiline-value', false, true);
+
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/applications/app-1/envs',
+          expect.objectContaining({
+            method: 'PATCH',
+            body: JSON.stringify({
+              key: 'PEM_KEY',
+              value: 'multiline-value',
+              is_buildtime: false,
+              is_runtime: true,
+            }),
           }),
         );
       });

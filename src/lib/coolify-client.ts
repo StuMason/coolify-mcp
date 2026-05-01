@@ -322,7 +322,8 @@ function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
     uuid: envVar.uuid,
     key: envVar.key,
     value: envVar.value,
-    is_build_time: envVar.is_build_time,
+    is_buildtime: envVar.is_buildtime,
+    is_runtime: envVar.is_runtime,
   };
 }
 
@@ -1433,7 +1434,8 @@ export class CoolifyClient {
         count: envVars?.length || 0,
         variables: (envVars || []).map((v) => ({
           key: v.key,
-          is_build_time: v.is_build_time ?? false,
+          is_buildtime: v.is_buildtime ?? false,
+          is_runtime: v.is_runtime ?? true,
         })),
       },
       recent_deployments: (deployments || []).slice(0, 5).map((d) => ({
@@ -1738,13 +1740,15 @@ export class CoolifyClient {
    * @param appUuids - Array of application UUIDs
    * @param key - Environment variable key
    * @param value - Environment variable value
-   * @param isBuildTime - Whether this is a build-time variable (default: false)
+   * @param isBuildtime - Sets the build-time flag on the variable when provided
+   * @param isRuntime - Sets the runtime flag on the variable when provided
    */
   async bulkEnvUpdate(
     appUuids: string[],
     key: string,
     value: string,
-    isBuildTime: boolean = false,
+    isBuildtime?: boolean,
+    isRuntime?: boolean,
   ): Promise<BatchOperationResult> {
     // Early return for empty array - avoid unnecessary API call
     if (appUuids.length === 0) {
@@ -1767,7 +1771,12 @@ export class CoolifyClient {
 
     const results = await Promise.allSettled(
       appUuids.map((uuid) =>
-        this.updateApplicationEnvVar(uuid, { key, value, is_build_time: isBuildTime }),
+        this.updateApplicationEnvVar(uuid, {
+          key,
+          value,
+          is_buildtime: isBuildtime,
+          is_runtime: isRuntime,
+        }),
       ),
     );
 
