@@ -100,6 +100,7 @@ The Coolify OpenAPI docs are unreliable — always test against the real API. Kn
 
 - **`docker_compose_raw` requires base64** — The API expects base64-encoded YAML, but the field name suggests raw content. The client auto-encodes this field so models and callers can pass plain YAML.
 - **Validation errors vary in format** — The `errors` field in API error responses can contain `string[]` or plain `string` values. The client handles both.
+- **Env var field names are `is_buildtime` and `is_runtime`** (one word each), not `is_build_time` (two words). On `POST /applications/{uuid}/envs` and `PATCH /applications/{uuid}/envs` the wrong name returns HTTP 422 `"This field is not allowed."`; on `PATCH /applications/{uuid}/envs/bulk` the wrong name is silently ignored (request returns 201 but the flag stays at the default). Verified against Coolify v4.0.0-beta.473 in #174 / #135. When adding env-var related code or tests, mirror the API field names exactly — do not paraphrase to `is_build_time`.
 
 ## TypeScript Standards
 
