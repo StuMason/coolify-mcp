@@ -3,12 +3,19 @@ import { CoolifyClient } from '../lib/coolify-client.js';
 import type { ServiceType, CreateServiceRequest } from '../types/coolify.js';
 
 // Helper to create mock response
-function mockResponse(data: unknown, ok = true, status = 200): Response {
+function mockResponse(
+  data: unknown,
+  ok = true,
+  status = 200,
+  contentType = 'application/json',
+): Response {
+  const body = contentType.includes('application/json') ? JSON.stringify(data) : String(data);
   return {
     ok,
     status,
     statusText: ok ? 'OK' : 'Error',
-    text: async () => JSON.stringify(data),
+    headers: new Headers({ 'Content-Type': contentType }),
+    text: async () => body,
   } as Response;
 }
 
@@ -715,6 +722,29 @@ describe('CoolifyClient', () => {
 
       const result = await client.deleteServer('test-uuid');
       expect(result).toEqual({});
+    });
+
+    it('should return plain text responses without JSON parsing', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse('log line 1\nlog line 2', true, 200, 'text/plain; charset=utf-8'),
+      );
+
+      const result = await client.getApplicationLogs('app-uuid', 50);
+
+      expect(result).toBe('log line 1\nlog line 2');
+    });
+
+    it('should fall back to raw text when JSON responses are malformed', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        text: async () => 'not valid json',
+      } as Response);
+
+      const result = await client.getApplicationLogs('app-uuid', 50);
+
+      expect(result).toBe('not valid json');
     });
 
     it('should handle API errors without message', async () => {
