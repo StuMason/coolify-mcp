@@ -7,13 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-05-11
+
 ### Security
 
-- **`env_vars` list now masks values by default** (#159, thanks @daniel-rudaev for reporting) — `value` (and `real_value` on the full projection) on `env_vars` list responses is now replaced with `'***'` so plaintext secrets are not leaked to MCP clients / LLMs. Metadata (uuid, key, `is_buildtime`, `is_runtime`, timestamps, ids) is untouched. Applied at the API boundary in `listApplicationEnvVars` and `listServiceEnvVars` so both the summary and full projections are protected. `bulk_env_update` continues to return `MessageResponse`-shape data with no values echoed.
+- **`env_vars` list now masks values by default** (#159 / #182, thanks @daniel-rudaev for reporting) — `value` and `real_value` on `env_vars` list responses are now replaced with `***` so plaintext secrets are not leaked to MCP clients / LLMs. Metadata (uuid, key, `is_buildtime`, `is_runtime`, timestamps, ids) is untouched. Applied at the API boundary in `listApplicationEnvVars` and `listServiceEnvVars` so both the summary and full projections are protected. `bulk_env_update` continues to return `MessageResponse`-shape data with no values echoed.
 
 ### Changed (behavioural, may surprise existing callers)
 
-- **`env_vars` list `value` field is now `'\***'`by default.** Callers that need the plaintext value must pass`reveal: true`on the`env_vars`list action (e.g. "what is FOO set to right now?"). If you were relying on`value`being present in list responses, add`reveal: true`to your call. The underlying client methods`listApplicationEnvVars(uuid, options)`and`listServiceEnvVars(uuid, options)`now accept`reveal?: boolean` on the options object.
+- **`env_vars` list values are masked by default.** Callers that need the plaintext value must pass `reveal: true` on the `env_vars` list action (e.g. "what is FOO set to right now?"). The underlying client methods `listApplicationEnvVars(uuid, options)` and `listServiceEnvVars(uuid, options)` now accept `reveal?: boolean` on the options object.
+- **Env var field names renamed to match Coolify API** (#174 / #135, thanks @kashik0i) — `is_build_time` → `is_buildtime` (one word) and new `is_runtime` flag. The previous `is_build_time` name was being rejected by the Coolify API with HTTP 422 on single endpoints and silently dropped on the bulk endpoint. Callers that were passing `is_build_time` were getting either errors or unchanged variables. Documented as a permanent gotcha in CLAUDE.md.
+
+### Fixed
+
+- **Defensive parsing for non-JSON responses** (#177 / #163, thanks @zxyasfas, @Erudition for reporting) — `request<T>()` now checks `Content-Type` and falls back to raw text when the server returns plain text or malformed JSON. Previously threw `SyntaxError: Unexpected token` on Coolify 4.0.0-beta.474 endpoints that started returning plain text. `application/json` and `+json` variants both supported; empty content-type treated as JSON for backward compat.
+- **`is_runtime` flag now flows through `bulkEnvUpdate`** (#174) — was previously missing from the bulk-update signature, so PEM-key-shaped multiline secrets couldn't be set as runtime-only across multiple apps in one call.
+
+### Internal
+
+- Dependency bumps via dependabot (#170, #176, #180, #181): jest-junit, jest, lint-staged, and the minor-and-patch group of 8 dev-deps.
+- Dependabot config now ignores TypeScript major-version bumps (#179) — TS 6.0.3 (#171) broke the build matrix; majors will be taken as deliberate migration PRs from now on.
 
 ## [2.8.1] - 2026-04-28
 
