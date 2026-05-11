@@ -16,6 +16,11 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    # TypeScript majors regularly ship breaking type changes (e.g. 6.0.3 broke
+    # the build (24.x) matrix in #171). Pin to minors until we explicitly migrate.
+    ignore:
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: 'chore(deps)'
     labels:
