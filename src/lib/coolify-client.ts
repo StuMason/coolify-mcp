@@ -328,6 +328,43 @@ function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
 }
 
 /**
+ * Sentinel string used to replace plaintext env var values when masking.
+ * Exported via behaviour, not as a public API — clients should treat any
+ * non-real string as "value not returned".
+ */
+const MASKED_VALUE = '***';
+
+/**
+ * Mask the `value` and `real_value` fields on a full {@link EnvironmentVariable}.
+ * All other metadata (uuid, key, flags, timestamps, ids) is preserved verbatim.
+ *
+ * Applied at the API boundary so callers cannot accidentally leak secrets to
+ * an LLM client by forgetting to strip values downstream. Pair with the
+ * `reveal: true` opt-in on list methods when the caller genuinely needs the
+ * plaintext (e.g. "what is FOO set to right now?").
+ */
+function maskEnvVar(envVar: EnvironmentVariable): EnvironmentVariable {
+  const masked: EnvironmentVariable = {
+    ...envVar,
+    value: MASKED_VALUE,
+  };
+  if (envVar.real_value !== undefined) {
+    masked.real_value = MASKED_VALUE;
+  }
+  return masked;
+}
+
+/**
+ * Mask the `value` field on an {@link EnvVarSummary}. Metadata is preserved.
+ */
+function maskEnvVarSummary(envVar: EnvVarSummary): EnvVarSummary {
+  return {
+    ...envVar,
+    value: MASKED_VALUE,
+  };
+}
+
+/**
  * HTTP client for the Coolify API
  */
 export class CoolifyClient {
@@ -768,12 +805,24 @@ export class CoolifyClient {
   // Application Environment Variables
   // ===========================================================================
 
+  /**
+   * List env vars for an application.
+   *
+   * Default behaviour masks `value` (and `real_value` on the full projection)
+   * with a sentinel string so secrets are not leaked to MCP clients. Pass
+   * `reveal: true` when the caller explicitly needs the plaintext value.
+   */
   async listApplicationEnvVars(
     uuid: string,
-    options?: { summary?: boolean },
+    options?: { summary?: boolean; reveal?: boolean },
   ): Promise<EnvironmentVariable[] | EnvVarSummary[]> {
     const envVars = await this.request<EnvironmentVariable[]>(`/applications/${uuid}/envs`);
-    return options?.summary ? envVars.map(toEnvVarSummary) : envVars;
+    const reveal = options?.reveal === true;
+    if (options?.summary) {
+      const summaries = envVars.map(toEnvVarSummary);
+      return reveal ? summaries : summaries.map(maskEnvVarSummary);
+    }
+    return reveal ? envVars : envVars.map(maskEnvVar);
   }
 
   async createApplicationEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
@@ -990,8 +1039,19 @@ export class CoolifyClient {
   // Service Environment Variables
   // ===========================================================================
 
-  async listServiceEnvVars(uuid: string): Promise<EnvironmentVariable[]> {
-    return this.request<EnvironmentVariable[]>(`/services/${uuid}/envs`);
+  /**
+   * List env vars for a service.
+   *
+   * Default behaviour masks `value` (and `real_value`) with a sentinel string
+   * so secrets are not leaked to MCP clients. Pass `reveal: true` when the
+   * caller explicitly needs the plaintext value.
+   */
+  async listServiceEnvVars(
+    uuid: string,
+    options?: { reveal?: boolean },
+  ): Promise<EnvironmentVariable[]> {
+    const envVars = await this.request<EnvironmentVariable[]>(`/services/${uuid}/envs`);
+    return options?.reveal === true ? envVars : envVars.map(maskEnvVar);
   }
 
   async createServiceEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {

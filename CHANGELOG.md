@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`env_vars` list now masks values by default** (#159, thanks @daniel-rudaev for reporting) — `value` (and `real_value` on the full projection) on `env_vars` list responses is now replaced with `'***'` so plaintext secrets are not leaked to MCP clients / LLMs. Metadata (uuid, key, `is_buildtime`, `is_runtime`, timestamps, ids) is untouched. Applied at the API boundary in `listApplicationEnvVars` and `listServiceEnvVars` so both the summary and full projections are protected. `bulk_env_update` continues to return `MessageResponse`-shape data with no values echoed.
+
+### Changed (behavioural, may surprise existing callers)
+
+- **`env_vars` list `value` field is now `'\***'`by default.** Callers that need the plaintext value must pass`reveal: true`on the`env_vars`list action (e.g. "what is FOO set to right now?"). If you were relying on`value`being present in list responses, add`reveal: true`to your call. The underlying client methods`listApplicationEnvVars(uuid, options)`and`listServiceEnvVars(uuid, options)`now accept`reveal?: boolean` on the options object.
+
 ## [2.8.1] - 2026-04-28
 
 ### Added
