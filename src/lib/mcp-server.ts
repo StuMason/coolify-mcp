@@ -899,7 +899,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'env_vars',
-      'Manage env vars for app or service. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.',
+      "Manage env vars for app or service. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
       {
         resource: z.enum(['application', 'service']),
         action: z.enum(['list', 'create', 'update', 'delete']),
@@ -909,12 +909,25 @@ export class CoolifyMcpServer extends McpServer {
         env_uuid: z.string().optional(),
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
+        reveal: z.boolean().optional(),
       },
-      async ({ resource, action, uuid, key, value, env_uuid, is_buildtime, is_runtime }) => {
+      async ({
+        resource,
+        action,
+        uuid,
+        key,
+        value,
+        env_uuid,
+        is_buildtime,
+        is_runtime,
+        reveal,
+      }) => {
         if (resource === 'application') {
           switch (action) {
             case 'list':
-              return wrap(() => this.client.listApplicationEnvVars(uuid, { summary: true }));
+              return wrap(() =>
+                this.client.listApplicationEnvVars(uuid, { summary: true, reveal }),
+              );
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
@@ -945,7 +958,7 @@ export class CoolifyMcpServer extends McpServer {
         } else {
           switch (action) {
             case 'list':
-              return wrap(() => this.client.listServiceEnvVars(uuid));
+              return wrap(() => this.client.listServiceEnvVars(uuid, { reveal }));
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };

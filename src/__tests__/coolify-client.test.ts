@@ -1646,19 +1646,74 @@ describe('CoolifyClient', () => {
       is_runtime: true,
     };
 
-    it('should list application env vars', async () => {
+    it('should list application env vars with values masked by default (#159)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
 
       const result = await client.listApplicationEnvVars('app-uuid');
 
-      expect(result).toEqual([mockEnvVar]);
+      // value masked, metadata preserved
+      expect(result).toEqual([
+        {
+          uuid: 'env-var-uuid',
+          key: 'API_KEY',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+        },
+      ]);
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/applications/app-uuid/envs',
         expect.any(Object),
       );
     });
 
-    it('should list application env vars with summary', async () => {
+    it('should list application env vars with real_value also masked on the full projection (#159)', async () => {
+      const fullEnvVar = {
+        id: 1,
+        uuid: 'env-var-uuid',
+        key: 'API_KEY',
+        value: 'secret123',
+        real_value: 'secret123',
+        is_buildtime: false,
+        is_runtime: true,
+        is_literal: true,
+        is_multiline: false,
+        is_preview: false,
+        is_shared: false,
+        is_shown_once: false,
+        application_id: 1,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse([fullEnvVar]));
+
+      const result = (await client.listApplicationEnvVars('app-uuid')) as EnvironmentVariable[];
+
+      expect(result[0].value).toBe('***');
+      expect(result[0].real_value).toBe('***');
+      // Metadata stays intact
+      expect(result[0]).toMatchObject({
+        uuid: 'env-var-uuid',
+        key: 'API_KEY',
+        is_buildtime: false,
+        is_runtime: true,
+        is_literal: true,
+        is_preview: false,
+        application_id: 1,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      });
+    });
+
+    it('should list application env vars with real values when reveal=true (#159)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
+
+      const result = await client.listApplicationEnvVars('app-uuid', { reveal: true });
+
+      expect(result).toEqual([mockEnvVar]);
+    });
+
+    it('should list application env vars with summary, masked by default (#159)', async () => {
       const fullEnvVar = {
         id: 1,
         uuid: 'env-var-uuid',
@@ -1679,7 +1734,42 @@ describe('CoolifyClient', () => {
 
       const result = await client.listApplicationEnvVars('app-uuid', { summary: true });
 
-      // Summary should only include uuid, key, value, is_buildtime, is_runtime
+      // Summary should only include uuid, key, value, is_buildtime, is_runtime — and value masked
+      expect(result).toEqual([
+        {
+          uuid: 'env-var-uuid',
+          key: 'API_KEY',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+        },
+      ]);
+    });
+
+    it('should list application env vars with summary and reveal=true returning real values (#159)', async () => {
+      const fullEnvVar = {
+        id: 1,
+        uuid: 'env-var-uuid',
+        key: 'API_KEY',
+        value: 'secret123',
+        is_buildtime: false,
+        is_runtime: true,
+        is_literal: true,
+        is_multiline: false,
+        is_preview: false,
+        is_shared: false,
+        is_shown_once: false,
+        application_id: 1,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse([fullEnvVar]));
+
+      const result = await client.listApplicationEnvVars('app-uuid', {
+        summary: true,
+        reveal: true,
+      });
+
       expect(result).toEqual([
         {
           uuid: 'env-var-uuid',
@@ -2207,16 +2297,64 @@ describe('CoolifyClient', () => {
       value: 'svc-value',
     };
 
-    it('should list service env vars', async () => {
+    it('should list service env vars with values masked by default (#159)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
 
       const result = await client.listServiceEnvVars('test-uuid');
 
-      expect(result).toEqual([mockEnvVar]);
+      // value masked, metadata (uuid, key) preserved
+      expect(result).toEqual([
+        {
+          uuid: 'svc-env-uuid',
+          key: 'SVC_KEY',
+          value: '***',
+        },
+      ]);
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/envs',
         expect.any(Object),
       );
+    });
+
+    it('should list service env vars with real_value masked on the full projection (#159)', async () => {
+      const fullEnvVar = {
+        id: 1,
+        uuid: 'svc-env-uuid',
+        key: 'SVC_KEY',
+        value: 'svc-value',
+        real_value: 'svc-value',
+        is_buildtime: false,
+        is_runtime: true,
+        is_literal: true,
+        is_multiline: false,
+        is_preview: false,
+        is_shared: false,
+        is_shown_once: false,
+        service_id: 42,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse([fullEnvVar]));
+
+      const result = await client.listServiceEnvVars('test-uuid');
+
+      expect(result[0].value).toBe('***');
+      expect(result[0].real_value).toBe('***');
+      expect(result[0]).toMatchObject({
+        uuid: 'svc-env-uuid',
+        key: 'SVC_KEY',
+        is_buildtime: false,
+        is_runtime: true,
+        service_id: 42,
+      });
+    });
+
+    it('should list service env vars with real values when reveal=true (#159)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
+
+      const result = await client.listServiceEnvVars('test-uuid', { reveal: true });
+
+      expect(result).toEqual([mockEnvVar]);
     });
 
     it('should create service env var', async () => {
