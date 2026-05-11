@@ -378,7 +378,21 @@ export class CoolifyClient {
 
       // Handle empty responses (204 No Content, etc.)
       const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
+      const contentType = response.headers?.get('Content-Type')?.toLowerCase() ?? '';
+      const isJsonResponse =
+        !contentType || contentType.includes('application/json') || contentType.includes('+json');
+      let data: unknown = {};
+      if (text) {
+        if (isJsonResponse) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
+        } else {
+          data = text;
+        }
+      }
 
       if (!response.ok) {
         const error = data as ErrorResponse;
