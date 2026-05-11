@@ -6,7 +6,7 @@
  * These tests verify MCP server instantiation and structure.
  */
 import { createRequire } from 'module';
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
   CoolifyMcpServer,
   VERSION,
@@ -192,6 +192,143 @@ describe('CoolifyMcpServer v2', () => {
       // CoolifyClient stores base URL without /api/v1 suffix
       expect(client['baseUrl']).toBe('http://localhost:3000');
       expect(client['accessToken']).toBe('test-token');
+    });
+  });
+
+  describe('env_vars tool handler', () => {
+    // Reach the SDK-registered handler so the is_buildtime / is_runtime
+    // passthrough lines are actually executed (not just type-checked).
+    const callEnvVars = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['env_vars'];
+      return tool.handler(args, {});
+    };
+
+    it('forwards is_buildtime/is_runtime to createApplicationEnvVar', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationEnvVar')
+        .mockResolvedValue({ uuid: 'env-1' });
+
+      await callEnvVars(server, {
+        resource: 'application',
+        action: 'create',
+        uuid: 'app-uuid',
+        key: 'PEM_KEY',
+        value: '-----BEGIN-----',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', {
+        key: 'PEM_KEY',
+        value: '-----BEGIN-----',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+    });
+
+    it('forwards is_buildtime/is_runtime to updateApplicationEnvVar', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateApplicationEnvVar')
+        .mockResolvedValue({ message: 'Updated' });
+
+      await callEnvVars(server, {
+        resource: 'application',
+        action: 'update',
+        uuid: 'app-uuid',
+        key: 'NODE_ENV',
+        value: 'production',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', {
+        key: 'NODE_ENV',
+        value: 'production',
+        is_buildtime: false,
+        is_runtime: true,
+      });
+    });
+
+    it('forwards is_buildtime/is_runtime to createServiceEnvVar', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createServiceEnvVar')
+        .mockResolvedValue({ uuid: 'env-1' });
+
+      await callEnvVars(server, {
+        resource: 'service',
+        action: 'create',
+        uuid: 'svc-uuid',
+        key: 'API_KEY',
+        value: 'secret',
+        is_buildtime: true,
+        is_runtime: undefined,
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-uuid', {
+        key: 'API_KEY',
+        value: 'secret',
+        is_buildtime: true,
+        is_runtime: undefined,
+      });
+    });
+
+    it('returns key/value error when create is missing required fields', async () => {
+      const result = (await callEnvVars(server, {
+        resource: 'application',
+        action: 'create',
+        uuid: 'app-uuid',
+      })) as { content: Array<{ text: string }> };
+      expect(result.content[0].text).toContain('key, value required');
+    });
+
+    it('returns key/value error when service create is missing required fields', async () => {
+      const result = (await callEnvVars(server, {
+        resource: 'service',
+        action: 'create',
+        uuid: 'svc-uuid',
+      })) as { content: Array<{ text: string }> };
+      expect(result.content[0].text).toContain('key, value required');
+    });
+  });
+
+  describe('bulk_env_update tool handler', () => {
+    it('forwards is_buildtime/is_runtime to bulkEnvUpdate', async () => {
+      const spy = jest.spyOn(server['client'], 'bulkEnvUpdate').mockResolvedValue({
+        summary: { total: 2, succeeded: 2, failed: 0 },
+        succeeded: [],
+        failed: [],
+      });
+
+      const tool = (
+        server as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['bulk_env_update'];
+      await tool.handler(
+        {
+          app_uuids: ['app-1', 'app-2'],
+          key: 'PEM_KEY',
+          value: 'multiline',
+          is_buildtime: false,
+          is_runtime: true,
+        },
+        {},
+      );
+
+      expect(spy).toHaveBeenCalledWith(['app-1', 'app-2'], 'PEM_KEY', 'multiline', false, true);
     });
   });
 });
