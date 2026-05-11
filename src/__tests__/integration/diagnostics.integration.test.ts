@@ -67,11 +67,12 @@ describeFn('Diagnostic Integration Tests', () => {
       expect(typeof result.environment_variables.count).toBe('number');
       expect(Array.isArray(result.environment_variables.variables)).toBe(true);
 
-      // Values should be hidden (only key and is_build_time exposed)
+      // Values should be hidden (only key, is_buildtime, is_runtime exposed)
       if (result.environment_variables.variables.length > 0) {
         const firstVar = result.environment_variables.variables[0];
         expect(firstVar).toHaveProperty('key');
-        expect(firstVar).toHaveProperty('is_build_time');
+        expect(firstVar).toHaveProperty('is_buildtime');
+        expect(firstVar).toHaveProperty('is_runtime');
         expect(firstVar).not.toHaveProperty('value');
       }
 
