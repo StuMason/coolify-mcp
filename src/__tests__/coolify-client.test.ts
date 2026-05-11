@@ -1,6 +1,6 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { CoolifyClient } from '../lib/coolify-client.js';
-import type { ServiceType, CreateServiceRequest } from '../types/coolify.js';
+import type { ServiceType, CreateServiceRequest, EnvironmentVariable } from '../types/coolify.js';
 
 // Helper to create mock response
 function mockResponse(data: unknown, ok = true, status = 200): Response {
@@ -3006,6 +3006,25 @@ describe('CoolifyClient', () => {
         ]);
         expect(result.recent_deployments).toHaveLength(2);
         expect(result.errors).toBeUndefined();
+      });
+
+      it('should apply default flags when env var omits is_buildtime/is_runtime', async () => {
+        // Hits the `?? false` / `?? true` fallback branches in the diagnose mapping
+        // for legacy Coolify responses that don't carry both flags explicitly.
+        const envVarsMissingFlags = [
+          { id: 1, uuid: 'env-1', key: 'LEGACY_VAR', value: 'x' } as unknown as EnvironmentVariable,
+        ];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(envVarsMissingFlags))
+          .mockResolvedValueOnce(mockResponse({ count: 0, deployments: [] }));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.environment_variables.variables).toEqual([
+          { key: 'LEGACY_VAR', is_buildtime: false, is_runtime: true },
+        ]);
       });
 
       it('should detect unhealthy application status', async () => {
