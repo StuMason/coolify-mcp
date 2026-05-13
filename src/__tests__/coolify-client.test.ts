@@ -1359,6 +1359,146 @@ describe('CoolifyClient', () => {
       expect(callBody.custom_labels).toBe('dHJhZWZpaw==');
     });
 
+    // Regression for #178 — verify build-config and health_check_* fields reach
+    // the wire, not just zod-accepted then silently stripped by the hand-pick.
+    it('should pass build-config and health_check fields through createApplicationPublic', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPublic({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        git_repository: 'https://github.com/user/monorepo',
+        git_branch: 'main',
+        build_pack: 'dockerfile',
+        ports_exposes: '3000',
+        base_directory: '/apps/api',
+        publish_directory: '/dist',
+        install_command: 'pnpm install',
+        build_command: 'pnpm build',
+        start_command: 'node dist/main.js',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 3000,
+        health_check_start_period: 60,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.base_directory).toBe('/apps/api');
+      expect(callBody.publish_directory).toBe('/dist');
+      expect(callBody.install_command).toBe('pnpm install');
+      expect(callBody.build_command).toBe('pnpm build');
+      expect(callBody.start_command).toBe('node dist/main.js');
+      expect(callBody.dockerfile_location).toBe('/apps/api/Dockerfile');
+      expect(callBody.watch_paths).toBe('apps/api/**');
+      expect(callBody.health_check_enabled).toBe(true);
+      expect(callBody.health_check_path).toBe('/health');
+      expect(callBody.health_check_port).toBe(3000);
+      expect(callBody.health_check_start_period).toBe(60);
+    });
+
+    it('should pass build-config and health_check fields through createApplicationPrivateGH', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPrivateGH({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        github_app_uuid: 'gh-app-uuid',
+        git_repository: 'org/monorepo',
+        git_branch: 'main',
+        base_directory: '/apps/api',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.base_directory).toBe('/apps/api');
+      expect(callBody.dockerfile_location).toBe('/apps/api/Dockerfile');
+      expect(callBody.watch_paths).toBe('apps/api/**');
+      expect(callBody.health_check_enabled).toBe(true);
+      expect(callBody.health_check_path).toBe('/health');
+    });
+
+    it('should pass build-config and health_check fields through createApplicationPrivateKey', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationPrivateKey({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        private_key_uuid: 'key-uuid',
+        git_repository: 'git@github.com:org/monorepo.git',
+        git_branch: 'main',
+        base_directory: '/apps/api',
+        publish_directory: '/dist',
+        install_command: 'pnpm install',
+        build_command: 'pnpm build',
+        start_command: 'node dist/main.js',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 3000,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.base_directory).toBe('/apps/api');
+      expect(callBody.dockerfile_location).toBe('/apps/api/Dockerfile');
+      expect(callBody.watch_paths).toBe('apps/api/**');
+      expect(callBody.health_check_path).toBe('/health');
+      expect(callBody.health_check_port).toBe(3000);
+    });
+
+    it('should pass health_check fields through createApplicationDockerImage (build-config N/A)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
+
+      await client.createApplicationDockerImage({
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_registry_image_name: 'traefik/whoami',
+        ports_exposes: '80',
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 80,
+        health_check_method: 'GET',
+        health_check_scheme: 'http',
+        health_check_return_code: 200,
+        health_check_interval: 30,
+        health_check_timeout: 5,
+        health_check_retries: 3,
+        health_check_start_period: 60,
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.health_check_enabled).toBe(true);
+      expect(callBody.health_check_path).toBe('/health');
+      expect(callBody.health_check_port).toBe(80);
+      expect(callBody.health_check_method).toBe('GET');
+      expect(callBody.health_check_scheme).toBe('http');
+      expect(callBody.health_check_return_code).toBe(200);
+      expect(callBody.health_check_interval).toBe(30);
+      expect(callBody.health_check_timeout).toBe(5);
+      expect(callBody.health_check_retries).toBe(3);
+      expect(callBody.health_check_start_period).toBe(60);
+    });
+
+    it('should pass dockerfile_target_build through updateApplication (PATCH-only field)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      await client.updateApplication('app-uuid', {
+        dockerfile_location: '/apps/api/Dockerfile',
+        dockerfile_target_build: 'production',
+        base_directory: '/apps/api',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.dockerfile_location).toBe('/apps/api/Dockerfile');
+      expect(callBody.dockerfile_target_build).toBe('production');
+      expect(callBody.base_directory).toBe('/apps/api');
+    });
+
     it('should pass destination_uuid through in createApplicationPublic', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 
