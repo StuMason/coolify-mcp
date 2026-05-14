@@ -443,7 +443,7 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'application',
-      'Manage app: create/update/delete',
+      'Manage app: create/update/delete/delete_preview',
       {
         action: z.enum([
           'create_public',
@@ -452,6 +452,7 @@ export class CoolifyMcpServer extends McpServer {
           'create_dockerimage',
           'update',
           'delete',
+          'delete_preview',
         ]),
         uuid: z.string().optional(),
         // Create fields
@@ -504,6 +505,8 @@ export class CoolifyMcpServer extends McpServer {
         dockerfile_target_build: z.string().optional(),
         // Delete fields
         delete_volumes: z.boolean().optional(),
+        // Preview fields
+        pull_request_id: z.number().optional(),
       },
       async (args) => {
         const { action, uuid, delete_volumes } = args;
@@ -742,6 +745,12 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() =>
               this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
             );
+          case 'delete_preview':
+            if (!uuid || !args.pull_request_id)
+              return {
+                content: [{ type: 'text' as const, text: 'Error: uuid, pull_request_id required' }],
+              };
+            return wrap(() => this.client.deleteApplicationPreview(uuid, args.pull_request_id!));
         }
       },
     );
@@ -1534,52 +1543,94 @@ export class CoolifyMcpServer extends McpServer {
       },
       async (args) => {
         const { resource, action, uuid, storage_uuid } = args;
-        const createData = {
-          type: args.type!,
-          mount_path: args.mount_path!,
-          name: args.name,
-          host_path: args.host_path,
-          content: args.content,
-          is_directory: args.is_directory,
-          fs_path: args.fs_path,
-          is_preview_suffix_enabled: args.is_preview_suffix_enabled,
-        };
-        const updateData = {
-          uuid: storage_uuid,
-          type: args.type!,
-          is_preview_suffix_enabled: args.is_preview_suffix_enabled,
-          name: args.name,
-          mount_path: args.mount_path,
-          host_path: args.host_path,
-          content: args.content,
-          is_directory: args.is_directory,
-        };
+        if (action === 'create' && (!args.type || !args.mount_path))
+          return { content: [{ type: 'text' as const, text: 'Error: type, mount_path required' }] };
+        if (action === 'update' && (!args.type || !storage_uuid))
+          return {
+            content: [{ type: 'text' as const, text: 'Error: type, storage_uuid required' }],
+          };
+        if (action === 'delete' && !storage_uuid)
+          return { content: [{ type: 'text' as const, text: 'Error: storage_uuid required' }] };
         const methods: Record<string, Record<string, () => Promise<unknown>>> = {
           application: {
             list: () => this.client.listApplicationStorages(uuid),
-            create: () => this.client.createApplicationStorage(uuid, createData),
-            update: () => this.client.updateApplicationStorage(uuid, updateData),
+            create: () =>
+              this.client.createApplicationStorage(uuid, {
+                type: args.type!,
+                mount_path: args.mount_path!,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                fs_path: args.fs_path,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
+            update: () =>
+              this.client.updateApplicationStorage(uuid, {
+                uuid: storage_uuid!,
+                type: args.type!,
+                mount_path: args.mount_path,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
             delete: () => this.client.deleteApplicationStorage(uuid, storage_uuid!),
           },
           database: {
             list: () => this.client.listDatabaseStorages(uuid),
-            create: () => this.client.createDatabaseStorage(uuid, createData),
-            update: () => this.client.updateDatabaseStorage(uuid, updateData),
+            create: () =>
+              this.client.createDatabaseStorage(uuid, {
+                type: args.type!,
+                mount_path: args.mount_path!,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                fs_path: args.fs_path,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
+            update: () =>
+              this.client.updateDatabaseStorage(uuid, {
+                uuid: storage_uuid!,
+                type: args.type!,
+                mount_path: args.mount_path,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
             delete: () => this.client.deleteDatabaseStorage(uuid, storage_uuid!),
           },
           service: {
             list: () => this.client.listServiceStorages(uuid),
-            create: () => this.client.createServiceStorage(uuid, createData),
-            update: () => this.client.updateServiceStorage(uuid, updateData),
+            create: () =>
+              this.client.createServiceStorage(uuid, {
+                type: args.type!,
+                mount_path: args.mount_path!,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                fs_path: args.fs_path,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
+            update: () =>
+              this.client.updateServiceStorage(uuid, {
+                uuid: storage_uuid!,
+                type: args.type!,
+                mount_path: args.mount_path,
+                name: args.name,
+                host_path: args.host_path,
+                content: args.content,
+                is_directory: args.is_directory,
+                is_preview_suffix_enabled: args.is_preview_suffix_enabled,
+              }),
             delete: () => this.client.deleteServiceStorage(uuid, storage_uuid!),
           },
         };
-        if (action === 'create' && (!args.type || !args.mount_path))
-          return { content: [{ type: 'text' as const, text: 'Error: type, mount_path required' }] };
-        if (action === 'update' && !args.type)
-          return { content: [{ type: 'text' as const, text: 'Error: type required' }] };
-        if (action === 'delete' && !storage_uuid)
-          return { content: [{ type: 'text' as const, text: 'Error: storage_uuid required' }] };
         return wrap(() => methods[resource][action]());
       },
     );
@@ -1666,17 +1717,6 @@ export class CoolifyMcpServer extends McpServer {
             );
         }
       },
-    );
-
-    // =========================================================================
-    // Application Previews (1 tool)
-    // =========================================================================
-    this.tool(
-      'delete_preview',
-      'Delete a preview deployment for an application',
-      { uuid: z.string(), pull_request_id: z.number() },
-      async ({ uuid, pull_request_id }) =>
-        wrap(() => this.client.deleteApplicationPreview(uuid, pull_request_id)),
     );
 
     // =========================================================================
@@ -1770,28 +1810,24 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     // =========================================================================
-    // Resources (1 tool)
-    // =========================================================================
-    this.tool('list_resources', 'List all resources across infrastructure', {}, async () =>
-      wrap(() => this.client.listResources()),
-    );
-
-    // =========================================================================
-    // Health (1 tool)
-    // =========================================================================
-    this.tool('health', 'Check Coolify API health', {}, async () =>
-      wrap(() => this.client.getHealth()),
-    );
-
-    // =========================================================================
-    // API Enable/Disable (1 tool)
+    // System (1 tool - health/list_resources/api_control consolidated)
     // =========================================================================
     this.tool(
-      'api_control',
-      'Enable or disable the Coolify API (requires root)',
-      { action: z.enum(['enable', 'disable']) },
-      async ({ action }) =>
-        wrap(() => (action === 'enable' ? this.client.enableApi() : this.client.disableApi())),
+      'system',
+      'System operations: health/list_resources/enable_api/disable_api',
+      { action: z.enum(['health', 'list_resources', 'enable_api', 'disable_api']) },
+      async ({ action }) => {
+        switch (action) {
+          case 'health':
+            return wrap(() => this.client.getHealth());
+          case 'list_resources':
+            return wrap(() => this.client.listResources());
+          case 'enable_api':
+            return wrap(() => this.client.enableApi());
+          case 'disable_api':
+            return wrap(() => this.client.disableApi());
+        }
+      },
     );
 
     // =========================================================================

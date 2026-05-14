@@ -1299,6 +1299,17 @@ export interface GitHubBranch {
 }
 
 // =============================================================================
+// Resource List Types
+// =============================================================================
+
+export interface ResourceListItem {
+  uuid: string;
+  name: string;
+  type: 'server' | 'application' | 'database' | 'service' | string;
+  status?: string;
+}
+
+// =============================================================================
 // Response Enhancement Types (HATEOAS-style actions)
 // =============================================================================
 

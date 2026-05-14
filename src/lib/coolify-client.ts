@@ -109,6 +109,8 @@ import type {
   InfrastructureIssuesReport,
   // Batch operation types
   BatchOperationResult,
+  // Resource list types
+  ResourceListItem,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -1646,8 +1648,8 @@ export class CoolifyClient {
   // Resources endpoint
   // ===========================================================================
 
-  async listResources(): Promise<unknown> {
-    return this.request<unknown>('/resources');
+  async listResources(): Promise<ResourceListItem[]> {
+    return this.request<ResourceListItem[]>('/resources');
   }
 
   // ===========================================================================
