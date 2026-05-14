@@ -268,6 +268,21 @@ export interface CreateApplicationPublicRequest {
   install_command?: string;
   build_command?: string;
   start_command?: string;
+  dockerfile_location?: string;
+  watch_paths?: string;
+  // Health check configuration
+  health_check_enabled?: boolean;
+  health_check_path?: string;
+  health_check_port?: number;
+  health_check_host?: string;
+  health_check_method?: string;
+  health_check_return_code?: number;
+  health_check_scheme?: string;
+  health_check_response_text?: string;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  health_check_retries?: number;
+  health_check_start_period?: number;
   custom_docker_run_options?: string;
   custom_labels?: string;
   instant_deploy?: boolean;
@@ -325,6 +340,19 @@ export interface CreateApplicationDockerImageRequest {
   docker_registry_image_tag?: string;
   ports_exposes: string;
   ports_mappings?: string;
+  // Health check configuration
+  health_check_enabled?: boolean;
+  health_check_path?: string;
+  health_check_port?: number;
+  health_check_host?: string;
+  health_check_method?: string;
+  health_check_return_code?: number;
+  health_check_scheme?: string;
+  health_check_response_text?: string;
+  health_check_interval?: number;
+  health_check_timeout?: number;
+  health_check_retries?: number;
+  health_check_start_period?: number;
   custom_docker_run_options?: string;
   custom_labels?: string;
   instant_deploy?: boolean;
@@ -372,6 +400,8 @@ export interface UpdateApplicationRequest {
   install_command?: string;
   build_command?: string;
   start_command?: string;
+  dockerfile_target_build?: string;
+  watch_paths?: string;
   // Health check configuration
   health_check_enabled?: boolean;
   health_check_path?: string;

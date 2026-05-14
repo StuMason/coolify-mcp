@@ -331,6 +331,205 @@ describe('CoolifyMcpServer v2', () => {
       expect(spy).toHaveBeenCalledWith(['app-1', 'app-2'], 'PEM_KEY', 'multiline', false, true);
     });
   });
+
+  describe('application tool handler', () => {
+    // Regression for #178 — verify the application tool's create_* hand-picks
+    // forward build-config and health_check_* fields to the client. Previously
+    // these fields were accepted by zod but silently dropped by the hand-pick.
+
+    const callApplication = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['application'];
+      return tool.handler(args, {});
+    };
+
+    const baseCreatePublic = {
+      action: 'create_public' as const,
+      project_uuid: 'proj-uuid',
+      server_uuid: 'server-uuid',
+      git_repository: 'https://github.com/org/monorepo',
+      git_branch: 'main',
+      build_pack: 'dockerfile',
+      ports_exposes: '3000',
+    };
+
+    it('forwards build-config and health_check fields in create_public', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationPublic')
+        .mockResolvedValue({ uuid: 'app-1' });
+
+      await callApplication(server, {
+        ...baseCreatePublic,
+        base_directory: '/apps/api',
+        publish_directory: '/dist',
+        install_command: 'pnpm install',
+        build_command: 'pnpm build',
+        start_command: 'node dist/main.js',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 3000,
+        health_check_start_period: 60,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          base_directory: '/apps/api',
+          publish_directory: '/dist',
+          install_command: 'pnpm install',
+          build_command: 'pnpm build',
+          start_command: 'node dist/main.js',
+          dockerfile_location: '/apps/api/Dockerfile',
+          watch_paths: 'apps/api/**',
+          health_check_enabled: true,
+          health_check_path: '/health',
+          health_check_port: 3000,
+          health_check_start_period: 60,
+        }),
+      );
+    });
+
+    it('forwards build-config and health_check fields in create_github', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationPrivateGH')
+        .mockResolvedValue({ uuid: 'app-2' });
+
+      await callApplication(server, {
+        action: 'create_github',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        github_app_uuid: 'gh-app-uuid',
+        git_repository: 'org/monorepo',
+        git_branch: 'main',
+        base_directory: '/apps/api',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          base_directory: '/apps/api',
+          dockerfile_location: '/apps/api/Dockerfile',
+          watch_paths: 'apps/api/**',
+          health_check_enabled: true,
+          health_check_path: '/health',
+        }),
+      );
+    });
+
+    it('forwards build-config and health_check fields in create_key', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationPrivateKey')
+        .mockResolvedValue({ uuid: 'app-3' });
+
+      await callApplication(server, {
+        action: 'create_key',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        private_key_uuid: 'key-uuid',
+        git_repository: 'git@github.com:org/monorepo.git',
+        git_branch: 'main',
+        base_directory: '/apps/api',
+        publish_directory: '/dist',
+        install_command: 'pnpm install',
+        build_command: 'pnpm build',
+        start_command: 'node dist/main.js',
+        dockerfile_location: '/apps/api/Dockerfile',
+        watch_paths: 'apps/api/**',
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 3000,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          base_directory: '/apps/api',
+          publish_directory: '/dist',
+          install_command: 'pnpm install',
+          build_command: 'pnpm build',
+          start_command: 'node dist/main.js',
+          dockerfile_location: '/apps/api/Dockerfile',
+          watch_paths: 'apps/api/**',
+          health_check_enabled: true,
+          health_check_path: '/health',
+          health_check_port: 3000,
+        }),
+      );
+    });
+
+    it('forwards health_check fields in create_dockerimage (build-config intentionally dropped)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationDockerImage')
+        .mockResolvedValue({ uuid: 'app-4' });
+
+      // Caller passes both healthcheck AND build-config. Coolify's /applications/dockerimage
+      // endpoint doesn't accept build-config (pre-built image), so handler must drop those.
+      await callApplication(server, {
+        action: 'create_dockerimage',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        docker_registry_image_name: 'traefik/whoami',
+        ports_exposes: '80',
+        // Should be forwarded:
+        health_check_enabled: true,
+        health_check_path: '/health',
+        health_check_port: 80,
+        // Should NOT be forwarded (build-config not applicable to prebuilt image):
+        base_directory: '/should-be-dropped',
+        install_command: 'should-be-dropped',
+        dockerfile_location: '/should-be-dropped',
+      });
+
+      const forwarded = spy.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+      expect(forwarded).toEqual(
+        expect.objectContaining({
+          health_check_enabled: true,
+          health_check_path: '/health',
+          health_check_port: 80,
+        }),
+      );
+      expect(forwarded).not.toHaveProperty('base_directory');
+      expect(forwarded).not.toHaveProperty('install_command');
+      expect(forwarded).not.toHaveProperty('dockerfile_location');
+    });
+
+    it('forwards dockerfile_target_build through update (PATCH-only)', async () => {
+      const spy = jest.spyOn(server['client'], 'updateApplication').mockResolvedValue({} as never);
+
+      await callApplication(server, {
+        action: 'update',
+        uuid: 'app-uuid',
+        dockerfile_location: '/apps/api/Dockerfile',
+        dockerfile_target_build: 'production',
+        base_directory: '/apps/api',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'app-uuid',
+        expect.objectContaining({
+          dockerfile_location: '/apps/api/Dockerfile',
+          dockerfile_target_build: 'production',
+          base_directory: '/apps/api',
+        }),
+      );
+      // Confirm the update spread strips routing fields.
+      const updateData = spy.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+      expect(updateData).not.toHaveProperty('action');
+      expect(updateData).not.toHaveProperty('uuid');
+    });
+  });
 });
 
 describe('truncateLogs', () => {
