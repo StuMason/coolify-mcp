@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-05-14
+
+### Added
+
+- **Application build-config and `health_check_*` fields now wired through `create_*`** (#185 / #178, thanks @kashik0i) — eight build-config fields (`dockerfile_location`, `dockerfile_target_build`, `base_directory`, `publish_directory`, `install_command`, `build_command`, `start_command`, `watch_paths`) added to the `application` tool's zod schema; all twelve `health_check_*` fields plus the build-config fields now forwarded by `create_public`, `create_github`, `create_key`, and `create_dockerimage` handlers. Previously these were silently stripped, so e.g. `create_key` with `health_check_enabled: true, health_check_path: '/health'` produced an app with healthcheck off and default `/` path. Live-tested against Coolify v4 with GET round-trip verification of every field.
+
+### Fixed
+
+- **`dockerfile_target_build` accepted on `update`** (#185) — verified against Coolify's `ApplicationsController.php` allowlists that this field is UPDATE-only (present on the update allowlist at line 2497, absent from create allowlist at line 1014). Now correctly forwarded on the `update` action; intentionally not forwarded on any `create_*` action (Coolify would silently drop it).
+
+### Internal
+
+- **CLAUDE.md gotcha** (#185) — documented the CREATE vs UPDATE `$allowedFields` asymmetry in Coolify's `ApplicationsController.php`, with concrete examples for `dockerfile_target_build` and `create_dockerimage`. Captures the practical reality that Coolify's `openapi.yaml` is an incomplete projection of the real allowlists — always check the controller source before trusting the spec.
+
 ## [2.9.0] - 2026-05-11
 
 ### Security
