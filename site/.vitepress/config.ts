@@ -7,7 +7,9 @@ export default withMermaid(
     description: 'MCP server for Coolify — 42 token-optimized tools for AI assistants',
 
     cleanUrls: true,
-    lastUpdated: true,
+    // lastUpdated needs git available at build time; disabled until we wire
+    // .git into the Dockerfile build stage (or move to a build that has it).
+    lastUpdated: false,
     ignoreDeadLinks: 'localhostLinks',
 
     head: [
