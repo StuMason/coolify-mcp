@@ -11,6 +11,8 @@
 
 > **The most comprehensive MCP server for Coolify** - 42 optimized tools, smart diagnostics, documentation search, and batch operations for managing your self-hosted PaaS through AI assistants.
 
+📖 **Docs**: [**coolify-mcp.stumason.dev**](https://coolify-mcp.stumason.dev) — install guide, quickstart, full tools reference, MCP primer, Coolify API gotchas, contributing guide, and the public v3 roadmap.
+
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
 ## Features
