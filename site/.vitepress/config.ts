@@ -23,7 +23,8 @@ export default withMermaid(
         'meta',
         {
           name: 'og:description',
-          content: '42 token-optimized MCP tools. Drop into Claude / Cursor / Code. Drive your Coolify with natural language.',
+          content:
+            '42 token-optimized MCP tools. Drop into Claude / Cursor / Code. Drive your Coolify with natural language.',
         },
       ],
     ],
