@@ -16,7 +16,7 @@ The order matters. Follow it.
 
 4. **Add the MCP tool** (or new action on an existing tool) to `src/lib/mcp-server.ts`. Prefer extending an existing tool with a new `action` enum value over adding a new top-level tool — see the consolidation pattern in [how-it-works](/concepts/how-it-works).
 5. **Add tests** — both client-level and method-existence (see [Testing](/contributing/testing)).
-6. **Update docs** — CHANGELOG entry under `[Unreleased]`, README if tool count changed.
+6. **Update docs** — CHANGELOG entry under `[Unreleased]`, README tool count if it changed, and the [Tools reference](/tools/) on this docs site if you've added a new tool or new action.
 
 ## Code-style rules
 

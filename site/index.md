@@ -25,7 +25,7 @@ features:
     details: One env var, you're running. Works in Claude Desktop, Claude Code, Cursor, and any other MCP-aware client.
   - icon: 🎯
     title: 42 consolidated tools
-    details: v2.0 cut tool count from 60+ to 38 by routing related ops through action parameters. LLM tool-list tokens dropped ~85% (43k → 6.6k).
+    details: v2.0 collapsed 60+ tools into a small set of action-driven tools. The count is at 42 today after new tool families landed in v2.11. LLM tool-list tokens dropped ~85% (43k → 6.6k).
   - icon: 🔒
     title: Secure by default
     details: env_vars list responses mask secrets. Opt-in reveal. Bulk-update doesn't echo values back. Token never leaves your machine.

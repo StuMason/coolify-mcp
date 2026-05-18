@@ -44,7 +44,12 @@ The model uses `deploy` with the application UUID. Currently blocks until the de
 
 - All `create_*` / `update_*` / `delete_*` actions
 - `deploy`, `redeploy_project`, `restart_*`
-- `stop_all_apps` (the nuke button)
-- `bulk_env_update`, `bulk_env_delete`
+- `stop_all_apps` (the emergency-stop button)
+- `bulk_env_update`
 
-The v2.x tools don't yet declare `destructiveHint` / `readOnlyHint` annotations to drive client confirmation UX — that's a v3 add (see [v3 vision](/roadmap/v3-vision)).
+The v2.x tools don't yet declare `destructiveHint` / `readOnlyHint` annotations to drive client confirmation UX. That's a v3 add (see [v3 vision](/roadmap/v3-vision)).
+
+## What next?
+
+- [Tools reference](/tools/) — every one of the 42 tools, grouped by concern, marked read or destructive.
+- [How coolify-mcp works](/concepts/how-it-works) — the architecture, the file structure, the security model.
