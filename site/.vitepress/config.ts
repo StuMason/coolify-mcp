@@ -71,6 +71,7 @@ export default withMermaid(
             items: [
               { text: 'MCP primer', link: '/concepts/mcp-primer' },
               { text: 'How coolify-mcp works', link: '/concepts/how-it-works' },
+              { text: 'Security model', link: '/concepts/security' },
               { text: 'Coolify API gotchas', link: '/concepts/coolify-api-gotchas' },
             ],
           },
