@@ -7,15 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [2.11.0] - 2026-05-18
 
-- **`delete_preview` moved into `application` tool** — `delete_preview` is now `action: 'delete_preview'` on the existing `application` tool (alongside create/update/delete), consistent with the v2.0.0 consolidation pattern. The standalone `delete_preview` tool is removed.
-- **`system` tool consolidates health/resource/API controls** — `health`, `list_resources`, and `api_control` are removed as standalone tools and replaced by a single `system` tool with `action: 'health' | 'list_resources' | 'enable_api' | 'disable_api'`. Net tool count: 45 → 42.
-- **`storages` `update` action now requires `storage_uuid`** — Previously `storage_uuid` was not validated for `update`, causing the PATCH to send without the required field. Also fixed data construction to occur inside each action branch (after validation), so non-null assertions are guaranteed.
+### Added (#172, thanks @opastorello)
 
-### Fixed
+Net tool count: 38 → 42 (after consolidation; original PR proposed 45 before review).
 
-- **`listResources()` explicit return type** — Changed from `Promise<unknown>` to `Promise<ResourceListItem[]>` with a new `ResourceListItem` interface in `src/types/coolify.ts`, complying with the project's no-implicit-any policy.
+- **`storages` tool** — list/create/update/delete persistent or file storages for application/database/service. Single consolidated tool with action+resource pattern.
+- **`scheduled_tasks` tool** — list/create/update/delete/list_executions for application or service. Consolidated.
+- **`hetzner` tool** — list_locations, list_server_types, list_images, list_ssh_keys, create_server against the Coolify Hetzner cloud-provider endpoints. Requires a configured cloud-provider token UUID. The Coolify Hetzner routes are auth-scope-gated; the wiring is correct but the calling user needs the right token.
+- **`system` tool** — health, list_resources, enable_api, disable_api against the instance. Consolidates what would have been three separate tools.
+- **`env_vars` expanded** — adds `database` resource, `bulk_update` action, plus `is_build_time`, `is_preview`, `data[]` params on the existing actions.
+- **`github_apps` expanded** — adds `list_repos`, `list_branches` actions.
+- **`database_backups` expanded** — adds `delete_execution` action.
+- **`ResourceListItem` type** — concrete interface for `/api/v1/resources` responses with `uuid`, `name`, `type`, optional `status`. Replaces `Promise<unknown>` on the client method (no-implicit-any policy compliance).
+
+### Changed (breaking, behavioural)
+
+- **`delete_preview` moved into `application` tool** (#172) — was a standalone top-level tool, now `action: 'delete_preview'` on the existing `application` tool alongside create/update/delete/get/start/stop/restart. Callers must update tool invocations: `delete_preview({ application_uuid, pull_request_id })` → `application({ action: 'delete_preview', uuid, pull_request_id })`.
+- **`health`, `list_resources`, `api_control` consolidated into `system` tool** (#172) — three standalone tools merged into one. Callers must update: `health()` → `system({ action: 'health' })`, `list_resources()` → `system({ action: 'list_resources' })`, `api_control({ enabled: true/false })` → `system({ action: 'enable_api' | 'disable_api' })`.
+- **`storages` `update` action now requires `storage_uuid`** (#172) — previously not validated; the PATCH would send without the required field and silently fail. Now zod-validated; missing `storage_uuid` returns a guard error before the request is built.
+
+### Internal
+
+- Dependency bumps via dependabot (#184, #188): minor-and-patch group across two cycles — @types/node, eslint, lint-staged.
+- Live-verified the new `system` tool's `health` and `list_resources` actions against a real Coolify instance; Hetzner routes confirmed wired (401 not 404) but require an instance with a properly-scoped token.
 
 ## [2.10.0] - 2026-05-14
 
