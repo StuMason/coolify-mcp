@@ -8,8 +8,8 @@ coolify-mcp v2.11.0 is firmly in MCP's "tools-only" era. 42 consolidated tools c
 
 Recent landings:
 
-- v2.11.0 — `system` tool consolidation + 4 new tool families (storages, scheduled_tasks, hetzner, system)
-- v2.10.0 — application build-config + health*check fields wired through `create*\*`
+- v2.11.0 — 3 new tool families (`storages`, `scheduled_tasks`, `hetzner`) plus the `system` consolidation of `health` / `list_resources` / `api_control`
+- v2.10.0 — application build-config and `health_check_*` fields wired through `create_*`
 - v2.9.0 — env_vars masking by default, defensive non-JSON parsing
 - v2.8.x — `--header` flag, application params, env_vars field rename
 

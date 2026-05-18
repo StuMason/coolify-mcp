@@ -82,6 +82,6 @@ npm run test:coverage       # coverage report
 npm run test:integration    # hit live Coolify (~30-60s)
 npm run lint                # eslint
 npm run format              # prettier
-npm run types               # tsc --noEmit
+npx tsc --noEmit            # type-check only (no emit)
 npm run build               # produces dist/
 ```
