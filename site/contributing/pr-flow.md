@@ -38,16 +38,16 @@ Aim for:
 - **How verified** — `npm test` + (ideally) live smoke results
 - **Closes #N** if applicable
 
-The maintainer (currently @StuMason) typically responds within a day or two. The repo has a Claude review bot that runs on most PRs and posts a structured review — its feedback is advisory but often catches real things.
+The maintainer (currently [@StuMason](https://github.com/StuMason)) reviews PRs on a best-effort basis. The repo also runs a Claude review bot on most PRs. Its feedback is advisory but often catches real issues.
 
 ## After approval
 
-Maintainer admin-merges (squash). Releases are bundled — a release PR follows shortly after notable changes, version bumps `package.json`, and the `publish.yml` workflow auto-publishes to npm via trusted publishing.
+The maintainer admin-merges (squash). Releases are bundled: a release PR follows shortly after notable changes, version bumps `package.json`, and the `publish.yml` workflow auto-publishes to npm via trusted publishing.
 
 ## Contributor recognition
 
-Every CHANGELOG entry credits the PR author (`thanks @username`). It's not a formality — these are real contributions that have shipped fixes affecting production users.
+Every CHANGELOG entry credits the PR author (`thanks @username`). This is not a formality. These are real contributions that have shipped fixes affecting production users.
 
 ## Stale PRs
 
-If your PR sits without movement for two weeks, ping the maintainer in a comment. If it sits longer, it's probably scope-stalled — open a follow-up issue to discuss the blocker.
+If your PR sits without movement for two weeks, post a comment asking the maintainer for status. If it sits longer, the scope is probably stalled. Open a follow-up issue to discuss the blocker.

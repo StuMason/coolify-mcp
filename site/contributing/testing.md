@@ -65,11 +65,11 @@ These actually hit the network. Use them for:
 
 ## The /smoke-test slash command
 
-After fixing a bug that involves API interaction, always run `/smoke-test` (the Claude Code slash command for this repo) before declaring done. It builds the project, runs the integration suite, and verifies fixes work end-to-end against the live instance.
+After fixing a bug that involves API interaction, always run `/smoke-test` (the Claude Code slash command for this repo) before marking the work complete. It builds the project, runs the integration suite, and verifies fixes work end-to-end against the live instance.
 
 ## Coverage requirements
 
-codecov is strict on patch coverage. New lines in `src/lib/*.ts` must hit ~90%+. New lines in `src/lib/mcp-server.ts` are excluded from coverage collection by design (it's the MCP SDK wrapper layer; logic lives in `coolify-client.ts`).
+codecov is strict on patch coverage. New lines in `src/lib/*.ts` must hit ~90%+. New lines in `src/lib/mcp-server.ts` are excluded from coverage collection by design: that file is the MCP SDK wrapper layer, and the logic lives in `coolify-client.ts`.
 
 If your patch coverage fails, the typical cause is missing branch coverage on `?? default` fallbacks. Add a test that hits the fallback path.
 
