@@ -1,10 +1,22 @@
 # MCP primer
 
-A short orientation for contributors new to the [Model Context Protocol](https://modelcontextprotocol.io). Not a replacement for the spec — just enough context to read the codebase.
+A short orientation for contributors new to the [Model Context Protocol](https://modelcontextprotocol.io). Not a replacement for the spec. Just enough context to read the codebase.
 
-## What MCP is, in one paragraph
+> **New to MCP?** Read the official [MCP quickstart](https://modelcontextprotocol.io/quickstart) first. This page assumes basic familiarity.
 
-MCP is a JSON-RPC protocol that lets an AI client (Claude Desktop, Cursor, Claude Code, Continue, etc.) talk to a _server_ that exposes capabilities. The capabilities are organised into a few primitive types: **tools** (functions the model calls), **resources** (data the application can read), **prompts** (templated workflows users invoke), plus client-offered capabilities (sampling, roots, elicitation). The protocol is transport-agnostic — most servers today run over stdio (the client spawns the server process), but HTTP+SSE and streamable-HTTP transports also exist.
+## What MCP is
+
+MCP is a JSON-RPC protocol. It lets an AI client (such as Claude Desktop, Cursor, Claude Code, or Continue) talk to a _server_ that exposes capabilities.
+
+The capabilities come in a few primitive types:
+
+- **Tools** — functions the model calls
+- **Resources** — data the application can read
+- **Prompts** — templated workflows users invoke
+
+The client side can also offer capabilities back: **sampling**, **roots**, and **elicitation**. coolify-mcp uses none of these client primitives today.
+
+The protocol is transport-agnostic. Most servers today run over stdio: the client spawns the server as a child process. HTTP+SSE and streamable-HTTP transports also exist for remote-hosted servers.
 
 ## The primitive types
 
@@ -45,7 +57,7 @@ This is why tools have safety affordances (annotations, output schemas, error se
 
 **Tools only.** All 42 entry points are MCP tools registered via `this.tool(name, description, schema, handler)`. No resources, no prompts, no annotations, no structured outputs.
 
-That worked well for v1 / v2 but leaves things on the table:
+That approach worked well for v1 and v2 but leaves several capabilities unused:
 
 - The client has no way to know which tools are destructive vs read-only
 - The model gets text blobs back from `list_*` instead of typed objects (harder to chain into `get_*` calls)

@@ -18,7 +18,7 @@ The model uses `diagnose_app`, which aggregates application config, recent deplo
 
 > "Add `LOG_LEVEL=debug` to staging-api as a runtime-only variable."
 
-The model uses `env_vars` with `action: 'create', is_buildtime: false, is_runtime: true`. The runtime-only flag matters — variables marked as build-time get injected as Dockerfile ARG and can break multiline secrets like PEM keys.
+The model uses `env_vars` with `action: 'create', is_buildtime: false, is_runtime: true`. The runtime-only flag matters: variables marked as build-time are injected as Dockerfile ARG, which can break multiline secrets like PEM keys.
 
 ## 4. Bulk operation
 

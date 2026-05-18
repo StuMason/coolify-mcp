@@ -1,12 +1,12 @@
 # v3 vision
 
-> Status: **draft** — living document. Pushback / suggestions welcome via [GitHub Issues](https://github.com/StuMason/coolify-mcp/issues).
+> Status: **draft**. This is a living document. Suggestions and pushback are welcome via [GitHub Issues](https://github.com/StuMason/coolify-mcp/issues).
 
 ## The one-liner
 
 > v3 reframes coolify-mcp from "RPC to a remote API" into **a live, subscribable, scriptable surface on your infrastructure.**
 
-Concretely that means three MCP primitives we don't use today — **Resources**, **Tasks**, **Prompts** — plus a transport option (**streamable HTTP**) that makes the multi-Coolify use case ([#164](https://github.com/StuMason/coolify-mcp/issues/164)) trivial, and a layer of polish (**annotations + outputSchema**) that should ship as a v2.12 quick-win regardless.
+Concretely, v3 adopts three MCP primitives that v2 does not use: **Resources**, **Tasks**, and **Prompts**. It adds a transport option, **streamable HTTP**, that makes the multi-Coolify use case ([#164](https://github.com/StuMason/coolify-mcp/issues/164)) straightforward. It also adds **tool annotations** and **outputSchema**, which can ship as a v2.12 release independently of the rest.
 
 ## What's wrong with v2.x
 
@@ -80,9 +80,9 @@ flowchart LR
 
 **Why this is a win:**
 
-- Clients (especially Claude Desktop) can auto-attach resources to context. The user doesn't have to say "list my apps" — the app list is already in context.
-- Resources support **subscribe + notification**. The client can subscribe to `coolify://applications/{uuid}` and be notified when status changes — perfect for "deploy this, then tell me when it's healthy."
-- Resources are _application-controlled_, not _model-controlled_. The model can browse them but doesn't autonomously invoke side-effects.
+- Clients (especially Claude Desktop) can attach resources to context automatically. The user does not have to say "list my apps" because the app list is already in context.
+- Resources support **subscribe + notification**. The client can subscribe to `coolify://applications/{uuid}` and be notified when status changes. This fits patterns like "deploy this, then tell me when it's healthy."
+- Resources are _application-controlled_, not _model-controlled_. The model can browse them but cannot autonomously trigger side effects.
 
 **Migration impact:** `list_*` and `get_*` tools stay (some clients don't yet support resources). They become wrappers over the resource read. No removals.
 
@@ -121,7 +121,7 @@ sequenceDiagram
 
 - The user can do other things while a deployment runs.
 - Progress updates ("building... 30%... 60%... healthy") become possible.
-- Retry semantics — transient failures don't waste the user's hour.
+- Retry semantics: a transient failure does not lose an hour of the user's time.
 
 **Migration impact:** sync calls still work (declaring `taskSupport` as `optional` lets old clients ignore it). New clients get the streaming UX automatically.
 
