@@ -1018,7 +1018,18 @@ export class CoolifyMcpServer extends McpServer {
           )
           .optional(),
       },
-      async ({ resource, action, uuid, key, value, env_uuid, is_buildtime, is_runtime, reveal, data }) => {
+      async ({
+        resource,
+        action,
+        uuid,
+        key,
+        value,
+        env_uuid,
+        is_buildtime,
+        is_runtime,
+        reveal,
+        data,
+      }) => {
         if (resource === 'application') {
           switch (action) {
             case 'list':
