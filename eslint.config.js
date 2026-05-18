@@ -22,6 +22,9 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/'],
+    // site/ is the VitePress docs mini-project — has its own deps and
+    // doesn't share the root toolchain. Ignored to keep the root lint
+    // scoped to the MCP source.
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'site/'],
   },
 );

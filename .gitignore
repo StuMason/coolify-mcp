@@ -47,4 +47,7 @@ coverage/
 *.tgz
 
 # Yarn Integrity file
-.yarn-integrity 
+.yarn-integrity
+
+# Playwright MCP runtime artefacts (screenshots, snapshots)
+.playwright-mcp/
