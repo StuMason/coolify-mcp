@@ -181,6 +181,75 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.deleteCloudToken).toBe('function');
       expect(typeof client.validateCloudToken).toBe('function');
 
+      // Application storage operations
+      expect(typeof client.listApplicationStorages).toBe('function');
+      expect(typeof client.createApplicationStorage).toBe('function');
+      expect(typeof client.updateApplicationStorage).toBe('function');
+      expect(typeof client.deleteApplicationStorage).toBe('function');
+
+      // Application scheduled task operations
+      expect(typeof client.listApplicationScheduledTasks).toBe('function');
+      expect(typeof client.createApplicationScheduledTask).toBe('function');
+      expect(typeof client.updateApplicationScheduledTask).toBe('function');
+      expect(typeof client.deleteApplicationScheduledTask).toBe('function');
+      expect(typeof client.listApplicationScheduledTaskExecutions).toBe('function');
+
+      // Application preview operations
+      expect(typeof client.deleteApplicationPreview).toBe('function');
+
+      // Database environment variable operations
+      expect(typeof client.listDatabaseEnvVars).toBe('function');
+      expect(typeof client.createDatabaseEnvVar).toBe('function');
+      expect(typeof client.updateDatabaseEnvVar).toBe('function');
+      expect(typeof client.bulkUpdateDatabaseEnvVars).toBe('function');
+      expect(typeof client.deleteDatabaseEnvVar).toBe('function');
+
+      // Database storage operations
+      expect(typeof client.listDatabaseStorages).toBe('function');
+      expect(typeof client.createDatabaseStorage).toBe('function');
+      expect(typeof client.updateDatabaseStorage).toBe('function');
+      expect(typeof client.deleteDatabaseStorage).toBe('function');
+
+      // Delete backup execution
+      expect(typeof client.deleteBackupExecution).toBe('function');
+
+      // Service env var bulk operations
+      expect(typeof client.bulkUpdateServiceEnvVars).toBe('function');
+
+      // Service storage operations
+      expect(typeof client.listServiceStorages).toBe('function');
+      expect(typeof client.createServiceStorage).toBe('function');
+      expect(typeof client.updateServiceStorage).toBe('function');
+      expect(typeof client.deleteServiceStorage).toBe('function');
+
+      // Service scheduled task operations
+      expect(typeof client.listServiceScheduledTasks).toBe('function');
+      expect(typeof client.createServiceScheduledTask).toBe('function');
+      expect(typeof client.updateServiceScheduledTask).toBe('function');
+      expect(typeof client.deleteServiceScheduledTask).toBe('function');
+      expect(typeof client.listServiceScheduledTaskExecutions).toBe('function');
+
+      // Hetzner cloud operations
+      expect(typeof client.listHetznerLocations).toBe('function');
+      expect(typeof client.listHetznerServerTypes).toBe('function');
+      expect(typeof client.listHetznerImages).toBe('function');
+      expect(typeof client.listHetznerSSHKeys).toBe('function');
+      expect(typeof client.createHetznerServer).toBe('function');
+
+      // GitHub App repository operations
+      expect(typeof client.listGitHubAppRepositories).toBe('function');
+      expect(typeof client.listGitHubAppBranches).toBe('function');
+
+      // Resources operations
+      expect(typeof client.listResources).toBe('function');
+
+      // Health operations
+      expect(typeof client.getHealth).toBe('function');
+
+      // API enable/disable operations
+      expect(typeof client.enableApi).toBe('function');
+      expect(typeof client.disableApi).toBe('function');
+
       // Version caching
       expect(typeof client.getCachedVersion).toBe('function');
     });

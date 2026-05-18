@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`delete_preview` moved into `application` tool** — `delete_preview` is now `action: 'delete_preview'` on the existing `application` tool (alongside create/update/delete), consistent with the v2.0.0 consolidation pattern. The standalone `delete_preview` tool is removed.
+- **`system` tool consolidates health/resource/API controls** — `health`, `list_resources`, and `api_control` are removed as standalone tools and replaced by a single `system` tool with `action: 'health' | 'list_resources' | 'enable_api' | 'disable_api'`. Net tool count: 45 → 42.
+- **`storages` `update` action now requires `storage_uuid`** — Previously `storage_uuid` was not validated for `update`, causing the PATCH to send without the required field. Also fixed data construction to occur inside each action branch (after validation), so non-null assertions are guaranteed.
+
+### Fixed
+
+- **`listResources()` explicit return type** — Changed from `Promise<unknown>` to `Promise<ResourceListItem[]>` with a new `ResourceListItem` interface in `src/types/coolify.ts`, complying with the project's no-implicit-any policy.
+
 ## [2.10.0] - 2026-05-14
 
 ### Added

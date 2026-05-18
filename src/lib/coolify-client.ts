@@ -82,6 +82,25 @@ import type {
   CloudTokenValidation,
   // Version types
   Version,
+  // Storage types
+  StorageListResponse,
+  CreateStorageRequest,
+  UpdateStorageRequest,
+  // Scheduled task types
+  ScheduledTask,
+  ScheduledTaskExecution,
+  CreateScheduledTaskRequest,
+  UpdateScheduledTaskRequest,
+  // Hetzner types
+  HetznerLocation,
+  HetznerServerType,
+  HetznerImage,
+  HetznerSSHKey,
+  CreateHetznerServerRequest,
+  CreateHetznerServerResponse,
+  // GitHub repository types
+  GitHubRepository,
+  GitHubBranch,
   // Diagnostic types
   DiagnosticHealthStatus,
   ApplicationDiagnostic,
@@ -90,6 +109,8 @@ import type {
   InfrastructureIssuesReport,
   // Batch operation types
   BatchOperationResult,
+  // Resource list types
+  ResourceListItem,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -1308,6 +1329,347 @@ export class CoolifyClient {
     return this.request<MessageResponse>(`/databases/${databaseUuid}/backups/${backupUuid}`, {
       method: 'DELETE',
     });
+  }
+
+  // ===========================================================================
+  // Application Storage endpoints
+  // ===========================================================================
+
+  async listApplicationStorages(uuid: string): Promise<StorageListResponse> {
+    return this.request<StorageListResponse>(`/applications/${uuid}/storages`);
+  }
+
+  async createApplicationStorage(
+    uuid: string,
+    data: CreateStorageRequest,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateApplicationStorage(
+    uuid: string,
+    data: UpdateStorageRequest,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteApplicationStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/storages/${storageUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Application Scheduled Task endpoints
+  // ===========================================================================
+
+  async listApplicationScheduledTasks(uuid: string): Promise<ScheduledTask[]> {
+    return this.request<ScheduledTask[]>(`/applications/${uuid}/scheduled-tasks`);
+  }
+
+  async createApplicationScheduledTask(
+    uuid: string,
+    data: CreateScheduledTaskRequest,
+  ): Promise<ScheduledTask> {
+    return this.request<ScheduledTask>(`/applications/${uuid}/scheduled-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateApplicationScheduledTask(
+    uuid: string,
+    taskUuid: string,
+    data: UpdateScheduledTaskRequest,
+  ): Promise<ScheduledTask> {
+    return this.request<ScheduledTask>(`/applications/${uuid}/scheduled-tasks/${taskUuid}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteApplicationScheduledTask(uuid: string, taskUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/scheduled-tasks/${taskUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listApplicationScheduledTaskExecutions(
+    uuid: string,
+    taskUuid: string,
+  ): Promise<ScheduledTaskExecution[]> {
+    return this.request<ScheduledTaskExecution[]>(
+      `/applications/${uuid}/scheduled-tasks/${taskUuid}/executions`,
+    );
+  }
+
+  // ===========================================================================
+  // Application Preview endpoints
+  // ===========================================================================
+
+  async deleteApplicationPreview(uuid: string, pullRequestId: number): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/previews/${pullRequestId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Database Environment Variable endpoints
+  // ===========================================================================
+
+  async listDatabaseEnvVars(uuid: string): Promise<EnvironmentVariable[]> {
+    return this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+  }
+
+  async createDatabaseEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
+    return this.request<UuidResponse>(`/databases/${uuid}/envs`, {
+      method: 'POST',
+      body: JSON.stringify(cleanRequestData(data)),
+    });
+  }
+
+  async updateDatabaseEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/envs`, {
+      method: 'PATCH',
+      body: JSON.stringify(cleanRequestData(data)),
+    });
+  }
+
+  async bulkUpdateDatabaseEnvVars(
+    uuid: string,
+    data: BulkUpdateEnvVarsRequest,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/envs/bulk`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDatabaseEnvVar(uuid: string, envUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/envs/${envUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Database Storage endpoints
+  // ===========================================================================
+
+  async listDatabaseStorages(uuid: string): Promise<StorageListResponse> {
+    return this.request<StorageListResponse>(`/databases/${uuid}/storages`);
+  }
+
+  async createDatabaseStorage(uuid: string, data: CreateStorageRequest): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDatabaseStorage(uuid: string, data: UpdateStorageRequest): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDatabaseStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Delete Backup Execution endpoint
+  // ===========================================================================
+
+  async deleteBackupExecution(
+    databaseUuid: string,
+    backupUuid: string,
+    executionUuid: string,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/databases/${databaseUuid}/backups/${backupUuid}/executions/${executionUuid}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  // ===========================================================================
+  // Service Environment Variable (bulk) endpoint
+  // ===========================================================================
+
+  async bulkUpdateServiceEnvVars(
+    uuid: string,
+    data: BulkUpdateEnvVarsRequest,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/envs/bulk`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ===========================================================================
+  // Service Storage endpoints
+  // ===========================================================================
+
+  async listServiceStorages(uuid: string): Promise<StorageListResponse> {
+    return this.request<StorageListResponse>(`/services/${uuid}/storages`);
+  }
+
+  async createServiceStorage(uuid: string, data: CreateStorageRequest): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateServiceStorage(uuid: string, data: UpdateStorageRequest): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteServiceStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===========================================================================
+  // Service Scheduled Task endpoints
+  // ===========================================================================
+
+  async listServiceScheduledTasks(uuid: string): Promise<ScheduledTask[]> {
+    return this.request<ScheduledTask[]>(`/services/${uuid}/scheduled-tasks`);
+  }
+
+  async createServiceScheduledTask(
+    uuid: string,
+    data: CreateScheduledTaskRequest,
+  ): Promise<ScheduledTask> {
+    return this.request<ScheduledTask>(`/services/${uuid}/scheduled-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateServiceScheduledTask(
+    uuid: string,
+    taskUuid: string,
+    data: UpdateScheduledTaskRequest,
+  ): Promise<ScheduledTask> {
+    return this.request<ScheduledTask>(`/services/${uuid}/scheduled-tasks/${taskUuid}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteServiceScheduledTask(uuid: string, taskUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/scheduled-tasks/${taskUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async listServiceScheduledTaskExecutions(
+    uuid: string,
+    taskUuid: string,
+  ): Promise<ScheduledTaskExecution[]> {
+    return this.request<ScheduledTaskExecution[]>(
+      `/services/${uuid}/scheduled-tasks/${taskUuid}/executions`,
+    );
+  }
+
+  // ===========================================================================
+  // Hetzner Cloud endpoints
+  // ===========================================================================
+
+  async listHetznerLocations(tokenUuid: string): Promise<HetznerLocation[]> {
+    return this.request<HetznerLocation[]>(
+      `/hetzner/locations?cloud_provider_token_uuid=${encodeURIComponent(tokenUuid)}`,
+    );
+  }
+
+  async listHetznerServerTypes(tokenUuid: string): Promise<HetznerServerType[]> {
+    return this.request<HetznerServerType[]>(
+      `/hetzner/server-types?cloud_provider_token_uuid=${encodeURIComponent(tokenUuid)}`,
+    );
+  }
+
+  async listHetznerImages(tokenUuid: string): Promise<HetznerImage[]> {
+    return this.request<HetznerImage[]>(
+      `/hetzner/images?cloud_provider_token_uuid=${encodeURIComponent(tokenUuid)}`,
+    );
+  }
+
+  async listHetznerSSHKeys(tokenUuid: string): Promise<HetznerSSHKey[]> {
+    return this.request<HetznerSSHKey[]>(
+      `/hetzner/ssh-keys?cloud_provider_token_uuid=${encodeURIComponent(tokenUuid)}`,
+    );
+  }
+
+  async createHetznerServer(
+    data: CreateHetznerServerRequest,
+  ): Promise<CreateHetznerServerResponse> {
+    return this.request<CreateHetznerServerResponse>('/servers/hetzner', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ===========================================================================
+  // GitHub App Repository endpoints
+  // ===========================================================================
+
+  async listGitHubAppRepositories(githubAppId: number): Promise<GitHubRepository[]> {
+    const response = await this.request<{ repositories: GitHubRepository[] }>(
+      `/github-apps/${githubAppId}/repositories`,
+    );
+    return response.repositories ?? [];
+  }
+
+  async listGitHubAppBranches(
+    githubAppId: number,
+    owner: string,
+    repo: string,
+  ): Promise<GitHubBranch[]> {
+    return this.request<GitHubBranch[]>(
+      `/github-apps/${githubAppId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    );
+  }
+
+  // ===========================================================================
+  // Resources endpoint
+  // ===========================================================================
+
+  async listResources(): Promise<ResourceListItem[]> {
+    return this.request<ResourceListItem[]>('/resources');
+  }
+
+  // ===========================================================================
+  // Health endpoint
+  // ===========================================================================
+
+  async getHealth(): Promise<MessageResponse> {
+    return this.request<MessageResponse>('/health');
+  }
+
+  // ===========================================================================
+  // API Enable/Disable endpoints
+  // ===========================================================================
+
+  async enableApi(): Promise<MessageResponse> {
+    return this.request<MessageResponse>('/enable', { method: 'GET' });
+  }
+
+  async disableApi(): Promise<MessageResponse> {
+    return this.request<MessageResponse>('/disable', { method: 'GET' });
   }
 
   // ===========================================================================

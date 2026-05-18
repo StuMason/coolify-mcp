@@ -4128,4 +4128,714 @@ describe('CoolifyClient', () => {
       });
     });
   });
+
+  // ===========================================================================
+  // Application Storage endpoints
+  // ===========================================================================
+
+  describe('listApplicationStorages', () => {
+    it('should list application storages', async () => {
+      const mockData = { persistent_storages: [], file_storages: [] };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+      const result = await client.listApplicationStorages('app-uuid');
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/storages',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createApplicationStorage', () => {
+    it('should create application storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Storage created.' }));
+      const result = await client.createApplicationStorage('app-uuid', {
+        type: 'persistent',
+        mount_path: '/data',
+        name: 'my-vol',
+      });
+      expect(result).toEqual({ message: 'Storage created.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/storages',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateApplicationStorage', () => {
+    it('should update application storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Storage updated.' }));
+      const result = await client.updateApplicationStorage('app-uuid', {
+        uuid: 'stor-uuid',
+        type: 'persistent',
+        name: 'renamed',
+      });
+      expect(result).toEqual({ message: 'Storage updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/storages',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteApplicationStorage', () => {
+    it('should delete application storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Storage deleted.' }));
+      const result = await client.deleteApplicationStorage('app-uuid', 'stor-uuid');
+      expect(result).toEqual({ message: 'Storage deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/storages/stor-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Application Scheduled Task endpoints
+  // ===========================================================================
+
+  describe('listApplicationScheduledTasks', () => {
+    it('should list scheduled tasks', async () => {
+      const mockTasks = [
+        {
+          id: 1,
+          uuid: 'task-1',
+          name: 'backup',
+          command: 'pg_dump',
+          frequency: '0 * * * *',
+          enabled: true,
+          timeout: 300,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockTasks));
+      const result = await client.listApplicationScheduledTasks('app-uuid');
+      expect(result).toEqual(mockTasks);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/scheduled-tasks',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createApplicationScheduledTask', () => {
+    it('should create a scheduled task', async () => {
+      const mockTask = {
+        id: 1,
+        uuid: 'task-1',
+        name: 'backup',
+        command: 'pg_dump',
+        frequency: '0 * * * *',
+        enabled: true,
+        timeout: 300,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockTask));
+      const result = await client.createApplicationScheduledTask('app-uuid', {
+        name: 'backup',
+        command: 'pg_dump',
+        frequency: '0 * * * *',
+      });
+      expect(result).toEqual(mockTask);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/scheduled-tasks',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateApplicationScheduledTask', () => {
+    it('should update a scheduled task', async () => {
+      const mockTask = {
+        id: 1,
+        uuid: 'task-1',
+        name: 'backup-v2',
+        command: 'pg_dump -Fc',
+        frequency: '0 * * * *',
+        enabled: true,
+        timeout: 300,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockTask));
+      const result = await client.updateApplicationScheduledTask('app-uuid', 'task-1', {
+        name: 'backup-v2',
+      });
+      expect(result).toEqual(mockTask);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/scheduled-tasks/task-1',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteApplicationScheduledTask', () => {
+    it('should delete a scheduled task', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Scheduled task deleted.' }));
+      const result = await client.deleteApplicationScheduledTask('app-uuid', 'task-1');
+      expect(result).toEqual({ message: 'Scheduled task deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/scheduled-tasks/task-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  describe('listApplicationScheduledTaskExecutions', () => {
+    it('should list task executions', async () => {
+      const mockExecs = [
+        {
+          uuid: 'exec-1',
+          status: 'success',
+          retry_count: 0,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockExecs));
+      const result = await client.listApplicationScheduledTaskExecutions('app-uuid', 'task-1');
+      expect(result).toEqual(mockExecs);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/scheduled-tasks/task-1/executions',
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Application Preview endpoint
+  // ===========================================================================
+
+  describe('deleteApplicationPreview', () => {
+    it('should delete a preview deployment', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Preview deleted.' }));
+      const result = await client.deleteApplicationPreview('app-uuid', 42);
+      expect(result).toEqual({ message: 'Preview deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/previews/42',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Database Environment Variable endpoints
+  // ===========================================================================
+
+  describe('listDatabaseEnvVars', () => {
+    it('should list database env vars', async () => {
+      const mockEnvs = [
+        {
+          id: 1,
+          uuid: 'env-1',
+          key: 'DB_HOST',
+          value: 'localhost',
+          is_build_time: false,
+          is_literal: false,
+          is_multiline: false,
+          is_preview: false,
+          is_shared: false,
+          is_shown_once: false,
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockEnvs));
+      const result = await client.listDatabaseEnvVars('db-uuid');
+      expect(result).toEqual(mockEnvs);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createDatabaseEnvVar', () => {
+    it('should create a database env var', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'env-1' }));
+      const result = await client.createDatabaseEnvVar('db-uuid', {
+        key: 'DB_HOST',
+        value: 'localhost',
+      });
+      expect(result).toEqual({ uuid: 'env-1' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateDatabaseEnvVar', () => {
+    it('should update a database env var', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Updated.' }));
+      const result = await client.updateDatabaseEnvVar('db-uuid', {
+        key: 'DB_HOST',
+        value: '127.0.0.1',
+      });
+      expect(result).toEqual({ message: 'Updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('bulkUpdateDatabaseEnvVars', () => {
+    it('should bulk update database env vars', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Bulk updated.' }));
+      const result = await client.bulkUpdateDatabaseEnvVars('db-uuid', {
+        data: [{ key: 'A', value: '1' }],
+      });
+      expect(result).toEqual({ message: 'Bulk updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs/bulk',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteDatabaseEnvVar', () => {
+    it('should delete a database env var', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted.' }));
+      const result = await client.deleteDatabaseEnvVar('db-uuid', 'env-uuid');
+      expect(result).toEqual({ message: 'Deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs/env-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Database Storage endpoints
+  // ===========================================================================
+
+  describe('listDatabaseStorages', () => {
+    it('should list database storages', async () => {
+      const mockData = { persistent_storages: [], file_storages: [] };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+      const result = await client.listDatabaseStorages('db-uuid');
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/storages',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createDatabaseStorage', () => {
+    it('should create database storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Created.' }));
+      const result = await client.createDatabaseStorage('db-uuid', {
+        type: 'persistent',
+        mount_path: '/data',
+      });
+      expect(result).toEqual({ message: 'Created.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/storages',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateDatabaseStorage', () => {
+    it('should update database storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Updated.' }));
+      const result = await client.updateDatabaseStorage('db-uuid', {
+        type: 'persistent',
+        name: 'new-name',
+      });
+      expect(result).toEqual({ message: 'Updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/storages',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteDatabaseStorage', () => {
+    it('should delete database storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted.' }));
+      const result = await client.deleteDatabaseStorage('db-uuid', 'stor-uuid');
+      expect(result).toEqual({ message: 'Deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/storages/stor-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Delete Backup Execution endpoint
+  // ===========================================================================
+
+  describe('deleteBackupExecution', () => {
+    it('should delete a backup execution', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted.' }));
+      const result = await client.deleteBackupExecution('db-uuid', 'backup-uuid', 'exec-uuid');
+      expect(result).toEqual({ message: 'Deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/backups/backup-uuid/executions/exec-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Service Environment Variable bulk endpoint
+  // ===========================================================================
+
+  describe('bulkUpdateServiceEnvVars', () => {
+    it('should bulk update service env vars', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Bulk updated.' }));
+      const result = await client.bulkUpdateServiceEnvVars('svc-uuid', {
+        data: [{ key: 'A', value: '1' }],
+      });
+      expect(result).toEqual({ message: 'Bulk updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/envs/bulk',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Service Storage endpoints
+  // ===========================================================================
+
+  describe('listServiceStorages', () => {
+    it('should list service storages', async () => {
+      const mockData = { persistent_storages: [], file_storages: [] };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+      const result = await client.listServiceStorages('svc-uuid');
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/storages',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createServiceStorage', () => {
+    it('should create service storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Created.' }));
+      const result = await client.createServiceStorage('svc-uuid', {
+        type: 'file',
+        mount_path: '/config',
+      });
+      expect(result).toEqual({ message: 'Created.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/storages',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateServiceStorage', () => {
+    it('should update service storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Updated.' }));
+      const result = await client.updateServiceStorage('svc-uuid', {
+        type: 'file',
+        content: 'new content',
+      });
+      expect(result).toEqual({ message: 'Updated.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/storages',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteServiceStorage', () => {
+    it('should delete service storage', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted.' }));
+      const result = await client.deleteServiceStorage('svc-uuid', 'stor-uuid');
+      expect(result).toEqual({ message: 'Deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/storages/stor-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Service Scheduled Task endpoints
+  // ===========================================================================
+
+  describe('listServiceScheduledTasks', () => {
+    it('should list service scheduled tasks', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listServiceScheduledTasks('svc-uuid');
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/scheduled-tasks',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createServiceScheduledTask', () => {
+    it('should create a service scheduled task', async () => {
+      const mockTask = {
+        id: 1,
+        uuid: 'task-1',
+        name: 'cleanup',
+        command: 'rm -rf /tmp/*',
+        frequency: '0 0 * * *',
+        enabled: true,
+        timeout: 300,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockTask));
+      const result = await client.createServiceScheduledTask('svc-uuid', {
+        name: 'cleanup',
+        command: 'rm -rf /tmp/*',
+        frequency: '0 0 * * *',
+      });
+      expect(result).toEqual(mockTask);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/scheduled-tasks',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  describe('updateServiceScheduledTask', () => {
+    it('should update a service scheduled task', async () => {
+      const mockTask = {
+        id: 1,
+        uuid: 'task-1',
+        name: 'cleanup-v2',
+        command: 'rm -rf /tmp/*',
+        frequency: '0 0 * * *',
+        enabled: true,
+        timeout: 600,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockTask));
+      const result = await client.updateServiceScheduledTask('svc-uuid', 'task-1', {
+        timeout: 600,
+      });
+      expect(result).toEqual(mockTask);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/scheduled-tasks/task-1',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+  });
+
+  describe('deleteServiceScheduledTask', () => {
+    it('should delete a service scheduled task', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted.' }));
+      const result = await client.deleteServiceScheduledTask('svc-uuid', 'task-1');
+      expect(result).toEqual({ message: 'Deleted.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/scheduled-tasks/task-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  describe('listServiceScheduledTaskExecutions', () => {
+    it('should list service task executions', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listServiceScheduledTaskExecutions('svc-uuid', 'task-1');
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/scheduled-tasks/task-1/executions',
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Hetzner Cloud endpoints
+  // ===========================================================================
+
+  describe('listHetznerLocations', () => {
+    it('should list Hetzner locations', async () => {
+      const mockLocs = [
+        {
+          id: 1,
+          name: 'nbg1',
+          description: 'Nuremberg',
+          country: 'DE',
+          city: 'Nuremberg',
+          latitude: 49.45,
+          longitude: 11.08,
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockLocs));
+      const result = await client.listHetznerLocations('token-uuid');
+      expect(result).toEqual(mockLocs);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/hetzner/locations?cloud_provider_token_uuid=token-uuid',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('listHetznerServerTypes', () => {
+    it('should list Hetzner server types', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listHetznerServerTypes('token-uuid');
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/hetzner/server-types?cloud_provider_token_uuid=token-uuid',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('listHetznerImages', () => {
+    it('should list Hetzner images', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listHetznerImages('token-uuid');
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/hetzner/images?cloud_provider_token_uuid=token-uuid',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('listHetznerSSHKeys', () => {
+    it('should list Hetzner SSH keys', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listHetznerSSHKeys('token-uuid');
+      expect(result).toEqual([]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/hetzner/ssh-keys?cloud_provider_token_uuid=token-uuid',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('createHetznerServer', () => {
+    it('should create a Hetzner server', async () => {
+      const mockResp = { uuid: 'srv-uuid', hetzner_server_id: 12345, ip: '1.2.3.4' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockResp));
+      const result = await client.createHetznerServer({
+        location: 'nbg1',
+        server_type: 'cx11',
+        image: 15512617,
+        private_key_uuid: 'key-uuid',
+      });
+      expect(result).toEqual(mockResp);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/servers/hetzner',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // GitHub App Repository endpoints
+  // ===========================================================================
+
+  describe('listGitHubAppRepositories', () => {
+    it('should list GitHub App repositories', async () => {
+      const mockRepos = [
+        {
+          id: 1,
+          name: 'my-repo',
+          full_name: 'org/my-repo',
+          private: true,
+          html_url: 'https://github.com/org/my-repo',
+          default_branch: 'main',
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(mockResponse({ repositories: mockRepos }));
+      const result = await client.listGitHubAppRepositories(123);
+      expect(result).toEqual(mockRepos);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps/123/repositories',
+        expect.any(Object),
+      );
+    });
+
+    it('should return empty array when no repositories', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({}));
+      const result = await client.listGitHubAppRepositories(123);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('listGitHubAppBranches', () => {
+    it('should list branches for a repo', async () => {
+      const mockBranches = [{ name: 'main' }, { name: 'develop' }];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockBranches));
+      const result = await client.listGitHubAppBranches(123, 'org', 'my-repo');
+      expect(result).toEqual(mockBranches);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/github-apps/123/repositories/org/my-repo/branches',
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Resources endpoint
+  // ===========================================================================
+
+  describe('listResources', () => {
+    it('should list all resources', async () => {
+      const mockData = [{ uuid: 'r1', type: 'application' }];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+      const result = await client.listResources();
+      expect(result).toEqual(mockData);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resources',
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Health endpoint
+  // ===========================================================================
+
+  describe('getHealth', () => {
+    it('should check API health', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'OK' }));
+      const result = await client.getHealth();
+      expect(result).toEqual({ message: 'OK' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/health',
+        expect.any(Object),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // API Enable/Disable endpoints
+  // ===========================================================================
+
+  describe('enableApi', () => {
+    it('should enable the API', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'API enabled.' }));
+      const result = await client.enableApi();
+      expect(result).toEqual({ message: 'API enabled.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/enable',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+  });
+
+  describe('disableApi', () => {
+    it('should disable the API', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'API disabled.' }));
+      const result = await client.disableApi();
+      expect(result).toEqual({ message: 'API disabled.' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/disable',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+  });
 });
