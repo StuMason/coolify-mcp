@@ -185,4 +185,6 @@ flowchart LR
 - **`bulk_env_update` doesn't echo values back** — it returns a per-app success/failure summary only.
 - **No write tools auto-confirm.** Destructive operations rely on the MCP client's confirmation UI. v3 will add `destructiveHint` annotations so clients can prompt more aggressively — see the [v3 vision](/roadmap/v3-vision).
 
+For the full security model — credentials, threat model, what to do if a token leaks — see the dedicated [Security model](/concepts/security) page.
+
 See [Coolify API gotchas](/concepts/coolify-api-gotchas) for the unhappy surprises we've documented while building this.
