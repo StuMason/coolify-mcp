@@ -405,6 +405,43 @@ function toResourceListItemEssential(item: ResourceListItemFull): ResourceListIt
 }
 
 /**
+ * Per-resource sensitive fields returned by Coolify's `/api/v1/resources`
+ * endpoint that are masked by default in {@link CoolifyClient.listResources}
+ * when `include_full: true` is passed. Mirrors the v2.9.0 env-var masking
+ * posture: the underlying API exposes these via the same access token, but
+ * the MCP layer narrows the trust boundary so an LLM client that was granted
+ * "list resources" doesn't silently exfiltrate webhook HMAC secrets or
+ * basic-auth credentials.
+ *
+ * The `manual_webhook_secret_*` fields are HMAC signing keys for inbound
+ * deploy webhooks — anyone with one can forge deploys for that repo
+ * independently of the Coolify API token. `http_basic_auth_password` is the
+ * password gating front-of-app access.
+ */
+const SENSITIVE_RESOURCE_FIELDS = [
+  'manual_webhook_secret_github',
+  'manual_webhook_secret_gitlab',
+  'manual_webhook_secret_gitea',
+  'manual_webhook_secret_bitbucket',
+  'http_basic_auth_password',
+] as const;
+
+/**
+ * Replace each {@link SENSITIVE_RESOURCE_FIELDS} entry with `'***'` on a full
+ * resource row. Null/undefined values are preserved (since `null` conveys
+ * "no secret set" and matters to callers); only populated values get masked.
+ */
+function maskResourceItemFull(item: ResourceListItemFull): ResourceListItemFull {
+  const masked: ResourceListItemFull = { ...item };
+  for (const field of SENSITIVE_RESOURCE_FIELDS) {
+    if (masked[field] != null) {
+      masked[field] = MASKED_VALUE;
+    }
+  }
+  return masked;
+}
+
+/**
  * HTTP client for the Coolify API
  */
 export class CoolifyClient {
@@ -1676,15 +1713,20 @@ export class CoolifyClient {
    * config, which on a moderate instance can exceed 500 KB on a single call
    * and blow MCP/LLM context budgets. Set `include_full: true` to opt back
    * into the raw response shape ({@link ResourceListItemFull}).
+   *
+   * When `include_full: true`, sensitive fields ({@link SENSITIVE_RESOURCE_FIELDS}:
+   * webhook HMAC secrets + basic-auth password) are replaced with `'***'`
+   * unless the caller also passes `reveal: true`. Mirrors the v2.9.0 env_vars
+   * masking posture.
    */
   async listResources(
-    options?: { include_full?: boolean },
+    options?: { include_full?: boolean; reveal?: boolean },
   ): Promise<ResourceListItem[] | ResourceListItemFull[]> {
     const full = await this.request<ResourceListItemFull[]>('/resources');
-    if (options?.include_full === true) {
-      return full;
+    if (options?.include_full !== true) {
+      return full.map(toResourceListItemEssential);
     }
-    return full.map(toResourceListItemEssential);
+    return options.reveal === true ? full : full.map(maskResourceItemFull);
   }
 
   // ===========================================================================

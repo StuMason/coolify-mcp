@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`list_resources` masks webhook secrets and basic-auth credentials by default** (#204) — when `system({ action: 'list_resources', include_full: true })` is called, the per-resource fields `manual_webhook_secret_github` / `manual_webhook_secret_gitlab` / `manual_webhook_secret_gitea` / `manual_webhook_secret_bitbucket` and `http_basic_auth_password` are now replaced with `'***'` so an MCP client / LLM granted "list resources" cannot silently exfiltrate webhook HMAC signing keys or front-of-app passwords. Pass `reveal: true` alongside `include_full: true` to round-trip plaintext. Mirrors the v2.9.0 `env_vars` masking posture from #159 / #182. Applied at the API boundary in `listResources()` so any other code path also inherits masking by default.
+
 ### Fixed
 
 - **`system list_resources` returns essential projection by default** (#203) — previously typed as `Promise<ResourceListItem[]>` but actually returned the full Coolify `/api/v1/resources` payload (~95 fields per row, ~16 KB per item, 500+ KB on instances with 30+ resources) which blew MCP token budgets and made the tool unusable for LLM-driven workflows. Now defaults to a true `{ uuid, name, type, status? }` projection applied at the API boundary. Set `include_full: true` to opt back into the raw Coolify payload. Mirrors the `include_logs` opt-in pattern from #158.
 
 ### Changed (breaking, typed-only)
 
-- **`listResources` signature** (#203): `Promise<ResourceListItem[]>` → `Promise<ResourceListItem[] | ResourceListItemFull[]>` with new optional `options?: { include_full?: boolean }` parameter. Programmatic consumers of `@masonator/coolify-mcp` will need to widen their result type (or narrow at the call site with `include_full`). Note: the previous type was wrong-at-runtime against real Coolify (claimed 4 fields, returned ~95), so any caller that worked end-to-end was already accommodating the bloated shape.
+- **`listResources` signature** (#203, #204): `Promise<ResourceListItem[]>` → `Promise<ResourceListItem[] | ResourceListItemFull[]>` with new optional `options?: { include_full?: boolean; reveal?: boolean }` parameter. Programmatic consumers of `@masonator/coolify-mcp` will need to widen their result type (or narrow at the call site with `include_full`). Note: the previous type was wrong-at-runtime against real Coolify (claimed 4 fields, returned ~95), so any caller that worked end-to-end was already accommodating the bloated shape.
 
 ### Added (types)
 

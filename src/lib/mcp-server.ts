@@ -1825,17 +1825,18 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'system',
-      "System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload.",
+      "System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload. When `include_full: true`, webhook HMAC secrets and basic-auth password are masked unless `reveal: true` is also set (matches the `env_vars` `reveal` ergonomics).",
       {
         action: z.enum(['health', 'list_resources', 'enable_api', 'disable_api']),
         include_full: z.boolean().optional(),
+        reveal: z.boolean().optional(),
       },
-      async ({ action, include_full }) => {
+      async ({ action, include_full, reveal }) => {
         switch (action) {
           case 'health':
             return wrap(() => this.client.getHealth());
           case 'list_resources':
-            return wrap(() => this.client.listResources({ include_full }));
+            return wrap(() => this.client.listResources({ include_full, reveal }));
           case 'enable_api':
             return wrap(() => this.client.enableApi());
           case 'disable_api':

@@ -4836,6 +4836,63 @@ describe('CoolifyClient', () => {
       const result = await client.listResources({ include_full: false });
       expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
     });
+
+    describe('sensitive-field masking on include_full', () => {
+      const sensitiveResource = {
+        ...fluffyResource,
+        manual_webhook_secret_github: 'real-github-secret',
+        manual_webhook_secret_gitlab: 'real-gitlab-secret',
+        manual_webhook_secret_gitea: 'real-gitea-secret',
+        manual_webhook_secret_bitbucket: 'real-bitbucket-secret',
+        http_basic_auth_password: 'real-basic-auth-pwd',
+      };
+
+      it('masks webhook secrets and basic-auth password by default on include_full=true', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.manual_webhook_secret_github).toBe('***');
+        expect(first.manual_webhook_secret_gitlab).toBe('***');
+        expect(first.manual_webhook_secret_gitea).toBe('***');
+        expect(first.manual_webhook_secret_bitbucket).toBe('***');
+        expect(first.http_basic_auth_password).toBe('***');
+        expect(first.config_hash).toBe(sensitiveResource.config_hash);
+      });
+
+      it('round-trips plaintext when reveal=true', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const [first] = (await client.listResources({
+          include_full: true,
+          reveal: true,
+        })) as Array<Record<string, unknown>>;
+        expect(first.manual_webhook_secret_github).toBe('real-github-secret');
+        expect(first.http_basic_auth_password).toBe('real-basic-auth-pwd');
+      });
+
+      it('leaves null secret values untouched (Coolify uses null when unset)', async () => {
+        const noSecrets = {
+          ...fluffyResource,
+          manual_webhook_secret_github: null,
+          manual_webhook_secret_gitlab: null,
+          manual_webhook_secret_gitea: null,
+          manual_webhook_secret_bitbucket: null,
+          http_basic_auth_password: null,
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([noSecrets]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.manual_webhook_secret_github).toBeNull();
+        expect(first.http_basic_auth_password).toBeNull();
+      });
+
+      it('reveal=true on the default projection is a no-op (no fluff to reveal)', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const result = await client.listResources({ reveal: true });
+        expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
+      });
+    });
   });
 
   // ===========================================================================
