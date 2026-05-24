@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`system list_resources` returns essential projection by default** (#203) — previously typed as `Promise<ResourceListItem[]>` but actually returned the full Coolify `/api/v1/resources` payload (~95 fields per row, ~16 KB per item, 500+ KB on instances with 30+ resources) which blew MCP token budgets and made the tool unusable for LLM-driven workflows. Now defaults to a true `{ uuid, name, type, status? }` projection applied at the API boundary. Set `include_full: true` to opt back into the raw Coolify payload. Mirrors the `include_logs` opt-in pattern from #158.
+- **`is_build_time` typo bleed-in from #172** (#205) — test mock at `src/__tests__/coolify-client.test.ts:4335` and the `[2.11.0]` CHANGELOG entry both referenced the wrong underscored field name (`is_build_time`). The correct name is `is_buildtime` (one word) per #174 / v2.9.0; runtime code was already correct, this is doc + test-mock cleanup only.
 
 ### Changed (breaking, typed-only)
 
@@ -33,7 +34,7 @@ Net tool count: 38 → 42 (after consolidation; original PR proposed 45 before r
 - **`scheduled_tasks` tool** — list/create/update/delete/list_executions for application or service. Consolidated.
 - **`hetzner` tool** — list_locations, list_server_types, list_images, list_ssh_keys, create_server against the Coolify Hetzner cloud-provider endpoints. Requires a configured cloud-provider token UUID. The Coolify Hetzner routes are auth-scope-gated; the wiring is correct but the calling user needs the right token.
 - **`system` tool** — health, list_resources, enable_api, disable_api against the instance. Consolidates what would have been three separate tools.
-- **`env_vars` expanded** — adds `database` resource, `bulk_update` action, plus `is_build_time`, `is_preview`, `data[]` params on the existing actions.
+- **`env_vars` expanded** — adds `database` resource, `bulk_update` action, plus `is_preview` and `data[]` params on the existing actions. (`is_buildtime` and `is_runtime` have been on the schema since v2.9.0 / #174 — they are not new in this release.)
 - **`github_apps` expanded** — adds `list_repos`, `list_branches` actions.
 - **`database_backups` expanded** — adds `delete_execution` action.
 - **`ResourceListItem` type** — concrete interface for `/api/v1/resources` responses with `uuid`, `name`, `type`, optional `status`. Replaces `Promise<unknown>` on the client method (no-implicit-any policy compliance).

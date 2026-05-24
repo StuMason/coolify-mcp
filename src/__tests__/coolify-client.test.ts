@@ -4332,7 +4332,7 @@ describe('CoolifyClient', () => {
           uuid: 'env-1',
           key: 'DB_HOST',
           value: 'localhost',
-          is_build_time: false,
+          is_buildtime: false,
           is_literal: false,
           is_multiline: false,
           is_preview: false,
