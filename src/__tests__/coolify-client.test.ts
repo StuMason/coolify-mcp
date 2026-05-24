@@ -4783,15 +4783,58 @@ describe('CoolifyClient', () => {
   // ===========================================================================
 
   describe('listResources', () => {
-    it('should list all resources', async () => {
-      const mockData = [{ uuid: 'r1', type: 'application' }];
-      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+    const fluffyResource = {
+      uuid: 'r1',
+      name: 'my-app',
+      type: 'application',
+      status: 'running:healthy',
+      // ---- fluff that the essential projection should drop ----
+      id: 6,
+      config_hash: 'd1b84af30038c5902cced139b19e5f6f',
+      build_pack: 'dockerfile',
+      health_check_path: '/',
+      ports_exposes: '3500',
+      dockerfile_location: '/Dockerfile',
+      custom_labels: 'dHJhZWZpa...',
+      docker_compose: null,
+    };
+
+    it('returns essential projection by default (uuid/name/type/status only)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
       const result = await client.listResources();
-      expect(result).toEqual(mockData);
+      expect(result).toEqual([
+        { uuid: 'r1', name: 'my-app', type: 'application', status: 'running:healthy' },
+      ]);
+      const [first] = result;
+      expect(Object.keys(first).sort()).toEqual(['name', 'status', 'type', 'uuid']);
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/resources',
         expect.any(Object),
       );
+    });
+
+    it('omits status when the resource has none', async () => {
+      const noStatus: Record<string, unknown> = { ...fluffyResource };
+      delete noStatus.status;
+      mockFetch.mockResolvedValueOnce(mockResponse([noStatus]));
+      const result = await client.listResources();
+      expect(result).toEqual([{ uuid: 'r1', name: 'my-app', type: 'application' }]);
+      expect('status' in result[0]).toBe(false);
+    });
+
+    it('returns the raw Coolify payload when include_full is true', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
+      const result = await client.listResources({ include_full: true });
+      expect(result).toEqual([fluffyResource]);
+      const [first] = result as Array<Record<string, unknown>>;
+      expect(first.config_hash).toBe(fluffyResource.config_hash);
+      expect(first.custom_labels).toBe(fluffyResource.custom_labels);
+    });
+
+    it('treats include_full=false as the default essential projection', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
+      const result = await client.listResources({ include_full: false });
+      expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
     });
   });
 

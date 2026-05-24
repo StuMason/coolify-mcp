@@ -1309,6 +1309,15 @@ export interface ResourceListItem {
   status?: string;
 }
 
+/**
+ * Full Coolify `/api/v1/resources` row — the typed essentials plus every other
+ * field Coolify returns (build/healthcheck/limits/git/docker-compose config,
+ * etc.). Only surfaced when the caller passes `include_full: true`; the default
+ * `listResources()` response uses {@link ResourceListItem} to keep MCP token
+ * budgets sane on instances with many resources.
+ */
+export type ResourceListItemFull = ResourceListItem & Record<string, unknown>;
+
 // =============================================================================
 // Response Enhancement Types (HATEOAS-style actions)
 // =============================================================================

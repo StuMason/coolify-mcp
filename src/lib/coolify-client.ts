@@ -111,6 +111,7 @@ import type {
   BatchOperationResult,
   // Resource list types
   ResourceListItem,
+  ResourceListItemFull,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -383,6 +384,24 @@ function maskEnvVarSummary(envVar: EnvVarSummary): EnvVarSummary {
     ...envVar,
     value: MASKED_VALUE,
   };
+}
+
+/**
+ * Project a full Coolify resource row down to {@link ResourceListItem} — the
+ * four fields callers actually need for enumeration (uuid, name, type, status).
+ * Drops the ~90 extra fields Coolify returns by default to keep MCP token
+ * budgets sane.
+ */
+function toResourceListItemEssential(item: ResourceListItemFull): ResourceListItem {
+  const essential: ResourceListItem = {
+    uuid: item.uuid,
+    name: item.name,
+    type: item.type,
+  };
+  if (item.status !== undefined) {
+    essential.status = item.status as string;
+  }
+  return essential;
 }
 
 /**
@@ -1648,8 +1667,24 @@ export class CoolifyClient {
   // Resources endpoint
   // ===========================================================================
 
-  async listResources(): Promise<ResourceListItem[]> {
-    return this.request<ResourceListItem[]>('/resources');
+  /**
+   * List every resource on the Coolify instance.
+   *
+   * Defaults to an essential projection ({@link ResourceListItem}: uuid, name,
+   * type, optional status) — Coolify's `/api/v1/resources` endpoint actually
+   * returns ~95 fields per row including the full build/healthcheck/limits
+   * config, which on a moderate instance can exceed 500 KB on a single call
+   * and blow MCP/LLM context budgets. Set `include_full: true` to opt back
+   * into the raw response shape ({@link ResourceListItemFull}).
+   */
+  async listResources(
+    options?: { include_full?: boolean },
+  ): Promise<ResourceListItem[] | ResourceListItemFull[]> {
+    const full = await this.request<ResourceListItemFull[]>('/resources');
+    if (options?.include_full === true) {
+      return full;
+    }
+    return full.map(toResourceListItemEssential);
   }
 
   // ===========================================================================

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`system list_resources` returns essential projection by default** (#203) — previously typed as `Promise<ResourceListItem[]>` but actually returned the full Coolify `/api/v1/resources` payload (~95 fields per row, ~16 KB per item, 500+ KB on instances with 30+ resources) which blew MCP token budgets and made the tool unusable for LLM-driven workflows. Now defaults to a true `{ uuid, name, type, status? }` projection applied at the API boundary. Set `include_full: true` to opt back into the raw Coolify payload. Mirrors the `include_logs` opt-in pattern from #158.
+
+### Changed (breaking, typed-only)
+
+- **`listResources` signature** (#203): `Promise<ResourceListItem[]>` → `Promise<ResourceListItem[] | ResourceListItemFull[]>` with new optional `options?: { include_full?: boolean }` parameter. Programmatic consumers of `@masonator/coolify-mcp` will need to widen their result type (or narrow at the call site with `include_full`). Note: the previous type was wrong-at-runtime against real Coolify (claimed 4 fields, returned ~95), so any caller that worked end-to-end was already accommodating the bloated shape.
+
+### Added (types)
+
+- **`ResourceListItemFull` type** — `ResourceListItem & Record<string, unknown>`. Surfaces only when `include_full: true` is passed; documents that the full Coolify row carries arbitrary additional fields beyond the typed essentials.
+
 ## [2.11.0] - 2026-05-18
 
 ### Added (#172, thanks @opastorello)
