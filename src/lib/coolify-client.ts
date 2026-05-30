@@ -1106,8 +1106,9 @@ export class CoolifyClient {
     });
   }
 
-  async restartService(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/restart`, {
+  async restartService(uuid: string, pullLatest = false): Promise<MessageResponse> {
+    const qs = pullLatest ? '?latest=true' : '';
+    return this.request<MessageResponse>(`/services/${uuid}/restart${qs}`, {
       method: 'GET',
     });
   }
