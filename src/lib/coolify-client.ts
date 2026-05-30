@@ -398,8 +398,8 @@ function toResourceListItemEssential(item: ResourceListItemFull): ResourceListIt
     name: item.name,
     type: item.type,
   };
-  if (item.status !== undefined) {
-    essential.status = item.status as string;
+  if (typeof item.status === 'string') {
+    essential.status = item.status;
   }
   return essential;
 }

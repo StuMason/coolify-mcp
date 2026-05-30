@@ -4837,6 +4837,28 @@ describe('CoolifyClient', () => {
       expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
     });
 
+    it('returns [] on an empty payload (default projection)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listResources();
+      expect(result).toEqual([]);
+    });
+
+    it('returns [] on an empty payload (include_full=true, mask path)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listResources({ include_full: true });
+      expect(result).toEqual([]);
+    });
+
+    it('drops status when Coolify returns a non-string shape (defensive)', async () => {
+      // Hypothetical future Coolify divergence: status emitted as an object/null.
+      // The essential projection must not propagate a non-string into a `string`-typed field.
+      const objStatus = { ...fluffyResource, status: { state: 'running', healthy: true } };
+      mockFetch.mockResolvedValueOnce(mockResponse([objStatus]));
+      const result = await client.listResources();
+      expect(result).toEqual([{ uuid: 'r1', name: 'my-app', type: 'application' }]);
+      expect('status' in result[0]).toBe(false);
+    });
+
     describe('sensitive-field masking on include_full', () => {
       const sensitiveResource = {
         ...fluffyResource,

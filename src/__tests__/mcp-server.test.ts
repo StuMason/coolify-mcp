@@ -370,6 +370,35 @@ describe('CoolifyMcpServer v2', () => {
     });
   });
 
+  describe('system tool handler', () => {
+    const callSystem = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['system'];
+      return tool.handler(args, {});
+    };
+
+    it('forwards include_full and reveal to listResources', async () => {
+      const spy = jest.spyOn(server['client'], 'listResources').mockResolvedValue([]);
+      await callSystem(server, { action: 'list_resources', include_full: true, reveal: true });
+      expect(spy).toHaveBeenCalledWith({ include_full: true, reveal: true });
+    });
+
+    it('calls listResources with undefined flags when neither is passed', async () => {
+      const spy = jest.spyOn(server['client'], 'listResources').mockResolvedValue([]);
+      await callSystem(server, { action: 'list_resources' });
+      expect(spy).toHaveBeenCalledWith({ include_full: undefined, reveal: undefined });
+    });
+  });
+
   describe('bulk_env_update tool handler', () => {
     it('forwards is_buildtime/is_runtime to bulkEnvUpdate', async () => {
       const spy = jest.spyOn(server['client'], 'bulkEnvUpdate').mockResolvedValue({

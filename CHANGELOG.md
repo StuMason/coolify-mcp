@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`system list_resources` returns essential projection by default** (#203) — previously typed as `Promise<ResourceListItem[]>` but actually returned the full Coolify `/api/v1/resources` payload (~95 fields per row, ~16 KB per item, 500+ KB on instances with 30+ resources) which blew MCP token budgets and made the tool unusable for LLM-driven workflows. Now defaults to a true `{ uuid, name, type, status? }` projection applied at the API boundary. Set `include_full: true` to opt back into the raw Coolify payload. Mirrors the `include_logs` opt-in pattern from #158.
 - **`is_build_time` typo bleed-in from #172** (#205) — test mock at `src/__tests__/coolify-client.test.ts:4335` and the `[2.11.0]` CHANGELOG entry both referenced the wrong underscored field name (`is_build_time`). The correct name is `is_buildtime` (one word) per #174 / v2.9.0; runtime code was already correct, this is doc + test-mock cleanup only.
+- **`toResourceListItemEssential` guards `status` with `typeof`** — replaces an unchecked `item.status as string` cast. If a future Coolify version emits `status` as an object/null, the field is now dropped from the essential projection instead of silently violating the `ResourceListItem` interface.
 
 ### Changed (breaking, typed-only)
 
