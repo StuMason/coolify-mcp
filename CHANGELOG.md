@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-05-30
+
 ### Security
 
 - **`list_resources` masks webhook secrets and basic-auth credentials by default** (#204) — when `system({ action: 'list_resources', include_full: true })` is called, the per-resource fields `manual_webhook_secret_github` / `manual_webhook_secret_gitlab` / `manual_webhook_secret_gitea` / `manual_webhook_secret_bitbucket` and `http_basic_auth_password` are now replaced with `'***'` so an MCP client / LLM granted "list resources" cannot silently exfiltrate webhook HMAC signing keys or front-of-app passwords. Pass `reveal: true` alongside `include_full: true` to round-trip plaintext. Mirrors the v2.9.0 `env_vars` masking posture from #159 / #182. Applied at the API boundary in `listResources()` so any other code path also inherits masking by default.
