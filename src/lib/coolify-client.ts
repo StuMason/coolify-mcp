@@ -1719,9 +1719,10 @@ export class CoolifyClient {
    * unless the caller also passes `reveal: true`. Mirrors the v2.9.0 env_vars
    * masking posture.
    */
-  async listResources(
-    options?: { include_full?: boolean; reveal?: boolean },
-  ): Promise<ResourceListItem[] | ResourceListItemFull[]> {
+  async listResources(options?: {
+    include_full?: boolean;
+    reveal?: boolean;
+  }): Promise<ResourceListItem[] | ResourceListItemFull[]> {
     const full = await this.request<ResourceListItemFull[]>('/resources');
     if (options?.include_full !== true) {
       return full.map(toResourceListItemEssential);

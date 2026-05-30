@@ -1825,7 +1825,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'system',
-      "System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload. When `include_full: true`, webhook HMAC secrets and basic-auth password are masked unless `reveal: true` is also set (matches the `env_vars` `reveal` ergonomics).",
+      'System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload. When `include_full: true`, webhook HMAC secrets and basic-auth password are masked unless `reveal: true` is also set (matches the `env_vars` `reveal` ergonomics).',
       {
         action: z.enum(['health', 'list_resources', 'enable_api', 'disable_api']),
         include_full: z.boolean().optional(),
