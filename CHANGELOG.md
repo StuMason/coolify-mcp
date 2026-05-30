@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`list_resources` masks webhook secrets and basic-auth credentials by default** (#204) — when `system({ action: 'list_resources', include_full: true })` is called, the per-resource fields `manual_webhook_secret_github` / `manual_webhook_secret_gitlab` / `manual_webhook_secret_gitea` / `manual_webhook_secret_bitbucket` and `http_basic_auth_password` are now replaced with `'***'` so an MCP client / LLM granted "list resources" cannot silently exfiltrate webhook HMAC signing keys or front-of-app passwords. Pass `reveal: true` alongside `include_full: true` to round-trip plaintext. Mirrors the v2.9.0 `env_vars` masking posture from #159 / #182. Applied at the API boundary in `listResources()` so any other code path also inherits masking by default.
+
+### Fixed
+
+- **`system list_resources` returns essential projection by default** (#203) — previously typed as `Promise<ResourceListItem[]>` but actually returned the full Coolify `/api/v1/resources` payload (~95 fields per row, ~16 KB per item, 500+ KB on instances with 30+ resources) which blew MCP token budgets and made the tool unusable for LLM-driven workflows. Now defaults to a true `{ uuid, name, type, status? }` projection applied at the API boundary. Set `include_full: true` to opt back into the raw Coolify payload. Mirrors the `include_logs` opt-in pattern from #158.
+- **`is_build_time` typo bleed-in from #172** (#205) — test mock at `src/__tests__/coolify-client.test.ts:4335` and the `[2.11.0]` CHANGELOG entry both referenced the wrong underscored field name (`is_build_time`). The correct name is `is_buildtime` (one word) per #174 / v2.9.0; runtime code was already correct, this is doc + test-mock cleanup only.
+- **`toResourceListItemEssential` guards `status` with `typeof`** — replaces an unchecked `item.status as string` cast. If a future Coolify version emits `status` as an object/null, the field is now dropped from the essential projection instead of silently violating the `ResourceListItem` interface.
+
+### Changed (breaking, typed-only)
+
+- **`listResources` signature** (#203, #204): `Promise<ResourceListItem[]>` → `Promise<ResourceListItem[] | ResourceListItemFull[]>` with new optional `options?: { include_full?: boolean; reveal?: boolean }` parameter. Programmatic consumers of `@masonator/coolify-mcp` will need to widen their result type (or narrow at the call site with `include_full`). Note: the previous type was wrong-at-runtime against real Coolify (claimed 4 fields, returned ~95), so any caller that worked end-to-end was already accommodating the bloated shape.
+
+### Added (types)
+
+- **`ResourceListItemFull` type** — `ResourceListItem & Record<string, unknown>`. Surfaces only when `include_full: true` is passed; documents that the full Coolify row carries arbitrary additional fields beyond the typed essentials.
+
 ## [2.11.0] - 2026-05-18
 
 ### Added (#172, thanks @opastorello)
@@ -17,7 +35,7 @@ Net tool count: 38 → 42 (after consolidation; original PR proposed 45 before r
 - **`scheduled_tasks` tool** — list/create/update/delete/list_executions for application or service. Consolidated.
 - **`hetzner` tool** — list_locations, list_server_types, list_images, list_ssh_keys, create_server against the Coolify Hetzner cloud-provider endpoints. Requires a configured cloud-provider token UUID. The Coolify Hetzner routes are auth-scope-gated; the wiring is correct but the calling user needs the right token.
 - **`system` tool** — health, list_resources, enable_api, disable_api against the instance. Consolidates what would have been three separate tools.
-- **`env_vars` expanded** — adds `database` resource, `bulk_update` action, plus `is_build_time`, `is_preview`, `data[]` params on the existing actions.
+- **`env_vars` expanded** — adds `database` resource, `bulk_update` action, plus `is_preview` and `data[]` params on the existing actions. (`is_buildtime` and `is_runtime` have been on the schema since v2.9.0 / #174 — they are not new in this release.)
 - **`github_apps` expanded** — adds `list_repos`, `list_branches` actions.
 - **`database_backups` expanded** — adds `delete_execution` action.
 - **`ResourceListItem` type** — concrete interface for `/api/v1/resources` responses with `uuid`, `name`, `type`, optional `status`. Replaces `Promise<unknown>` on the client method (no-implicit-any policy compliance).

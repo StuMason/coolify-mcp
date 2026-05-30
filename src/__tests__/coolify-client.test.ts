@@ -4332,7 +4332,7 @@ describe('CoolifyClient', () => {
           uuid: 'env-1',
           key: 'DB_HOST',
           value: 'localhost',
-          is_build_time: false,
+          is_buildtime: false,
           is_literal: false,
           is_multiline: false,
           is_preview: false,
@@ -4783,15 +4783,137 @@ describe('CoolifyClient', () => {
   // ===========================================================================
 
   describe('listResources', () => {
-    it('should list all resources', async () => {
-      const mockData = [{ uuid: 'r1', type: 'application' }];
-      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
+    const fluffyResource = {
+      uuid: 'r1',
+      name: 'my-app',
+      type: 'application',
+      status: 'running:healthy',
+      // ---- fluff that the essential projection should drop ----
+      id: 6,
+      config_hash: 'd1b84af30038c5902cced139b19e5f6f',
+      build_pack: 'dockerfile',
+      health_check_path: '/',
+      ports_exposes: '3500',
+      dockerfile_location: '/Dockerfile',
+      custom_labels: 'dHJhZWZpa...',
+      docker_compose: null,
+    };
+
+    it('returns essential projection by default (uuid/name/type/status only)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
       const result = await client.listResources();
-      expect(result).toEqual(mockData);
+      expect(result).toEqual([
+        { uuid: 'r1', name: 'my-app', type: 'application', status: 'running:healthy' },
+      ]);
+      const [first] = result;
+      expect(Object.keys(first).sort()).toEqual(['name', 'status', 'type', 'uuid']);
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/resources',
         expect.any(Object),
       );
+    });
+
+    it('omits status when the resource has none', async () => {
+      const noStatus: Record<string, unknown> = { ...fluffyResource };
+      delete noStatus.status;
+      mockFetch.mockResolvedValueOnce(mockResponse([noStatus]));
+      const result = await client.listResources();
+      expect(result).toEqual([{ uuid: 'r1', name: 'my-app', type: 'application' }]);
+      expect('status' in result[0]).toBe(false);
+    });
+
+    it('returns the raw Coolify payload when include_full is true', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
+      const result = await client.listResources({ include_full: true });
+      expect(result).toEqual([fluffyResource]);
+      const [first] = result as Array<Record<string, unknown>>;
+      expect(first.config_hash).toBe(fluffyResource.config_hash);
+      expect(first.custom_labels).toBe(fluffyResource.custom_labels);
+    });
+
+    it('treats include_full=false as the default essential projection', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
+      const result = await client.listResources({ include_full: false });
+      expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
+    });
+
+    it('returns [] on an empty payload (default projection)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listResources();
+      expect(result).toEqual([]);
+    });
+
+    it('returns [] on an empty payload (include_full=true, mask path)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+      const result = await client.listResources({ include_full: true });
+      expect(result).toEqual([]);
+    });
+
+    it('drops status when Coolify returns a non-string shape (defensive)', async () => {
+      // Hypothetical future Coolify divergence: status emitted as an object/null.
+      // The essential projection must not propagate a non-string into a `string`-typed field.
+      const objStatus = { ...fluffyResource, status: { state: 'running', healthy: true } };
+      mockFetch.mockResolvedValueOnce(mockResponse([objStatus]));
+      const result = await client.listResources();
+      expect(result).toEqual([{ uuid: 'r1', name: 'my-app', type: 'application' }]);
+      expect('status' in result[0]).toBe(false);
+    });
+
+    describe('sensitive-field masking on include_full', () => {
+      const sensitiveResource = {
+        ...fluffyResource,
+        manual_webhook_secret_github: 'real-github-secret',
+        manual_webhook_secret_gitlab: 'real-gitlab-secret',
+        manual_webhook_secret_gitea: 'real-gitea-secret',
+        manual_webhook_secret_bitbucket: 'real-bitbucket-secret',
+        http_basic_auth_password: 'real-basic-auth-pwd',
+      };
+
+      it('masks webhook secrets and basic-auth password by default on include_full=true', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.manual_webhook_secret_github).toBe('***');
+        expect(first.manual_webhook_secret_gitlab).toBe('***');
+        expect(first.manual_webhook_secret_gitea).toBe('***');
+        expect(first.manual_webhook_secret_bitbucket).toBe('***');
+        expect(first.http_basic_auth_password).toBe('***');
+        expect(first.config_hash).toBe(sensitiveResource.config_hash);
+      });
+
+      it('round-trips plaintext when reveal=true', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const [first] = (await client.listResources({
+          include_full: true,
+          reveal: true,
+        })) as Array<Record<string, unknown>>;
+        expect(first.manual_webhook_secret_github).toBe('real-github-secret');
+        expect(first.http_basic_auth_password).toBe('real-basic-auth-pwd');
+      });
+
+      it('leaves null secret values untouched (Coolify uses null when unset)', async () => {
+        const noSecrets = {
+          ...fluffyResource,
+          manual_webhook_secret_github: null,
+          manual_webhook_secret_gitlab: null,
+          manual_webhook_secret_gitea: null,
+          manual_webhook_secret_bitbucket: null,
+          http_basic_auth_password: null,
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([noSecrets]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.manual_webhook_secret_github).toBeNull();
+        expect(first.http_basic_auth_password).toBeNull();
+      });
+
+      it('reveal=true on the default projection is a no-op (no fluff to reveal)', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
+        const result = await client.listResources({ reveal: true });
+        expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
+      });
     });
   });
 
