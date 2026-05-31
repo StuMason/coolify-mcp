@@ -2425,6 +2425,30 @@ describe('CoolifyClient', () => {
         expect.objectContaining({ method: 'GET' }),
       );
     });
+
+    it('should restart a service with pull_latest', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Restarted' }));
+
+      const result = await client.restartService('test-uuid', true);
+
+      expect(result).toEqual({ message: 'Restarted' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/test-uuid/restart?latest=true',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('should restart a service without pull_latest by default', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Restarted' }));
+
+      const result = await client.restartService('test-uuid', false);
+
+      expect(result).toEqual({ message: 'Restarted' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/test-uuid/restart',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
   });
 
   // =========================================================================
