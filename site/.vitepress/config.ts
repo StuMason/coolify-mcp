@@ -39,6 +39,7 @@ export default withMermaid(
         { text: 'Concepts', link: '/concepts/mcp-primer', activeMatch: '/concepts/' },
         { text: 'Contributing', link: '/contributing/adding-tools', activeMatch: '/contributing/' },
         { text: 'Roadmap', link: '/roadmap/', activeMatch: '/roadmap/' },
+        { text: 'Work with me', link: '/hire', activeMatch: '/hire' },
         {
           text: 'v2.11.0',
           items: [
@@ -109,7 +110,8 @@ export default withMermaid(
       },
 
       footer: {
-        message: 'MIT licensed. Built in the open.',
+        message:
+          'MIT licensed. Built in the open. <a href="/hire">Need this on your own product? Work with me →</a>',
         copyright:
           'By <a href="https://stumason.dev">Stu Mason</a> and <a href="https://github.com/StuMason/coolify-mcp/graphs/contributors">contributors</a>.',
       },

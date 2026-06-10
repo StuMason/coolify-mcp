@@ -114,4 +114,8 @@ Three new MCP primitives that reshape the experience:
 
 MIT licensed, open contribution. The [contributing guide](/contributing/adding-tools) explains how to add a tool from scratch: types → client → MCP layer → tests → CHANGELOG.
 
+## Who builds this
+
+[Stu Mason](https://stumason.dev) — solutions architect, 15+ years, Kent, UK. coolify-mcp is the public face of how I work: measured token budgets, secrets masked by default, tested against live infrastructure. If you want an MCP server for your own product — or AI integration that survives production — [work with me](/hire).
+
 </div>
