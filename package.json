@@ -60,7 +60,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",
-    "minisearch": "^7.2.0",
+    "@yoch/frozenminisearch": "^1.1.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
@@ -85,7 +85,7 @@
     "typescript-eslint": "^8.51.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.15"
   },
   "overrides": {
     "handlebars": "^4.7.9"

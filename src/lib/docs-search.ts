@@ -1,4 +1,4 @@
-import MiniSearch from 'minisearch';
+import FrozenMiniSearch from '@yoch/frozenminisearch';
 
 const DOCS_FULL_URL = 'https://coolify.io/docs/llms-full.txt';
 const DOCS_BASE_URL = 'https://coolify.io';
@@ -21,11 +21,11 @@ export interface DocSearchResult {
 
 /**
  * Lightweight full-text search over Coolify documentation.
- * Fetches llms-full.txt on first search, parses into chunks, indexes with MiniSearch (BM25).
+ * Fetches llms-full.txt on first search, parses into chunks, indexes with FrozenMiniSearch (BM25).
  * The LLM calling this tool handles semantic understanding — we just need good ranking.
  */
 export class DocsSearchEngine {
-  private index: MiniSearch<DocChunk> | null = null;
+  private index: FrozenMiniSearch<DocChunk> | null = null;
   private chunks: DocChunk[] = [];
   private loading: Promise<void> | null = null;
 
@@ -53,7 +53,8 @@ export class DocsSearchEngine {
 
       this.chunks = parseDocs(text);
 
-      this.index = new MiniSearch<DocChunk>({
+      this.index = FrozenMiniSearch.fromDocuments(this.chunks, {
+        idField: 'id',
         fields: ['title', 'description', 'content'],
         storeFields: ['title', 'url', 'description'],
         searchOptions: {
@@ -62,7 +63,6 @@ export class DocsSearchEngine {
           fuzzy: 0.2,
         },
       });
-      this.index.addAll(this.chunks);
     } catch (error) {
       this.loading = null;
       this.index = null;
