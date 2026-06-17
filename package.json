@@ -88,7 +88,8 @@
     "node": ">=20"
   },
   "overrides": {
-    "handlebars": "^4.7.9"
+    "handlebars": "^4.7.9",
+    "qs": "^6.15.2"
   },
   "lint-staged": {
     "*.{ts,js,json,md,yaml,yml}": "prettier --write",
