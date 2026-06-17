@@ -936,7 +936,10 @@ export class CoolifyMcpServer extends McpServer {
         resource: z.enum(['application', 'database', 'service']),
         action: z.enum(['start', 'stop', 'restart']),
         uuid: z.string(),
-        pull_latest: z.boolean().optional().describe('Pull latest images before restarting (services only)'),
+        pull_latest: z
+          .boolean()
+          .optional()
+          .describe('Pull latest images before restarting (services only)'),
       },
       async ({ resource, action, uuid, pull_latest }) => {
         const methods: Record<string, Record<string, (u: string) => Promise<unknown>>> = {
