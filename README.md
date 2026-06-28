@@ -14,7 +14,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
 [![CI](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stumason-coolify-mcp-badge.png)](https://mseep.ai/app/stumason-coolify-mcp)
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/c2138394-a57f-49e3-b6fb-e063953fe35c)
 
 > **The most comprehensive MCP server for Coolify** - 42 optimized tools, smart diagnostics, documentation search, and batch operations for managing your self-hosted PaaS through AI assistants.
 
