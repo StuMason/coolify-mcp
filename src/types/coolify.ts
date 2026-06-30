@@ -495,14 +495,7 @@ export interface EnvVarSummary {
 // =============================================================================
 
 export type DatabaseType =
-  | 'postgresql'
-  | 'mysql'
-  | 'mariadb'
-  | 'mongodb'
-  | 'redis'
-  | 'keydb'
-  | 'clickhouse'
-  | 'dragonfly';
+  'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'keydb' | 'clickhouse' | 'dragonfly';
 
 export interface DatabaseLimits {
   memory?: string;
