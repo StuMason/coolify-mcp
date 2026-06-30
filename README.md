@@ -19,6 +19,8 @@
 
 📖 **Docs**: [**coolify-mcp.stumason.dev**](https://coolify-mcp.stumason.dev) — install guide, quickstart, full tools reference, MCP primer, Coolify API gotchas, contributing guide, and the public v3 roadmap.
 
+> 💡 **Building a Laravel app?** Check out [**laravel-coolify**](https://github.com/StuMason/laravel-coolify) — deploy Laravel to Coolify with a Horizon-style dashboard, Artisan commands, and auto-generated Dockerfiles.
+
 A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
 
 ## Features
