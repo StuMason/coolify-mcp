@@ -50,6 +50,14 @@ The new `hetzner` tool's endpoints (`/api/v1/hetzner/locations`, `server-types`,
 
 Also: the path uses `server-types` (hyphen). `server_types` (underscore) returns 404.
 
+## Scheduled task `command` is limited to 255 chars
+
+Coolify's `scheduled_tasks` table stores `command` as `$table->string('command')` — a plain Laravel `string()` column, i.e. `varchar(255)` — per [`database/migrations/2023_12_31_173041_create_scheduled_tasks_table.php`](https://github.com/coollabsio/coolify/blob/main/database/migrations/2023_12_31_173041_create_scheduled_tasks_table.php) in `coollabsio/coolify`. No later migration changes the column type. Commands longer than the limit fail with a **bodyless HTTP 500** (`Internal Server Error`, no validation message) rather than a 422 — the worst possible error for an agent to act on.
+
+Empirically (Coolify 4.1.2): 132/155/165/247-char commands created fine; ~265/~270/~320/~330-char commands all 500'd, confirming the ~255-char ceiling.
+
+The `scheduled_tasks` tool now validates `command` client-side with `.max(255, ...)` on both `create` and `update`, and `request()` appends a hint to the error message when a bare 500 on a `/scheduled-tasks` path is seen. Workaround for longer commands: split into multiple scheduled tasks, or bake a script into the container image and invoke it by a short path/name instead of inlining the full command. Fixed in #234.
+
 ## `listApplicationDeployments` response shape
 
 Coolify's `GET /api/v1/deployments/applications/{uuid}` returns `{ count, deployments: [] }`, not `Deployment[]` as the OpenAPI suggests. Any caller using `.length` / `.map()` on the response would crash against a real Coolify server. Fixed in #158: the client method now correctly parses the envelope and returns `{ count, deployments }`.

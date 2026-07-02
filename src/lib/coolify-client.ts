@@ -239,6 +239,25 @@ function mapFqdnToDomains<T extends { fqdn?: string; domains?: string }>(
   return { ...rest, domains: fqdn };
 }
 
+/**
+ * Map a failed response's status/path to an actionable hint for known Coolify quirks.
+ * Coolify sometimes returns bodyless errors (e.g. bare `HTTP 500: Internal Server Error`)
+ * that leave the caller guessing at the cause — this appends a short, testable hint for
+ * the cases we've hit in practice. Returns undefined when no known case matches.
+ */
+export function errorHint(status: number, path: string): string | undefined {
+  if (status === 500 && /\/scheduled-tasks(\/|$)/.test(path)) {
+    return 'Known cause: Coolify stores scheduled-task `command` in a varchar(255) column and rejects longer commands with a bodyless 500 — check the command length (limit 255 chars).';
+  }
+  if (status === 401 || status === 403) {
+    return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation.';
+  }
+  if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
+    return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
+  }
+  return undefined;
+}
+
 // =============================================================================
 // Summary Transformers - reduce full objects to essential fields
 // =============================================================================
@@ -521,6 +540,10 @@ export class CoolifyClient {
             )
             .join('; ');
           errorMessage = `${errorMessage} - ${validationDetails}`;
+        }
+        const hint = errorHint(response.status, path);
+        if (hint) {
+          errorMessage = `${errorMessage} (${hint})`;
         }
         throw new Error(errorMessage);
       }
