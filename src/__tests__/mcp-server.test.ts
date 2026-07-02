@@ -628,6 +628,64 @@ describe('CoolifyMcpServer v2', () => {
       expect(updateData).not.toHaveProperty('uuid');
     });
   });
+
+  describe('database tool handler', () => {
+    // Regression for #217 — the database tool's create action didn't expose
+    // destination_uuid, so Coolify rejected creates on servers with more than
+    // one destination ("Server has multiple destinations. Please provide a
+    // destination_uuid.").
+
+    const callDatabase = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['database'];
+      return tool.handler(args, {});
+    };
+
+    it('forwards destination_uuid to createPostgresql when provided', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createPostgresql')
+        .mockResolvedValue({ uuid: 'db-1' });
+
+      await callDatabase(server, {
+        action: 'create',
+        type: 'postgresql',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        destination_uuid: 'dest-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          destination_uuid: 'dest-uuid',
+        }),
+      );
+    });
+
+    it('omits destination_uuid from createPostgresql when not provided', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createPostgresql')
+        .mockResolvedValue({ uuid: 'db-2' });
+
+      await callDatabase(server, {
+        action: 'create',
+        type: 'postgresql',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+      });
+
+      const forwarded = spy.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+      expect(forwarded.destination_uuid).toBeUndefined();
+    });
+  });
 });
 
 describe('truncateLogs', () => {
