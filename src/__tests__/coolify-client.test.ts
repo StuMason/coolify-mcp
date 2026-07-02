@@ -2615,14 +2615,37 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('should get a deployment with logs when includeLogs is true', async () => {
-      const deploymentWithLogs = { ...mockDeployment, logs: 'Build started...' };
+    it('should get a deployment with logs when includeLogs is true, still projected through essential', async () => {
+      const deploymentWithLogs = {
+        ...mockDeployment,
+        logs: 'Build started...',
+        // Simulate raw upstream fields that must never leak through.
+        application: { docker_compose: 'raw compose', manual_webhook_secret_github: 'whsec' },
+        destination: { server: { settings: { sentinel_token: 'sentinel-secret' } } },
+      };
       mockFetch.mockResolvedValueOnce(mockResponse(deploymentWithLogs));
 
       const result = await client.getDeployment('dep-uuid', { includeLogs: true });
 
-      // With includeLogs: true, returns full Deployment with logs
-      expect(result).toEqual(deploymentWithLogs);
+      // With includeLogs: true, logs are attached to the essential projection —
+      // raw upstream fields (application/server graph, secrets, id) never leak.
+      expect(result).toEqual({
+        uuid: 'dep-uuid',
+        deployment_uuid: 'dep-123',
+        application_uuid: undefined,
+        application_name: 'test-app',
+        server_name: undefined,
+        status: 'finished',
+        commit: undefined,
+        force_rebuild: false,
+        is_webhook: false,
+        is_api: true,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        logs_available: true,
+        logs_info: 'Logs available (16 chars). Use lines param to retrieve.',
+        logs: 'Build started...',
+      });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/deployments/dep-uuid',
         expect.any(Object),
@@ -2668,13 +2691,24 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('should return full deployments when includeLogs is true', async () => {
-      const withLogs = { ...mockDeployment, logs: 'build log stream' };
+    it('should attach logs to the essential projection when includeLogs is true (never the raw object)', async () => {
+      const withLogs = {
+        ...mockDeployment,
+        logs: 'build log stream',
+        application: { docker_compose: 'raw compose' },
+        destination: { server: { settings: { sentinel_token: 'sentinel-secret' } } },
+      };
       mockFetch.mockResolvedValueOnce(mockResponse({ count: 1, deployments: [withLogs] }));
 
       const result = await client.listApplicationDeployments('app-uuid', { includeLogs: true });
 
-      expect(result).toEqual({ count: 1, deployments: [withLogs] });
+      expect(result.count).toBe(1);
+      expect(result.deployments).toHaveLength(1);
+      const [first] = result.deployments;
+      expect(first.logs).toBe('build log stream');
+      expect(first).not.toHaveProperty('application');
+      expect(first).not.toHaveProperty('destination');
+      expect(first).not.toHaveProperty('id');
     });
 
     it('should tolerate a malformed envelope (missing deployments array)', async () => {

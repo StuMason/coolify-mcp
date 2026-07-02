@@ -22,7 +22,6 @@ import type {
   BuildPack,
   ResponseAction,
   ResponsePagination,
-  Deployment,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 
@@ -1176,9 +1175,9 @@ export class CoolifyMcpServer extends McpServer {
               const ll = lines;
               return wrapWithActions(
                 async () => {
-                  const deployment = (await this.client.getDeployment(uuid, {
+                  const deployment = await this.client.getDeployment(uuid, {
                     includeLogs: true,
-                  })) as Deployment;
+                  });
                   if (deployment.logs) {
                     const result = truncateLogs(deployment.logs, ll, max_chars ?? 50000, p);
                     deployment.logs = result.logs;
