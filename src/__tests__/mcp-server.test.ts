@@ -879,6 +879,189 @@ describe('CoolifyMcpServer v2', () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe('scheduled_tasks tool handler - run_once', () => {
+    type ServerWithSleep = { sleep: (ms: number) => Promise<void> };
+
+    const callScheduledTasks = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<{ content: Array<{ type: string; text: string }> }> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['scheduled_tasks'];
+      return tool.handler(args, {}) as Promise<{ content: Array<{ type: string; text: string }> }>;
+    };
+
+    const baseArgs = {
+      resource: 'application' as const,
+      action: 'run_once' as const,
+      uuid: 'app-uuid',
+      command: 'php artisan migrate',
+      container: 'app',
+      wait_seconds: 10, // small budget -> few poll attempts in tests
+    };
+
+    const mockTask = {
+      id: 1,
+      uuid: 'task-uuid',
+      enabled: true,
+      name: 'oneoff-abc123',
+      command: 'php artisan migrate',
+      frequency: '* * * * *',
+      timeout: 0,
+      created_at: '',
+      updated_at: '',
+    };
+
+    beforeEach(() => {
+      // Poll loop uses a real setTimeout by default; override the instance method
+      // directly so tests are instant (jest.spyOn's generic inference struggles
+      // with private methods here, so a plain shadowing assignment is simpler).
+      (server as unknown as ServerWithSleep).sleep = (): Promise<void> => Promise.resolve();
+    });
+
+    it('validates command and container are required', async () => {
+      const result = await callScheduledTasks(server, {
+        resource: 'application',
+        action: 'run_once',
+        uuid: 'app-uuid',
+      });
+      expect(result.content[0]!.text).toBe('Error: command, container required');
+    });
+
+    it('creates a task, polls until a terminal execution, returns its output, and deletes the task', async () => {
+      const createSpy = jest
+        .spyOn(server['client'], 'createApplicationScheduledTask')
+        .mockResolvedValue(mockTask);
+      const listSpy = jest
+        .spyOn(server['client'], 'listApplicationScheduledTaskExecutions')
+        .mockResolvedValueOnce([]) // first poll: nothing yet
+        .mockResolvedValueOnce([
+          {
+            uuid: 'exec-uuid',
+            status: 'success',
+            message: 'Migrated: 2026_01_01_000000_add_col',
+            retry_count: 0,
+            created_at: '',
+            updated_at: '',
+          },
+        ]);
+      const deleteSpy = jest
+        .spyOn(server['client'], 'deleteApplicationScheduledTask')
+        .mockResolvedValue({ message: 'deleted' });
+
+      const result = await callScheduledTasks(server, baseArgs);
+
+      expect(createSpy).toHaveBeenCalledWith(
+        'app-uuid',
+        expect.objectContaining({
+          command: 'php artisan migrate',
+          frequency: '* * * * *',
+          container: 'app',
+          enabled: true,
+        }),
+      );
+      expect(listSpy).toHaveBeenCalledTimes(2);
+      expect(listSpy).toHaveBeenCalledWith('app-uuid', 'task-uuid');
+      expect(deleteSpy).toHaveBeenCalledWith('app-uuid', 'task-uuid');
+
+      const parsed = JSON.parse(result.content[0]!.text) as {
+        status: string;
+        message: string;
+        task_uuid: string;
+        cleanup: string;
+      };
+      expect(parsed.status).toBe('success');
+      expect(parsed.message).toBe('Migrated: 2026_01_01_000000_add_col');
+      expect(parsed.task_uuid).toBe('task-uuid');
+      expect(parsed.cleanup).toContain('deleted');
+    });
+
+    it('times out when no execution ever appears, and still deletes the task', async () => {
+      jest.spyOn(server['client'], 'createApplicationScheduledTask').mockResolvedValue(mockTask);
+      jest.spyOn(server['client'], 'listApplicationScheduledTaskExecutions').mockResolvedValue([]);
+      const deleteSpy = jest
+        .spyOn(server['client'], 'deleteApplicationScheduledTask')
+        .mockResolvedValue({ message: 'deleted' });
+
+      const result = await callScheduledTasks(server, baseArgs);
+
+      expect(deleteSpy).toHaveBeenCalledWith('app-uuid', 'task-uuid');
+      expect(result.content[0]!.text).toContain('Timed out');
+      expect(result.content[0]!.text).toContain('task-uuid');
+      expect(result.content[0]!.text).toContain('deleted');
+    });
+
+    it('still deletes the task when polling throws, and surfaces the poll error', async () => {
+      jest.spyOn(server['client'], 'createApplicationScheduledTask').mockResolvedValue(mockTask);
+      jest
+        .spyOn(server['client'], 'listApplicationScheduledTaskExecutions')
+        .mockRejectedValue(new Error('network blip'));
+      const deleteSpy = jest
+        .spyOn(server['client'], 'deleteApplicationScheduledTask')
+        .mockResolvedValue({ message: 'deleted' });
+
+      const result = await callScheduledTasks(server, baseArgs);
+
+      expect(deleteSpy).toHaveBeenCalledWith('app-uuid', 'task-uuid');
+      expect(result.content[0]!.text).toContain('network blip');
+      expect(result.content[0]!.text).toContain('task-uuid');
+    });
+
+    it('warns loudly with the task UUID when the cleanup delete itself fails', async () => {
+      jest.spyOn(server['client'], 'createApplicationScheduledTask').mockResolvedValue(mockTask);
+      jest.spyOn(server['client'], 'listApplicationScheduledTaskExecutions').mockResolvedValue([
+        {
+          uuid: 'exec-uuid',
+          status: 'success',
+          message: 'ok',
+          retry_count: 0,
+          created_at: '',
+          updated_at: '',
+        },
+      ]);
+      jest
+        .spyOn(server['client'], 'deleteApplicationScheduledTask')
+        .mockRejectedValue(new Error('403 forbidden'));
+
+      const result = await callScheduledTasks(server, baseArgs);
+
+      const parsed = JSON.parse(result.content[0]!.text) as { cleanup: string };
+      expect(parsed.cleanup).toContain('WARNING');
+      expect(parsed.cleanup).toContain('task-uuid');
+      expect(parsed.cleanup).toContain('403 forbidden');
+    });
+
+    it('supports the service resource', async () => {
+      const createSpy = jest
+        .spyOn(server['client'], 'createServiceScheduledTask')
+        .mockResolvedValue(mockTask);
+      jest.spyOn(server['client'], 'listServiceScheduledTaskExecutions').mockResolvedValue([
+        {
+          uuid: 'e',
+          status: 'success',
+          message: 'ok',
+          retry_count: 0,
+          created_at: '',
+          updated_at: '',
+        },
+      ]);
+      const deleteSpy = jest
+        .spyOn(server['client'], 'deleteServiceScheduledTask')
+        .mockResolvedValue({ message: 'deleted' });
+
+      await callScheduledTasks(server, { ...baseArgs, resource: 'service', uuid: 'svc-uuid' });
+
+      expect(createSpy).toHaveBeenCalledWith('svc-uuid', expect.any(Object));
+      expect(deleteSpy).toHaveBeenCalledWith('svc-uuid', 'task-uuid');
+    });
+  });
 });
 
 describe('truncateLogs', () => {

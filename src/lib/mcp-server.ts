@@ -22,6 +22,7 @@ import type {
   BuildPack,
   ResponseAction,
   ResponsePagination,
+  ScheduledTaskExecution,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 
@@ -1658,11 +1659,17 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'scheduled_tasks',
-      'Manage scheduled tasks for app or service: list/create/update/delete/list_executions. ' +
-        'Coolify stores `command` in a varchar(255) column and rejects longer commands with a bodyless HTTP 500 — keep commands to 255 chars or fewer.',
+      'Manage scheduled tasks for app or service: list/create/update/delete/list_executions/run_once. ' +
+        "list_executions: the command's stdout comes back in the execution's message field. " +
+        'run_once: composite that creates a throwaway "* * * * *" task, polls list_executions every ~5s ' +
+        'for the first terminal execution (or until wait_seconds elapses, default 90), deletes the task, ' +
+        'and returns status+message. WARNING: the underlying cron may fire more than once before cleanup ' +
+        'completes — make the command idempotent (e.g. `where not exists`) or tolerate re-execution. ' +
+        'Coolify stores `command` in a varchar(255) column and rejects longer commands with a bodyless ' +
+        'HTTP 500 — keep commands to 255 chars or fewer (#234).',
       {
         resource: z.enum(['application', 'service']),
-        action: z.enum(['list', 'create', 'update', 'delete', 'list_executions']),
+        action: z.enum(['list', 'create', 'update', 'delete', 'list_executions', 'run_once']),
         uuid: z.string(),
         task_uuid: z.string().optional(),
         name: z.string().optional(),
@@ -1677,6 +1684,10 @@ export class CoolifyMcpServer extends McpServer {
         container: z.string().optional(),
         timeout: z.number().optional(),
         enabled: z.boolean().optional(),
+        wait_seconds: z
+          .number()
+          .optional()
+          .describe('run_once only: poll budget in seconds before giving up (default 90)'),
       },
       async (args) => {
         const { resource, action, uuid, task_uuid } = args;
@@ -1739,6 +1750,19 @@ export class CoolifyMcpServer extends McpServer {
               isApp
                 ? this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
                 : this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
+            );
+          case 'run_once':
+            if (!args.command || !args.container)
+              return {
+                content: [{ type: 'text' as const, text: 'Error: command, container required' }],
+              };
+            return this.runOnceScheduledTask(
+              resource,
+              uuid,
+              args.command,
+              args.container,
+              args.timeout,
+              args.wait_seconds,
             );
         }
       },
@@ -1921,5 +1945,149 @@ export class CoolifyMcpServer extends McpServer {
       async ({ project_uuid, force }) =>
         wrap(() => this.client.redeployProjectApps(project_uuid, force ?? true)),
     );
+  }
+
+  /**
+   * Injectable delay for the run_once poll loop. A real setTimeout in production;
+   * tests replace it with `jest.spyOn(server, 'sleep').mockResolvedValue(undefined)`
+   * so polling logic runs without waiting on the wall clock.
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Composite one-off command execution (#233 / #208): there is no upstream
+   * "run now" endpoint for scheduled tasks, so this creates a throwaway
+   * `* * * * *` task, polls list_executions until the first execution reaches a
+   * terminal status (or the poll budget runs out), and returns its status+message.
+   *
+   * The task is deleted in a finally-equivalent (try/finally-style) block so cleanup
+   * always runs — on success, on timeout, and on a polling error. If cleanup itself
+   * fails, the returned message says so loudly with the task UUID so a human can
+   * remove it manually (it would otherwise keep firing every minute).
+   */
+  private async runOnceScheduledTask(
+    resource: 'application' | 'service',
+    uuid: string,
+    command: string,
+    container: string,
+    timeout: number | undefined,
+    waitSeconds: number | undefined,
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    const isApp = resource === 'application';
+    const pollIntervalMs = 5000;
+    const budgetSeconds = waitSeconds ?? 90;
+    const maxAttempts = Math.max(1, Math.ceil((budgetSeconds * 1000) / pollIntervalMs));
+    const name = `oneoff-${Math.random().toString(36).slice(2, 10)}`;
+
+    let taskUuid: string;
+    try {
+      const task = isApp
+        ? await this.client.createApplicationScheduledTask(uuid, {
+            name,
+            command,
+            frequency: '* * * * *',
+            container,
+            timeout,
+            enabled: true,
+          })
+        : await this.client.createServiceScheduledTask(uuid, {
+            name,
+            command,
+            frequency: '* * * * *',
+            container,
+            timeout,
+            enabled: true,
+          });
+      taskUuid = task.uuid;
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error creating one-off task: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+
+    let execution: ScheduledTaskExecution | undefined;
+    let pollErrorMessage: string | undefined;
+
+    try {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const executions = isApp
+          ? await this.client.listApplicationScheduledTaskExecutions(uuid, taskUuid)
+          : await this.client.listServiceScheduledTaskExecutions(uuid, taskUuid);
+        const first = executions[0];
+        if (first && first.status !== 'running') {
+          execution = first;
+          break;
+        }
+        if (attempt < maxAttempts - 1) await this.sleep(pollIntervalMs);
+      }
+    } catch (error) {
+      pollErrorMessage = error instanceof Error ? error.message : String(error);
+    }
+
+    // Cleanup always runs, regardless of how the poll loop above ended.
+    let deleteErrorMessage: string | undefined;
+    try {
+      if (isApp) {
+        await this.client.deleteApplicationScheduledTask(uuid, taskUuid);
+      } else {
+        await this.client.deleteServiceScheduledTask(uuid, taskUuid);
+      }
+    } catch (error) {
+      deleteErrorMessage = error instanceof Error ? error.message : String(error);
+    }
+
+    const cleanupNote = deleteErrorMessage
+      ? `WARNING: failed to delete one-off task ${taskUuid} — it will keep firing every minute ` +
+        `until it is removed manually. Delete error: ${deleteErrorMessage}`
+      : `One-off task ${taskUuid} deleted.`;
+
+    if (pollErrorMessage) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error polling one-off task ${taskUuid} executions: ${pollErrorMessage}. ${cleanupNote}`,
+          },
+        ],
+      };
+    }
+
+    if (!execution) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `Timed out after ${budgetSeconds}s waiting for one-off task ${taskUuid} to produce ` +
+              `an execution. ${cleanupNote}`,
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            {
+              status: execution.status,
+              message: execution.message,
+              task_uuid: taskUuid,
+              cleanup: cleanupNote,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
   }
 }
