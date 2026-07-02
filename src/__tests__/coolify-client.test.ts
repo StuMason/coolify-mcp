@@ -3459,6 +3459,58 @@ describe('CoolifyClient', () => {
         expect(result.health.issues).toContain('2 failed deployment(s) in last 5');
       });
 
+      it('should flag stale code when app is running but the latest deployment failed', async () => {
+        const staleDeployments = [
+          { ...mockDeployments[0], uuid: 'deploy-latest', status: 'failed' },
+          { ...mockDeployments[1], status: 'finished' },
+        ];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp)) // status: running:healthy
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(
+            mockResponse({ count: staleDeployments.length, deployments: staleDeployments }),
+          );
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.health.status).toBe('unhealthy');
+        expect(result.health.issues).toContain(
+          'Running container predates the last (failed) deployment (deploy-latest) — the app is serving stale code. Use the deployment tool (action: get, uuid: deploy-latest, lines) to see why it failed.',
+        );
+      });
+
+      it('should not flag stale code when the latest deployment succeeded', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockResolvedValueOnce(
+            mockResponse({ count: mockDeployments.length, deployments: mockDeployments }),
+          );
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.health.status).toBe('healthy');
+        expect(result.health.issues.some((issue) => issue.includes('stale code'))).toBe(false);
+      });
+
+      it('should skip the deployment-freshness check without breaking diagnosis when deployments are unavailable', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(mockEnvVars))
+          .mockRejectedValueOnce(new Error('Deployments unavailable'));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.application).not.toBeNull();
+        expect(result.health.status).toBe('healthy');
+        expect(result.recent_deployments).toEqual([]);
+        expect(result.errors).toContain('deployments: Deployments unavailable');
+        expect(result.health.issues.some((issue) => issue.includes('stale code'))).toBe(false);
+      });
+
       it('should handle partial failures gracefully', async () => {
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApp))

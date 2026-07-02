@@ -1970,6 +1970,23 @@ export class CoolifyClient {
       }
     }
 
+    // Cross-check: the container can be running:healthy while the latest
+    // deployment failed/was cancelled — old code still serving, new code
+    // never arrived (#239). Skip silently if we have no app or no deployments.
+    if (app && deployments && deployments.length > 0) {
+      const latestDeployment = deployments[0];
+      const appIsRunning = (app.status || '').includes('running');
+      if (
+        appIsRunning &&
+        (latestDeployment.status === 'failed' || latestDeployment.status === 'cancelled')
+      ) {
+        issues.push(
+          `Running container predates the last (${latestDeployment.status}) deployment (${latestDeployment.uuid}) — the app is serving stale code. Use the deployment tool (action: get, uuid: ${latestDeployment.uuid}, lines) to see why it ${latestDeployment.status}.`,
+        );
+        healthStatus = 'unhealthy';
+      }
+    }
+
     return {
       application: app
         ? {
