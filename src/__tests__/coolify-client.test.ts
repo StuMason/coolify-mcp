@@ -554,6 +554,28 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should parse the deployments envelope Coolify returns for /deploy (#238)', async () => {
+      // Real Coolify returns { deployments: [{ message, resource_uuid, deployment_uuid }] },
+      // one entry per triggered deployment (a tag can match several apps).
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({
+          deployments: [
+            { message: 'Deployment queued', resource_uuid: 'app-1', deployment_uuid: 'dep-1' },
+            { message: 'Deployment queued', resource_uuid: 'app-2', deployment_uuid: 'dep-2' },
+          ],
+        }),
+      );
+
+      const result = await client.deployByTagOrUuid('my-tag', true);
+
+      expect(result).toEqual({
+        deployments: [
+          { message: 'Deployment queued', resource_uuid: 'app-1', deployment_uuid: 'dep-1' },
+          { message: 'Deployment queued', resource_uuid: 'app-2', deployment_uuid: 'dep-2' },
+        ],
+      });
+    });
+
     it('should deploy by Coolify UUID (24 char alphanumeric)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
 
