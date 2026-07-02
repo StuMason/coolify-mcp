@@ -822,6 +822,63 @@ describe('CoolifyMcpServer v2', () => {
       expect(text.length).toBeLessThan(20_000);
     });
   });
+
+  describe('scheduled_tasks tool handler', () => {
+    // Regression for #234 — Coolify's `command` column is a 255-char varchar and
+    // rejects longer commands with a bodyless HTTP 500. The zod schema must reject
+    // an over-long command locally, before any HTTP call is attempted.
+
+    const getScheduledTasksTool = (
+      srv: CoolifyMcpServer,
+    ): {
+      inputSchema: { safeParse: (args: unknown) => { success: boolean; error?: unknown } };
+      handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown>;
+    } =>
+      (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            {
+              inputSchema: { safeParse: (args: unknown) => { success: boolean; error?: unknown } };
+              handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown>;
+            }
+          >;
+        }
+      )._registeredTools['scheduled_tasks'];
+
+    const baseArgs = {
+      resource: 'application' as const,
+      action: 'create' as const,
+      uuid: 'app-uuid',
+      name: 'my-task',
+      frequency: '* * * * *',
+    };
+
+    it('rejects a command over 255 chars locally, with an actionable message', () => {
+      const createSpy = jest.spyOn(server['client'], 'createApplicationScheduledTask');
+      const updateSpy = jest.spyOn(server['client'], 'updateApplicationScheduledTask');
+
+      const tool = getScheduledTasksTool(server);
+      const result = tool.inputSchema.safeParse({ ...baseArgs, command: 'a'.repeat(256) });
+
+      expect(result.success).toBe(false);
+      const error = result.error as { issues: { message: string }[] };
+      expect(error.issues[0]?.message).toContain(
+        'Coolify rejects scheduled-task commands longer than 255 chars',
+      );
+
+      // No HTTP call should have been attempted.
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(updateSpy).not.toHaveBeenCalled();
+    });
+
+    it('accepts a command at exactly 255 chars', () => {
+      const tool = getScheduledTasksTool(server);
+      const result = tool.inputSchema.safeParse({ ...baseArgs, command: 'a'.repeat(255) });
+
+      expect(result.success).toBe(true);
+    });
+  });
 });
 
 describe('truncateLogs', () => {

@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { CoolifyClient } from '../lib/coolify-client.js';
+import { CoolifyClient, errorHint } from '../lib/coolify-client.js';
 import type { ServiceType, CreateServiceRequest, EnvironmentVariable } from '../types/coolify.js';
 
 // Helper to create mock response
@@ -810,6 +810,18 @@ describe('CoolifyClient', () => {
       await expect(client.listServers()).rejects.toThrow(
         'Validation failed. - name: The name field is required.; docker_compose_raw: The docker compose raw field is required.',
       );
+    });
+
+    it('should append a command-length hint on a bodyless 500 from a scheduled-tasks path', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({}, false, 500));
+
+      await expect(
+        client.createApplicationScheduledTask('app-uuid', {
+          name: 'task',
+          command: 'a'.repeat(300),
+          frequency: '* * * * *',
+        }),
+      ).rejects.toThrow(/varchar\(255\)/);
     });
   });
 
@@ -5017,5 +5029,33 @@ describe('CoolifyClient', () => {
         expect.objectContaining({ method: 'GET' }),
       );
     });
+  });
+});
+
+describe('errorHint', () => {
+  it('hints at the command-length limit for a 500 on a scheduled-tasks path', () => {
+    expect(errorHint(500, '/applications/app-uuid/scheduled-tasks')).toMatch(/varchar\(255\)/);
+    expect(errorHint(500, '/services/svc-uuid/scheduled-tasks/task-uuid')).toMatch(
+      /varchar\(255\)/,
+    );
+  });
+
+  it('does not hint at the command-length limit for a 500 on unrelated paths', () => {
+    expect(errorHint(500, '/servers')).toBeUndefined();
+  });
+
+  it('hints at the access token for 401 and 403', () => {
+    expect(errorHint(401, '/version')).toMatch(/COOLIFY_ACCESS_TOKEN/);
+    expect(errorHint(403, '/servers')).toMatch(/COOLIFY_ACCESS_TOKEN/);
+  });
+
+  it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {
+    expect(errorHint(404, '/applications/app-uuid')).toMatch(/different resource type/);
+  });
+
+  it('returns undefined for anything else (default passthrough)', () => {
+    expect(errorHint(200, '/servers')).toBeUndefined();
+    expect(errorHint(422, '/applications/app-uuid')).toBeUndefined();
+    expect(errorHint(404, '/health')).toBeUndefined();
   });
 });

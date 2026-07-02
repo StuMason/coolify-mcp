@@ -1658,14 +1658,21 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'scheduled_tasks',
-      'Manage scheduled tasks for app or service: list/create/update/delete/list_executions',
+      'Manage scheduled tasks for app or service: list/create/update/delete/list_executions. ' +
+        'Coolify stores `command` in a varchar(255) column and rejects longer commands with a bodyless HTTP 500 — keep commands to 255 chars or fewer.',
       {
         resource: z.enum(['application', 'service']),
         action: z.enum(['list', 'create', 'update', 'delete', 'list_executions']),
         uuid: z.string(),
         task_uuid: z.string().optional(),
         name: z.string().optional(),
-        command: z.string().optional(),
+        command: z
+          .string()
+          .max(
+            255,
+            'Coolify rejects scheduled-task commands longer than 255 chars — split the command or bake a script into the container image',
+          )
+          .optional(),
         frequency: z.string().optional(),
         container: z.string().optional(),
         timeout: z.number().optional(),
