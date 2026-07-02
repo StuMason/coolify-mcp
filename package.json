@@ -28,6 +28,7 @@
     "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=integration --testTimeout=60000",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check:spec-drift": "node scripts/check-client-spec-drift.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
