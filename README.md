@@ -315,8 +315,9 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `list_applications` - List all applications (returns summary)
 - `get_application` - Get application details
 - `application_logs` - Get application logs
-- `application` - Create, update, or delete apps with `action: create_public|create_github|create_key|create_dockerimage|update|delete`
-  - Deploy from public repos, private GitHub, SSH keys, or Docker images
+- `application` - Create, update, or delete apps with `action: create_public|create_github|create_key|create_dockerimage|create_dockerfile|update|delete`
+  - Deploy from public repos, private GitHub, SSH keys, Docker images, or a raw Dockerfile
+  - For docker-compose apps use the `service` tool — Coolify removed `POST /applications/dockercompose` in v4.1.0 in favour of services
   - Configure health checks (path, interval, retries, etc.)
 - `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
 - `control` - Start/stop/restart with `resource: application, action: start|stop|restart`

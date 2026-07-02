@@ -835,6 +835,12 @@ export class CoolifyClient {
     });
   }
 
+  /**
+   * @deprecated Coolify removed POST /applications/dockercompose upstream in
+   * v4.1.0 (coollabsio/coolify commit 6ee75cfa) in favour of POST /services.
+   * This 404s against current Coolify releases; use createService instead.
+   * Not exposed via any MCP tool — see #235.
+   */
   async createApplicationDockerCompose(
     data: CreateApplicationDockerComposeRequest,
   ): Promise<UuidResponse> {
