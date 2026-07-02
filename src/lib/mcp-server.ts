@@ -798,6 +798,10 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
         environment_name: z.string().optional(),
+        destination_uuid: z
+          .string()
+          .optional()
+          .describe('Destination UUID. Required if server has multiple destinations.'),
         name: z.string().optional(),
         description: z.string().optional(),
         image: z.string().optional(),
