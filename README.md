@@ -41,7 +41,7 @@ This MCP server provides **42 token-optimized tools** for **debugging, managemen
 | **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                        |
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                    |
-| **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions for apps and services)                                             |
+| **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                   |
 | **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                                                              |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                 |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                        |
@@ -125,6 +125,39 @@ If your Coolify instance sits behind a Cloudflare Access tunnel or other auth-pr
 ```
 
 Multiple `--header` flags can be combined. The reserved headers `Authorization` and `Content-Type` are filtered (with a warning) to prevent silently overriding the Coolify bearer token.
+
+### Multiple Coolify servers
+
+Each running instance of this MCP server is bound to one Coolify (one `COOLIFY_BASE_URL` + token). To work with several Coolify instances, pick whichever of these fits your workflow:
+
+**Per-workspace config (recommended).** Most MCP clients support project-scoped config files (`.mcp.json` / `.cursor/mcp.json` / `.vscode/mcp.json` in the repo root) alongside the global one. Put the Coolify credentials for _that project's_ estate in the project's own config, and "deploy this" automatically routes to the right Coolify whenever you're working in that repo — no server names to remember in conversation.
+
+**Named instances in global config.** Register the server twice (or more) under distinct names, and address them by name in conversation ("deploy this on staging"):
+
+```json
+{
+  "mcpServers": {
+    "coolify-prod": {
+      "command": "npx",
+      "args": ["-y", "@masonator/coolify-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://prod.coolify.example",
+        "COOLIFY_ACCESS_TOKEN": "..."
+      }
+    },
+    "coolify-staging": {
+      "command": "npx",
+      "args": ["-y", "@masonator/coolify-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://staging.coolify.example",
+        "COOLIFY_ACCESS_TOKEN": "..."
+      }
+    }
+  }
+}
+```
+
+The MCP server itself can't offer a settings screen or auto-detect the current repo — MCP servers are headless child processes and clients don't pass repo context — so routing lives in your client config, where both patterns above work today (see #164).
 
 ## Context-Optimized Responses
 
