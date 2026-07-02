@@ -1170,9 +1170,15 @@ export class CoolifyClient {
   async getDeployment(
     uuid: string,
     options?: { includeLogs?: boolean },
-  ): Promise<Deployment | DeploymentEssential> {
+  ): Promise<DeploymentEssential> {
     const deployment = await this.request<Deployment>(`/deployments/${uuid}`);
-    return options?.includeLogs ? deployment : toDeploymentEssential(deployment);
+    const essential = toDeploymentEssential(deployment);
+    // Attach the raw log string (never the raw upstream object, which also embeds
+    // the full application/server graph and secrets) onto the essential projection.
+    if (options?.includeLogs && deployment.logs) {
+      essential.logs = deployment.logs;
+    }
+    return essential;
   }
 
   async deployByTagOrUuid(tagOrUuid: string, force: boolean = false): Promise<MessageResponse> {
@@ -1193,19 +1199,27 @@ export class CoolifyClient {
    * By default returns a DeploymentEssential summary (no `logs` field) because
    * each deployment's log blob can be 30–100KB, and a typical list has 20–35
    * deployments — exceeding MCP response token limits. Pass `includeLogs: true`
-   * to get raw Deployment objects with full build logs.
+   * to also attach the raw log string to each essential projection (never the
+   * raw upstream deployment object, which also embeds the full application/server
+   * graph and secrets).
    */
   async listApplicationDeployments(
     appUuid: string,
     options?: { includeLogs?: boolean },
-  ): Promise<{ count: number; deployments: Deployment[] | DeploymentEssential[] }> {
+  ): Promise<{ count: number; deployments: DeploymentEssential[] }> {
     const envelope = await this.request<{ count: number; deployments: Deployment[] }>(
       `/deployments/applications/${appUuid}`,
     );
     const deployments = Array.isArray(envelope?.deployments) ? envelope.deployments : [];
     return {
       count: typeof envelope?.count === 'number' ? envelope.count : deployments.length,
-      deployments: options?.includeLogs ? deployments : deployments.map(toDeploymentEssential),
+      deployments: deployments.map((dep) => {
+        const essential = toDeploymentEssential(dep);
+        if (options?.includeLogs && dep.logs) {
+          essential.logs = dep.logs;
+        }
+        return essential;
+      }),
     };
   }
 

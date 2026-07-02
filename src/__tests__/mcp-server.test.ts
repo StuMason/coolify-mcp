@@ -6,7 +6,7 @@
  * These tests verify MCP server instantiation and structure.
  */
 import { createRequire } from 'module';
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
   CoolifyMcpServer,
   VERSION,
@@ -684,6 +684,142 @@ describe('CoolifyMcpServer v2', () => {
 
       const forwarded = spy.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
       expect(forwarded.destination_uuid).toBeUndefined();
+    });
+  });
+
+  describe('deployment tool handler (#232 essential projection)', () => {
+    // Regression for #232: `deployment {action: get, lines: N}` used to call
+    // getDeployment(uuid, { includeLogs: true }) and spread the RAW upstream
+    // payload into the response — leaking the destination server's
+    // logdrain_custom_config bearer token, sentinel_token, webhook secrets,
+    // and the full docker_compose/application graph. It must now always go
+    // through toDeploymentEssential(), with only the (string) logs attached.
+
+    const callDeployment = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<{ content: Array<{ text: string }> }> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['deployment'];
+      return tool.handler(args, {}) as Promise<{ content: Array<{ text: string }> }>;
+    };
+
+    // Mock the raw HTTP layer (not the client) so the test exercises the real
+    // CoolifyClient projection logic, not just the mcp-server spread.
+    const mockFetch = jest.fn<typeof fetch>();
+    let originalFetch: typeof fetch;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+      global.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      mockFetch.mockReset();
+    });
+
+    function mockJsonResponse(data: unknown): Response {
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        text: async () => JSON.stringify(data),
+      } as Response;
+    }
+
+    // A raw upstream deployment payload shaped like real Coolify responses:
+    // the full application graph plus the destination server object,
+    // including the secrets called out in #232.
+    function rawDeploymentWithSecrets(logsEntryCount: number): Record<string, unknown> {
+      const logs = JSON.stringify(
+        Array.from({ length: logsEntryCount }, (_, i) => ({
+          output: `log line ${i}`,
+          timestamp: `2026-07-02T00:00:0${i}Z`,
+          hidden: false,
+        })),
+      );
+      return {
+        id: 1,
+        uuid: 'dep-uuid',
+        deployment_uuid: 'dep-123',
+        application_uuid: 'app-uuid',
+        application_name: 'test-app',
+        server_name: 'test-server',
+        status: 'finished',
+        commit: 'abc123',
+        force_rebuild: false,
+        is_webhook: false,
+        is_api: true,
+        restart_only: false,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        logs,
+        // Raw upstream fields that must never leak through the projection:
+        application: {
+          uuid: 'app-uuid',
+          docker_compose: 'x'.repeat(5000),
+          docker_compose_raw: 'x'.repeat(5000),
+          custom_labels: 'a'.repeat(2000),
+          manual_webhook_secret_github: 'ghsecret',
+          manual_webhook_secret_gitlab: 'glsecret',
+        },
+        destination: {
+          server: {
+            uuid: 'server-uuid',
+            ip: '1.2.3.4',
+            settings: {
+              logdrain_custom_config: 'Bearer live-logdrain-token-abc123',
+              sentinel_token: 'live-sentinel-token-xyz789',
+            },
+            proxy: { config: 'y'.repeat(3000) },
+          },
+        },
+      };
+    }
+
+    it('returns essential fields + logs only, no leaked secrets or nested graphs', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(rawDeploymentWithSecrets(5)));
+
+      const result = await callDeployment(server, { action: 'get', uuid: 'dep-uuid', lines: 5 });
+      const text = result.content[0].text;
+
+      expect(text).not.toContain('logdrain');
+      expect(text).not.toContain('sentinel_token');
+      expect(text).not.toContain('manual_webhook_secret');
+      expect(text).not.toContain('docker_compose');
+      expect(text).not.toMatch(/"application":\s*{/);
+      expect(text).not.toMatch(/"server":\s*{/);
+      expect(text).not.toMatch(/"destination":\s*{/);
+
+      const parsed = JSON.parse(text) as { data: Record<string, unknown> };
+      expect(parsed.data).toMatchObject({
+        uuid: 'dep-uuid',
+        application_uuid: 'app-uuid',
+        application_name: 'test-app',
+        server_name: 'test-server',
+        status: 'finished',
+      });
+      expect(typeof parsed.data.logs).toBe('string');
+      expect(parsed.data).not.toHaveProperty('application');
+      expect(parsed.data).not.toHaveProperty('destination');
+      expect(parsed.data).not.toHaveProperty('id');
+    });
+
+    it('keeps the response under 20KB even with a bloated upstream payload', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(rawDeploymentWithSecrets(5)));
+
+      const result = await callDeployment(server, { action: 'get', uuid: 'dep-uuid', lines: 5 });
+      const text = result.content[0].text;
+
+      expect(text.length).toBeLessThan(20_000);
     });
   });
 });

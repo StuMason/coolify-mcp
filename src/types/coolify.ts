@@ -1342,4 +1342,5 @@ export interface DeploymentEssential {
   updated_at: string;
   logs_available?: boolean; // true if logs exist but were excluded
   logs_info?: string;
+  logs?: string; // populated only when the caller explicitly requested logs (never raw upstream fields)
 }
