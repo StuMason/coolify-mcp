@@ -593,6 +593,7 @@ export class CoolifyMcpServer extends McpServer {
           'create_github',
           'create_key',
           'create_dockerimage',
+          'create_dockerfile',
           'update',
           'delete',
           'delete_preview',
@@ -613,6 +614,8 @@ export class CoolifyMcpServer extends McpServer {
         // Docker image fields
         docker_registry_image_name: z.string().optional(),
         docker_registry_image_tag: z.string().optional(),
+        // Dockerfile fields (create_dockerfile)
+        dockerfile: z.string().optional(),
         // Update fields
         name: z.string().optional(),
         description: z.string().optional(),
@@ -870,6 +873,37 @@ export class CoolifyMcpServer extends McpServer {
                 health_check_timeout: args.health_check_timeout,
                 health_check_retries: args.health_check_retries,
                 health_check_start_period: args.health_check_start_period,
+                custom_docker_run_options: args.custom_docker_run_options,
+                custom_labels: args.custom_labels,
+                instant_deploy: args.instant_deploy,
+              }),
+            );
+          case 'create_dockerfile':
+            if (!args.project_uuid || !args.server_uuid || !args.dockerfile) {
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: project_uuid, server_uuid, dockerfile required',
+                  },
+                ],
+              };
+            }
+            return wrap(() =>
+              this.client.createApplicationDockerfile({
+                project_uuid: args.project_uuid!,
+                server_uuid: args.server_uuid!,
+                destination_uuid: args.destination_uuid,
+                dockerfile: args.dockerfile!,
+                dockerfile_location: args.dockerfile_location,
+                ports_exposes: args.ports_exposes,
+                base_directory: args.base_directory,
+                environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                name: args.name,
+                description: args.description,
+                fqdn: args.fqdn,
+                domains: args.domains,
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,

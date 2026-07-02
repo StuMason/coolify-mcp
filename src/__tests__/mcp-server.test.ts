@@ -82,6 +82,7 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.createApplicationPrivateGH).toBe('function');
       expect(typeof client.createApplicationPrivateKey).toBe('function');
       expect(typeof client.createApplicationDockerImage).toBe('function');
+      expect(typeof client.createApplicationDockerfile).toBe('function');
       expect(typeof client.updateApplication).toBe('function');
       expect(typeof client.deleteApplication).toBe('function');
       expect(typeof client.getApplicationLogs).toBe('function');
@@ -601,6 +602,42 @@ describe('CoolifyMcpServer v2', () => {
       expect(forwarded).not.toHaveProperty('base_directory');
       expect(forwarded).not.toHaveProperty('install_command');
       expect(forwarded).not.toHaveProperty('dockerfile_location');
+    });
+
+    it('forwards fields in create_dockerfile', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationDockerfile')
+        .mockResolvedValue({ uuid: 'app-5' });
+
+      await callApplication(server, {
+        action: 'create_dockerfile',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        dockerfile: 'FROM node:20\nCMD ["node", "index.js"]',
+        dockerfile_location: '/Dockerfile',
+        ports_exposes: '3000',
+        base_directory: '/apps/api',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project_uuid: 'proj-uuid',
+          server_uuid: 'server-uuid',
+          dockerfile: 'FROM node:20\nCMD ["node", "index.js"]',
+          dockerfile_location: '/Dockerfile',
+          ports_exposes: '3000',
+          base_directory: '/apps/api',
+        }),
+      );
+    });
+
+    it('returns required-param error when create_dockerfile is missing dockerfile', async () => {
+      const result = (await callApplication(server, {
+        action: 'create_dockerfile',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+      })) as { content: Array<{ text: string }> };
+      expect(result.content[0].text).toContain('project_uuid, server_uuid, dockerfile required');
     });
 
     it('forwards dockerfile_target_build through update (PATCH-only)', async () => {
