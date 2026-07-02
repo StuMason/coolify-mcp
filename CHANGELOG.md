@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-07-02
+
+### Security
+
+- **`deployment get` with `lines` no longer returns the raw upstream payload** (#232, #242) — requesting logs used to bypass the `toDeploymentEssential()` projection and return the full Coolify deployment object, embedding the application graph (rendered `docker_compose`, `custom_labels`, webhook secrets) and the destination server's settings including `logdrain_custom_config` (a live log-drain bearer token) and `sentinel_token` — ~78 KB for 5 log lines. `getDeployment()` and `listApplicationDeployments()` now always project through `toDeploymentEssential()` and attach only the log string when logs are requested; the raw upstream object never escapes the client. Regression tests assert no `logdrain` / `sentinel_token` / `manual_webhook_secret*` / `docker_compose` keys in the response and that a logs-included `get` stays under 20 KB against a bloated upstream payload.
+
+### Fixed
+
+- **`database create` accepts `destination_uuid`** (#217, #240, thanks @xwork1) — the Coolify API requires `destination_uuid` when a server has multiple destinations ("Server has multiple destinations. Please provide a destination_uuid."), but the `database` tool schema didn't expose it, so creates on such servers always failed. The client and types already supported the field end-to-end; it is now on the tool schema and forwarded through all 8 database create variants.
+
+### Changed (typed-only)
+
+- **`getDeployment` / `listApplicationDeployments` return types narrowed** (#242): `Promise<Deployment | DeploymentEssential>` → `Promise<DeploymentEssential>` (with optional `logs?: string` on `DeploymentEssential`). Programmatic consumers relying on raw `Deployment` fields from these methods must fetch what they need explicitly — the raw shape was the leak vector.
+
 ## [2.12.0] - 2026-05-30
 
 ### Security
