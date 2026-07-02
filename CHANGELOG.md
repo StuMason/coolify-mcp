@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-07-02
+
+### Added
+
+- **`scheduled_tasks` gains `run_once`** (#233, #245; closes #208) — one call runs a one-off command in an app/service container: creates a throwaway `* * * * *` task, polls `list_executions` every ~5s for the first terminal execution (poll budget `wait_seconds`, default 90), returns its `status` + `message` (the command's stdout), and deletes the task on success, timeout, _and_ error paths — with a loud warning carrying the task UUID if the delete itself fails. Caveat in the tool description: the underlying cron may fire more than once before cleanup completes, so make the command idempotent. Replaces the error-prone manual create → wait → list_executions → delete dance (documented as a gotcha in `site/concepts/coolify-api-gotchas.md`).
+- **`deploy` gains `wait` + `timeout_seconds`** (#238, #246) — opt-in polling of the triggered deployment to a terminal status. On failure the response includes a bounded log tail (never the raw upstream payload); on timeout, the current status plus a hint to keep polling `deployment get`. Kills the "site returns 200 so the deploy worked" false positive — a deploy can fail while the old container keeps serving. When a tag matches several apps, the first deployment is watched and the rest are surfaced as `additional_deployment_uuids`.
+- **`diagnose_app` cross-checks the latest deployment** (#239, #241) — an app that is `running` while its most recent deployment `failed`/`cancelled` is now flagged explicitly ("running container predates the last (failed) deployment — the app is serving stale code"), with the failed deployment's UUID and a pointer to its logs. No new API calls — reuses the deployments already fetched.
+- **`application` tool gains `create_dockerfile`** (#235, #244) — exposes the existing `createApplicationDockerfile` client method (required: `project_uuid`, `server_uuid`, `dockerfile`). Note: `create_dockercompose` was deliberately NOT added — Coolify removed `POST /applications/dockercompose` upstream in v4.1.0; compose-based apps are created via the `service` tool. `CoolifyClient#createApplicationDockerCompose` is deprecated.
+- **Client-vs-spec drift check** (#236, #247) — `npm run check:spec-drift` (wired into CI) extracts every path `coolify-client.ts` calls and fails if the bundled OpenAPI spec doesn't document it, closing the drift direction the weekly upstream-diff workflow couldn't see.
+
+### Fixed
+
+- **Scheduled-task `command` longer than 255 chars now fails locally with an actionable message** (#234, #243) — Coolify stores `command` in a varchar(255) column (confirmed from the upstream `create_scheduled_tasks_table` migration) and rejects longer commands with a bodyless HTTP 500. The tool schema now enforces `.max(255)` on create and update, before any HTTP call.
+- **Bodyless HTTP errors carry hints for known causes** (#234, #243) — `request()` appends actionable context: 500 on scheduled-task paths → the command-length limit; 401/403 → check `COOLIFY_ACCESS_TOKEN` validity/scopes; 404 on a uuid-shaped route → the uuid may belong to a different resource type.
+- **Bundled OpenAPI spec refreshed from upstream** (#236, #247) — 79 → 96 paths; scheduled-tasks, storages, and `/databases/{uuid}/envs*` endpoints (all called by the client) are now documented. All 101 client routes match the spec.
+
+### Documentation
+
+- **README documents multi-Coolify setups** (#164) — per-workspace MCP config (recommended) and named instances in global config. An in-server settings screen / repo auto-detection isn't possible in the MCP architecture (headless child processes, no repo context from clients).
+
 ## [2.12.1] - 2026-07-02
 
 ### Security
