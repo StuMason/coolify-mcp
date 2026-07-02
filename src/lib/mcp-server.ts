@@ -23,6 +23,9 @@ import type {
   ResponseAction,
   ResponsePagination,
   ScheduledTaskExecution,
+  Deployment,
+  DeploymentEssential,
+  DeployTriggerResponse,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 
@@ -213,6 +216,58 @@ function wrapWithActions<T>(
     }));
 }
 
+// =============================================================================
+// Deploy wait/poll helpers (#238)
+// =============================================================================
+
+/** Deployment statuses that end a run — polling stops once one of these is hit. */
+const TERMINAL_DEPLOYMENT_STATUSES: ReadonlySet<string> = new Set([
+  'finished',
+  'failed',
+  'cancelled',
+]);
+
+const DEFAULT_DEPLOY_TIMEOUT_SECONDS = 300;
+const DEPLOY_POLL_INTERVAL_MS = 5000;
+
+function isTerminalDeploymentStatus(status: string): boolean {
+  return TERMINAL_DEPLOYMENT_STATUSES.has(status);
+}
+
+/** Isolated so tests can drive polling with jest fake timers instead of real waits. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function durationSeconds(createdAt?: string, updatedAt?: string): number | undefined {
+  if (!createdAt || !updatedAt) return undefined;
+  const start = Date.parse(createdAt);
+  const end = Date.parse(updatedAt);
+  if (Number.isNaN(start) || Number.isNaN(end)) return undefined;
+  return Math.max(0, Math.round((end - start) / 1000));
+}
+
+/**
+ * Small, safe projection returned by `deploy` when `wait: true`.
+ * Built from essential fields + a bounded log tail only — never the raw
+ * upstream deployment object, which can carry server/application secrets
+ * (see #232).
+ */
+interface DeployWaitResult {
+  status: string;
+  deployment_uuid: string;
+  application_uuid?: string;
+  commit?: string;
+  created_at?: string;
+  updated_at?: string;
+  duration_seconds?: number;
+  timed_out?: boolean;
+  logs_tail?: string;
+  logs_meta?: { total_entries: number; showing: string };
+  next_action?: string;
+  additional_deployment_uuids?: string[];
+}
+
 export class CoolifyMcpServer extends McpServer {
   private readonly client: CoolifyClient;
   private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
@@ -225,6 +280,94 @@ export class CoolifyMcpServer extends McpServer {
 
   async connect(transport: Transport): Promise<void> {
     await super.connect(transport);
+  }
+
+  /**
+   * Poll a single deployment until it reaches a terminal status or the
+   * timeout elapses. Uses `getDeployment`'s no-logs projection
+   * (`DeploymentEssential`) while polling, and only fetches logs (once,
+   * truncated) if the deployment failed.
+   */
+  private async pollDeployment(uuid: string, timeoutSeconds: number): Promise<DeployWaitResult> {
+    const deadline = Date.now() + timeoutSeconds * 1000;
+    let current = (await this.client.getDeployment(uuid)) as DeploymentEssential;
+
+    while (!isTerminalDeploymentStatus(current.status) && Date.now() < deadline) {
+      await sleep(DEPLOY_POLL_INTERVAL_MS);
+      current = (await this.client.getDeployment(uuid)) as DeploymentEssential;
+    }
+
+    if (!isTerminalDeploymentStatus(current.status)) {
+      return {
+        status: current.status,
+        deployment_uuid: uuid,
+        application_uuid: current.application_uuid,
+        timed_out: true,
+        next_action: `Still "${current.status}" after ${timeoutSeconds}s — poll \`deployment\` (action: "get", uuid: "${uuid}") to keep watching.`,
+      };
+    }
+
+    if (current.status === 'failed') {
+      const withLogs = (await this.client.getDeployment(uuid, {
+        includeLogs: true,
+      })) as Deployment;
+      const tail = withLogs.logs ? truncateLogs(withLogs.logs, 30, 10_000) : undefined;
+      return {
+        status: current.status,
+        deployment_uuid: uuid,
+        application_uuid: current.application_uuid,
+        commit: current.commit,
+        created_at: current.created_at,
+        updated_at: current.updated_at,
+        duration_seconds: durationSeconds(current.created_at, current.updated_at),
+        logs_tail: tail?.logs,
+        logs_meta: tail
+          ? {
+              total_entries: tail.total,
+              showing: `${tail.showing_start}-${tail.showing_end} of ${tail.total}`,
+            }
+          : undefined,
+        next_action: `Deployment failed. See logs_tail above, or \`deployment\` (action: "get", uuid: "${uuid}", lines: N) for more.`,
+      };
+    }
+
+    return {
+      status: current.status,
+      deployment_uuid: uuid,
+      application_uuid: current.application_uuid,
+      commit: current.commit,
+      created_at: current.created_at,
+      updated_at: current.updated_at,
+      duration_seconds: durationSeconds(current.created_at, current.updated_at),
+    };
+  }
+
+  /**
+   * Trigger a deploy and wait for it to finish. A tag can resolve to
+   * multiple applications, so `deployByTagOrUuid` may return several
+   * `deployment_uuid`s — only the first is polled; any others are
+   * surfaced under `additional_deployment_uuids` for the caller to check
+   * separately via `deployment get`.
+   */
+  private async triggerAndWaitForDeploy(
+    tagOrUuid: string,
+    force: boolean | undefined,
+    timeoutSeconds: number,
+  ): Promise<DeployWaitResult | DeployTriggerResponse> {
+    const triggered = await this.client.deployByTagOrUuid(tagOrUuid, force);
+    const [first, ...rest] = triggered.deployments ?? [];
+
+    if (!first?.deployment_uuid) {
+      // Nothing to poll against — hand back the trigger response as-is.
+      return triggered;
+    }
+
+    const result = await this.pollDeployment(first.deployment_uuid, timeoutSeconds);
+    const additional = rest.map((d) => d.deployment_uuid).filter((u): u is string => !!u);
+    if (additional.length > 0) {
+      result.additional_deployment_uuids = additional;
+    }
+    return result;
   }
 
   private registerTools(): void {
@@ -1148,12 +1291,42 @@ export class CoolifyMcpServer extends McpServer {
     this.tool(
       'deploy',
       'Deploy by tag/UUID',
-      { tag_or_uuid: z.string(), force: z.boolean().optional() },
-      async ({ tag_or_uuid, force }) =>
-        wrapWithActions(
-          () => this.client.deployByTagOrUuid(tag_or_uuid, force),
-          () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
-        ),
+      {
+        tag_or_uuid: z.string(),
+        force: z.boolean().optional(),
+        wait: z
+          .boolean()
+          .optional()
+          .describe(
+            'Wait for the deployment to reach a terminal status (finished/failed/cancelled) instead of returning immediately, polling every ~5s. If tag_or_uuid matches multiple applications (a tag can trigger several deployments), only the first is watched — the rest are returned under additional_deployment_uuids for you to check separately via `deployment get`. On failure the response includes a bounded log tail. Default false (fire-and-forget, unchanged response).',
+          ),
+        timeout_seconds: z
+          .number()
+          .optional()
+          .describe(
+            'Max seconds to poll when wait is true before giving up and returning the current status plus a next-action hint (default 300). Ignored when wait is false.',
+          ),
+      },
+      async ({ tag_or_uuid, force, wait, timeout_seconds }) => {
+        if (!wait) {
+          return wrapWithActions(
+            () => this.client.deployByTagOrUuid(tag_or_uuid, force),
+            () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
+          );
+        }
+        return wrapWithActions(
+          () =>
+            this.triggerAndWaitForDeploy(
+              tag_or_uuid,
+              force,
+              timeout_seconds ?? DEFAULT_DEPLOY_TIMEOUT_SECONDS,
+            ),
+          (result) =>
+            'deployment_uuid' in result
+              ? getDeploymentActions(result.deployment_uuid, result.status, result.application_uuid)
+              : [],
+        );
+      },
     );
 
     this.tool(

@@ -1062,6 +1062,179 @@ describe('CoolifyMcpServer v2', () => {
       expect(deleteSpy).toHaveBeenCalledWith('svc-uuid', 'task-uuid');
     });
   });
+
+  describe('deploy tool handler', () => {
+    // #238 — opt-in `wait` polls the deployment to a terminal status instead
+    // of firing-and-forgetting. The no-wait path must stay byte-for-byte
+    // identical to the pre-#238 behaviour.
+
+    const callDeploy = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+          >;
+        }
+      )._registeredTools['deploy'];
+      return tool.handler(args, {});
+    };
+
+    const essentialDeployment = (
+      overrides: Partial<Record<string, unknown>> = {},
+    ): Record<string, unknown> => ({
+      uuid: 'dep-uuid',
+      deployment_uuid: 'dep-uuid',
+      application_uuid: 'app-uuid',
+      application_name: 'my-app',
+      status: 'in_progress',
+      commit: 'abc123',
+      force_rebuild: false,
+      is_webhook: false,
+      is_api: true,
+      created_at: '2026-01-01T10:00:00Z',
+      updated_at: '2026-01-01T10:00:00Z',
+      ...overrides,
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('no-wait path is unchanged: triggers deploy and returns immediately', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
+      const pollSpy = jest.spyOn(server['client'], 'getDeployment');
+
+      const result = (await callDeploy(server, { tag_or_uuid: 'my-tag', force: true })) as {
+        content: Array<{ text: string }>;
+      };
+
+      expect(spy).toHaveBeenCalledWith('my-tag', true);
+      expect(pollSpy).not.toHaveBeenCalled();
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data).toEqual({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
+      expect(parsed._actions).toEqual([
+        { tool: 'list_deployments', args: {}, hint: 'Check deployment status' },
+      ]);
+    });
+
+    it('wait: true polls until finished', async () => {
+      jest.useFakeTimers();
+      jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
+      const getDeploymentSpy = jest
+        .spyOn(server['client'], 'getDeployment')
+        .mockResolvedValueOnce(essentialDeployment({ status: 'in_progress' }) as never)
+        .mockResolvedValueOnce(essentialDeployment({ status: 'finished' }) as never);
+
+      const resultPromise = callDeploy(server, { tag_or_uuid: 'my-tag', wait: true }) as Promise<{
+        content: Array<{ text: string }>;
+      }>;
+
+      await jest.advanceTimersByTimeAsync(5000);
+      const result = await resultPromise;
+
+      expect(getDeploymentSpy).toHaveBeenCalledTimes(2);
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.data.status).toBe('finished');
+      expect(parsed.data.deployment_uuid).toBe('dep-uuid');
+      expect(parsed.data.logs_tail).toBeUndefined();
+    });
+
+    it('wait: true returns a bounded log tail on failure, never the raw payload', async () => {
+      jest.useFakeTimers();
+      jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
+      jest
+        .spyOn(server['client'], 'getDeployment')
+        .mockImplementation(async (uuid: string, options?: { includeLogs?: boolean }) => {
+          if (options?.includeLogs) {
+            return {
+              ...essentialDeployment({ status: 'failed' }),
+              logs: JSON.stringify([{ output: 'build failed: OOM', timestamp: 't1' }]),
+              // Fields that would only appear on the raw upstream object —
+              // must never leak into the tool response.
+              server: { ip: '10.0.0.1', private_key: 'super-secret' },
+              application: { env_secret: 'shh' },
+            } as never;
+          }
+          return essentialDeployment({ status: 'failed' }) as never;
+        });
+
+      const resultPromise = callDeploy(server, { tag_or_uuid: 'my-tag', wait: true }) as Promise<{
+        content: Array<{ text: string }>;
+      }>;
+
+      const result = await resultPromise;
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.data.status).toBe('failed');
+      expect(parsed.data.deployment_uuid).toBe('dep-uuid');
+      expect(parsed.data.logs_tail).toContain('build failed: OOM');
+      expect(result.content[0].text).not.toContain('private_key');
+      expect(result.content[0].text).not.toContain('env_secret');
+      expect(parsed.data).not.toHaveProperty('server');
+      expect(parsed.data).not.toHaveProperty('application');
+    });
+
+    it('wait: true returns an explicit timeout with a next-action hint', async () => {
+      jest.useFakeTimers();
+      jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
+      jest
+        .spyOn(server['client'], 'getDeployment')
+        .mockResolvedValue(essentialDeployment({ status: 'in_progress' }) as never);
+
+      const resultPromise = callDeploy(server, {
+        tag_or_uuid: 'my-tag',
+        wait: true,
+        timeout_seconds: 10,
+      }) as Promise<{ content: Array<{ text: string }> }>;
+
+      // Let the poll loop exceed the 10s timeout.
+      await jest.advanceTimersByTimeAsync(15_000);
+      const result = await resultPromise;
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.data.status).toBe('in_progress');
+      expect(parsed.data.timed_out).toBe(true);
+      expect(parsed.data.deployment_uuid).toBe('dep-uuid');
+      expect(parsed.data.next_action).toEqual(expect.stringContaining('deployment'));
+    });
+
+    it('wait: true watches only the first deployment when a tag triggers several', async () => {
+      jest.useFakeTimers();
+      jest.spyOn(server['client'], 'deployByTagOrUuid').mockResolvedValue({
+        deployments: [{ deployment_uuid: 'dep-1' }, { deployment_uuid: 'dep-2' }],
+      });
+      const getDeploymentSpy = jest.spyOn(server['client'], 'getDeployment').mockResolvedValue(
+        essentialDeployment({
+          status: 'finished',
+          deployment_uuid: 'dep-1',
+          uuid: 'dep-1',
+        }) as never,
+      );
+
+      const resultPromise = callDeploy(server, { tag_or_uuid: 'my-tag', wait: true }) as Promise<{
+        content: Array<{ text: string }>;
+      }>;
+      const result = await resultPromise;
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(getDeploymentSpy).toHaveBeenCalledWith('dep-1');
+      expect(getDeploymentSpy).not.toHaveBeenCalledWith('dep-2');
+      expect(parsed.data.deployment_uuid).toBe('dep-1');
+      expect(parsed.data.additional_deployment_uuids).toEqual(['dep-2']);
+    });
+  });
 });
 
 describe('truncateLogs', () => {

@@ -63,6 +63,7 @@ import type {
   // Deployment types
   Deployment,
   DeploymentEssential,
+  DeployTriggerResponse,
   // Team types
   Team,
   TeamMember,
@@ -1204,10 +1205,13 @@ export class CoolifyClient {
     return essential;
   }
 
-  async deployByTagOrUuid(tagOrUuid: string, force: boolean = false): Promise<MessageResponse> {
+  async deployByTagOrUuid(
+    tagOrUuid: string,
+    force: boolean = false,
+  ): Promise<DeployTriggerResponse> {
     // Detect if the value looks like a UUID or a tag name
     const param = this.isLikelyUuid(tagOrUuid) ? 'uuid' : 'tag';
-    return this.request<MessageResponse>(
+    return this.request<DeployTriggerResponse>(
       `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}`,
       { method: 'GET' },
     );

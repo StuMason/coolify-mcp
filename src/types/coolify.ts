@@ -858,6 +858,21 @@ export interface DeployByTagRequest {
   force?: boolean;
 }
 
+/**
+ * Response from `GET /deploy?tag=|uuid=`. A tag can match multiple
+ * applications, so Coolify returns one entry per triggered deployment.
+ * `message` at the top level is kept for backwards compatibility with
+ * older/mocked callers that only ever saw a bare `{ message }`.
+ */
+export interface DeployTriggerResponse {
+  message?: string;
+  deployments?: Array<{
+    message?: string;
+    resource_uuid?: string;
+    deployment_uuid?: string;
+  }>;
+}
+
 // =============================================================================
 // Team Types
 // =============================================================================
