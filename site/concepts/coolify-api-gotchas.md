@@ -63,3 +63,18 @@ The `scheduled_tasks` tool now validates `command` client-side with `.max(255, .
 Coolify's `GET /api/v1/deployments/applications/{uuid}` returns `{ count, deployments: [] }`, not `Deployment[]` as the OpenAPI suggests. Any caller using `.length` / `.map()` on the response would crash against a real Coolify server. Fixed in #158: the client method now correctly parses the envelope and returns `{ count, deployments }`.
 
 By default the response uses `DeploymentEssential[]` (no raw `logs` blobs) to keep token usage sane on a 35-deployment list. Pass `include_logs: true` to opt back in.
+
+## Scheduled tasks have no "run now" — and the every-minute dance is dangerous
+
+There is no upstream trigger/run-now endpoint for scheduled tasks: the bundled `docs/coolify-openapi.yaml` has no scheduled-task trigger (the only `trigger` in the spec is database backups), and `coolify-client.ts` has no such method. The only way to run a one-off command in a container is the manual dance: create a task with `frequency: "* * * * *"`, wait for the minute tick, read `list_executions`, delete the task.
+
+Sharp edges hit doing this manually (2026-07-02, applying a missed migration on the crunch app):
+
+- The task fires **every minute until deleted** — a non-idempotent SQL statement ran twice before the delete landed. Write commands as idempotent (`where not exists`, `insert ... on conflict`) or expect re-execution.
+- Timing the tick by hand (create → wait ~60-70s → `list_executions` → delete) is boilerplate every caller reimplements badly, and it's easy to delete too early (before the first execution lands) or too late (after a second tick fires).
+
+The `scheduled_tasks` tool's `run_once` action (#233) automates this: it creates the throwaway task, polls `list_executions` every ~5s for the first terminal execution (default 90s budget), deletes the task in a cleanup step that always runs (success, timeout, or error), and returns `status` + `message` (the command's stdout — see below). It still carries the same idempotency caveat, since the underlying cron can fire more than once before cleanup completes; deleting immediately after the first observed execution shrinks the window but does not close it.
+
+Also: `list_executions` returns a `message` field per execution that carries the command's **stdout** — easy to miss since nothing else in the response looks like output.
+
+Separately, Coolify silently rejects scheduled-task `command` values longer than ~255 chars as a bare `HTTP 500` with no body (#234) — keep commands short, or write a script into the container image and call that instead.
