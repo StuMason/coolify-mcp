@@ -1,0 +1,17 @@
+# Fails CI if repo content addresses or instructs AI agents invisibly
+# (hidden HTML comments, concealed elements, invisible unicode).
+# Why this exists: https://github.com/StuMason/coolify-mcp/issues/250
+name: hidden-agenda
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: StuMason/hidden-agenda@v0
+        with:
+          fail-on: error
