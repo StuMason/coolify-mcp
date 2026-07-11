@@ -664,6 +664,21 @@ describe('CoolifyMcpServer v2', () => {
       expect(updateData).not.toHaveProperty('action');
       expect(updateData).not.toHaveProperty('uuid');
     });
+
+    it('forwards custom_network_aliases through update (#254)', async () => {
+      const spy = jest.spyOn(server['client'], 'updateApplication').mockResolvedValue({} as never);
+
+      await callApplication(server, {
+        action: 'update',
+        uuid: 'app-uuid',
+        custom_network_aliases: 'edator-asr',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'app-uuid',
+        expect.objectContaining({ custom_network_aliases: 'edator-asr' }),
+      );
+    });
   });
 
   describe('database tool handler', () => {

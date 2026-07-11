@@ -623,6 +623,12 @@ export class CoolifyMcpServer extends McpServer {
         domains: z.string().optional(),
         custom_docker_run_options: z.string().optional(),
         custom_labels: z.string().optional(),
+        custom_network_aliases: z
+          .string()
+          .optional()
+          .describe(
+            'Comma-separated DNS aliases for app-to-app traffic (update only). App containers have no stable uuid hostname — only databases do.',
+          ),
         instant_deploy: z.boolean().optional(),
         // Health check fields
         health_check_enabled: z.boolean().optional(),

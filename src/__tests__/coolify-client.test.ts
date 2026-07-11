@@ -1533,6 +1533,17 @@ describe('CoolifyClient', () => {
       expect(callBody.base_directory).toBe('/apps/api');
     });
 
+    it('should pass custom_network_aliases through updateApplication (#254)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      await client.updateApplication('app-uuid', {
+        custom_network_aliases: 'edator-asr',
+      });
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.custom_network_aliases).toBe('edator-asr');
+    });
+
     it('should pass destination_uuid through in createApplicationPublic', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 

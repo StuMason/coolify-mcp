@@ -384,6 +384,9 @@ export interface UpdateApplicationRequest {
   domains?: string;
   custom_docker_run_options?: string;
   custom_labels?: string;
+  // App containers get no stable uuid DNS hostname (only databases do);
+  // this is the only way to give an app a fixed name for app-to-app traffic.
+  custom_network_aliases?: string;
   git_repository?: string;
   git_branch?: string;
   git_commit_sha?: string;
