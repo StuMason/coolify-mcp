@@ -2,25 +2,50 @@
 
 [![npm version](https://img.shields.io/npm/v/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/@masonator/coolify-mcp.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
 [![CI](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
 [![Claude Desktop one-click install](https://img.shields.io/badge/Claude%20Desktop-one--click%20install-d97757)](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **The most comprehensive MCP server for Coolify** - 42 optimized tools, smart diagnostics, documentation search, and batch operations for managing your self-hosted PaaS through AI assistants.
+Manage [Coolify](https://coolify.io/) through natural language — 42 token-optimized MCP tools for deploying, debugging, and operating your self-hosted PaaS from Claude, Cursor, or any MCP client.
 
-📖 **Docs**: [**coolify-mcp.stumason.dev**](https://coolify-mcp.stumason.dev) — install guide, quickstart, full tools reference, MCP primer, Coolify API gotchas, contributing guide, and the public v3 roadmap.
+📖 **Full docs: [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** — install guide, tools reference, architecture, security model, v3 roadmap.
 
-> 💡 **Building a Laravel app?** Check out [**laravel-coolify**](https://github.com/StuMason/laravel-coolify) — deploy Laravel to Coolify with a Horizon-style dashboard, Artisan commands, and auto-generated Dockerfiles.
+## Install
 
-A Model Context Protocol (MCP) server for [Coolify](https://coolify.io/), enabling AI assistants to manage and debug your Coolify instances through natural language.
+You need a running Coolify v4 instance and an API token (Coolify → Settings → API).
 
-## Features
+**Claude Desktop — one-click:** download [`coolify-mcp.mcpb`](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) and drag it into **Settings → Extensions**. You'll be prompted for your Coolify URL and token — no Node install, no JSON editing.
 
-This MCP server provides **42 token-optimized tools** for **debugging, management, and deployment**:
+**Claude Code:**
+
+```bash
+claude mcp add coolify \
+  -e COOLIFY_BASE_URL="https://your-coolify-instance.com" \
+  -e COOLIFY_ACCESS_TOKEN="your-api-token" \
+  -- npx @masonator/coolify-mcp@latest
+```
+
+**Any MCP client (JSON config):**
+
+```json
+{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@masonator/coolify-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://your-coolify-instance.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}
+```
+
+Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (repeatable). Cursor, multiple Coolify instances, and proxy setups are covered in the [install guide](https://coolify-mcp.stumason.dev/guide/installation).
+
+## Tools
 
 | Category             | Tools                                                                                                                               |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,7 +62,7 @@ This MCP server provides **42 token-optimized tools** for **debugging, managemen
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                    |
 | **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                   |
-| **Deployments**      | `list_deployments`, `deploy`, `deployment` (get, cancel, list_for_app)                                                              |
+| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                              |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                 |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                        |
 | **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                  |
@@ -45,421 +70,56 @@ This MCP server provides **42 token-optimized tools** for **debugging, managemen
 | **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                            |
 | **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                |
 
-### Token-Optimized Design
+Full reference with parameters and examples: [tools docs](https://coolify-mcp.stumason.dev/tools/).
 
-The server uses **85% fewer tokens** than a naive implementation (6,600 vs 43,000) by consolidating related operations into single tools with action parameters. This prevents context window exhaustion in AI assistants.
+## Design
 
-### Secure by Default
+- **Token-optimized** — consolidated action-param tools keep the tool list at ~6,600 tokens instead of ~43,000 (85% less), so the server doesn't eat your context window before you've asked anything.
+- **Summaries by default** — `list_*` tools return `uuid`/`name`/`status` projections (90–99% smaller than the raw API, measured against a real 21-app estate); `get_*` tools fetch full detail for one resource.
+- **Smart lookup** — `diagnose_app` takes a UUID, name, or domain; `diagnose_server` takes a UUID, name, or IP.
+- **Actionable responses** — results carry `_actions` hints (view logs, restart, next page) so the assistant knows the logical next step without extra tokens.
+- **Verified deploys** — `deploy` with `wait: true` polls to a terminal status and returns a log tail on failure, instead of "the site returns 200 so it probably worked".
 
-Your AI assistant should be able to _manage_ infrastructure without silently _reading every credential in it_. Secrets are masked at the API boundary — an LLM client granted "list" access never sees plaintext credentials unless you explicitly opt in:
+## Secure by default
 
-| Surface                             | Masked by default                                                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `env_vars` (app/service/database)   | Variable values (`value` / `real_value`)                                                                                                                                        |
-| `system list_resources` (full mode) | Webhook HMAC secrets, basic-auth passwords, all database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env-var values (#209) |
-| `deployment get`                    | Raw upstream payload never returned — projected response strips server settings, log-drain tokens, webhook secrets (#232)                                                       |
+Secrets are masked at the API boundary — a client granted "list" access never sees plaintext credentials unless you explicitly opt in with `reveal: true`:
 
-Pass `reveal: true` on `env_vars list` / `list_resources` when the caller genuinely needs plaintext ("what is FOO set to?"). Masking is applied inside the HTTP client, so every code path inherits it.
+- **`env_vars`** — variable values return as `***`
+- **`system list_resources` (full mode)** — webhook HMAC secrets, basic-auth and database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env vars
+- **`deployment get`** — the raw upstream payload (server settings, log-drain tokens, webhook secrets) never leaves the client; responses are projected
 
-## Installation
+Details: [security model](https://coolify-mcp.stumason.dev/concepts/security).
 
-### Prerequisites
-
-- Node.js >= 20 (not needed for the one-click Claude Desktop install — Node ships inside Claude Desktop)
-- A running Coolify instance (tested from v4.0.0-beta.460 through v4.1.2)
-- Coolify API access token (generate in Coolify Settings > API)
-
-### Claude Desktop — one-click install (recommended)
-
-Download [`coolify-mcp.mcpb`](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) from the latest release and drag it into Claude Desktop **Settings → Extensions**. You'll be prompted for your Coolify URL and API token — no config file editing, no Node install required.
-
-### Claude Desktop — manual config
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "coolify": {
-      "command": "npx",
-      "args": ["-y", "@masonator/coolify-mcp"],
-      "env": {
-        "COOLIFY_ACCESS_TOKEN": "your-api-token",
-        "COOLIFY_BASE_URL": "https://your-coolify-instance.com"
-      }
-    }
-  }
-}
-```
-
-### Claude Code
-
-```bash
-claude mcp add coolify \
-  -e COOLIFY_BASE_URL="https://your-coolify-instance.com" \
-  -e COOLIFY_ACCESS_TOKEN="your-api-token" \
-  -- npx @masonator/coolify-mcp@latest
-```
-
-> **Note:** Use `@latest` tag (not `-y` flag) for reliable startup in Claude Code CLI.
-
-### Cursor
-
-```bash
-env COOLIFY_ACCESS_TOKEN=your-api-token COOLIFY_BASE_URL=https://your-coolify-instance.com npx -y @masonator/coolify-mcp
-```
-
-### Custom HTTP Headers (Cloudflare Zero Trust, Auth Proxies)
-
-If your Coolify instance sits behind a Cloudflare Access tunnel or other auth-proxy middleware, pass extra headers on every outbound request with `--header`:
-
-```json
-{
-  "mcpServers": {
-    "coolify": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@masonator/coolify-mcp",
-        "--header",
-        "CF-Access-Client-Id: abc123.access",
-        "--header",
-        "CF-Access-Client-Secret: your-secret"
-      ],
-      "env": {
-        "COOLIFY_ACCESS_TOKEN": "your-api-token",
-        "COOLIFY_BASE_URL": "https://your-coolify-instance.com"
-      }
-    }
-  }
-}
-```
-
-Multiple `--header` flags can be combined. The reserved headers `Authorization` and `Content-Type` are filtered (with a warning) to prevent silently overriding the Coolify bearer token.
-
-### Multiple Coolify servers
-
-Each running instance of this MCP server is bound to one Coolify (one `COOLIFY_BASE_URL` + token). To work with several Coolify instances, pick whichever of these fits your workflow:
-
-**Per-workspace config (recommended).** Most MCP clients support project-scoped config files (`.mcp.json` / `.cursor/mcp.json` / `.vscode/mcp.json` in the repo root) alongside the global one. Put the Coolify credentials for _that project's_ estate in the project's own config, and "deploy this" automatically routes to the right Coolify whenever you're working in that repo — no server names to remember in conversation.
-
-**Named instances in global config.** Register the server twice (or more) under distinct names, and address them by name in conversation ("deploy this on staging"):
-
-```json
-{
-  "mcpServers": {
-    "coolify-prod": {
-      "command": "npx",
-      "args": ["-y", "@masonator/coolify-mcp"],
-      "env": {
-        "COOLIFY_BASE_URL": "https://prod.coolify.example",
-        "COOLIFY_ACCESS_TOKEN": "..."
-      }
-    },
-    "coolify-staging": {
-      "command": "npx",
-      "args": ["-y", "@masonator/coolify-mcp"],
-      "env": {
-        "COOLIFY_BASE_URL": "https://staging.coolify.example",
-        "COOLIFY_ACCESS_TOKEN": "..."
-      }
-    }
-  }
-}
-```
-
-The MCP server itself can't offer a settings screen or auto-detect the current repo — MCP servers are headless child processes and clients don't pass repo context — so routing lives in your client config, where both patterns above work today (see #164).
-
-## Context-Optimized Responses
-
-### Why This Matters
-
-The Coolify API returns extremely verbose responses - a single application can contain 91 fields including embedded 3KB server objects and 47KB docker-compose files. When listing 20+ applications, responses can exceed 200KB, which quickly exhausts the context window of AI assistants like Claude Desktop.
-
-**This MCP server solves this by returning optimized summaries by default.**
-
-### How It Works
-
-| Tool Type                     | Returns                                  | Use Case                            |
-| ----------------------------- | ---------------------------------------- | ----------------------------------- |
-| `list_*`                      | Summaries only (uuid, name, status, etc) | Discovery, finding resources        |
-| `get_*`                       | Full details for a single resource       | Deep inspection, debugging          |
-| `get_infrastructure_overview` | All resources summarized in one call     | Start here to understand your setup |
-
-### Response Size Comparison
-
-| Endpoint                | Full Response | Summary Response | Reduction |
-| ----------------------- | ------------- | ---------------- | --------- |
-| list_applications       | ~170KB        | ~4.4KB           | **97%**   |
-| list_services           | ~367KB        | ~1.2KB           | **99%**   |
-| list_servers            | ~4KB          | ~0.4KB           | **90%**   |
-| list_application_envs   | ~3KB/var      | ~0.1KB/var       | **97%**   |
-| deployment get          | ~13KB         | ~1KB             | **92%**   |
-| deployment list_for_app | ~1MB          | ~4KB             | **99.6%** |
-
-### HATEOAS-style Response Actions
-
-Responses include contextual `_actions` suggesting relevant next steps:
-
-```json
-{
-  "data": { "uuid": "abc123", "status": "running" },
-  "_actions": [
-    { "tool": "application_logs", "args": { "uuid": "abc123" }, "hint": "View logs" },
-    {
-      "tool": "control",
-      "args": { "resource": "application", "action": "restart", "uuid": "abc123" },
-      "hint": "Restart"
-    }
-  ],
-  "_pagination": { "next": { "tool": "list_applications", "args": { "page": 2 } } }
-}
-```
-
-This helps AI assistants understand logical next steps without consuming extra tokens.
-
-### Recommended Workflow
-
-1. **Start with overview**: `get_infrastructure_overview` - see everything at once
-2. **Find your target**: `list_applications` - get UUIDs of what you need
-3. **Dive deep**: `get_application(uuid)` - full details for one resource
-4. **Take action**: `control(resource: 'application', action: 'restart')`, `application_logs(uuid)`, etc.
-
-### Pagination
-
-All list endpoints still support optional pagination for very large deployments:
-
-```bash
-# Get page 2 with 10 items per page
-list_applications(page=2, per_page=10)
-```
-
-## Example Prompts
-
-### Getting Started
+## Example prompts
 
 ```text
 Give me an overview of my infrastructure
-Show me all my applications
-What's running on my servers?
-```
-
-### Debugging & Monitoring
-
-```text
 Diagnose my stuartmason.co.uk app
-What's wrong with my-api application?
-Check the status of server 192.168.1.100
 Find any issues in my infrastructure
-Get the logs for application {uuid}
-What environment variables are set for application {uuid}?
-Show me recent deployments for application {uuid}
-What resources are running on server {uuid}?
-```
-
-### Application Management
-
-```text
-Restart application {uuid}
-Stop the database {uuid}
-Start service {uuid}
-Deploy application {uuid} with force rebuild
+Deploy application {uuid} and wait for it to finish
 Update the DATABASE_URL env var for application {uuid}
-```
-
-### Project Setup
-
-```text
-Create a new project called "my-app"
 Create a staging environment in project {uuid}
-Deploy my app from private GitHub repo org/repo on branch main
-Deploy nginx:latest from Docker Hub
-Deploy from public repo https://github.com/org/repo
+Restart all applications in project {uuid}
+How do I fix a 502 Bad Gateway error in Coolify?
 ```
-
-### Documentation & Help
-
-```text
-How do I set up Docker Compose with Coolify?
-Search the docs for health check configuration
-How do I fix a 502 Bad Gateway error?
-What are Coolify environment variables?
-```
-
-### Teams & Cloud Providers
-
-```text
-Who has access to my Coolify instance?
-Show me the current team members
-List my cloud provider tokens
-Validate my Hetzner API token
-```
-
-## Environment Variables
-
-| Variable               | Required | Default                 | Description               |
-| ---------------------- | -------- | ----------------------- | ------------------------- |
-| `COOLIFY_ACCESS_TOKEN` | Yes      | -                       | Your Coolify API token    |
-| `COOLIFY_BASE_URL`     | No       | `http://localhost:3000` | Your Coolify instance URL |
 
 ## Development
 
 ```bash
-# Clone and install
-git clone https://github.com/stumason/coolify-mcp.git
-cd coolify-mcp
-npm install
+git clone https://github.com/StuMason/coolify-mcp.git
+cd coolify-mcp && npm install
+npm run build && npm test
 
-# Build
-npm run build
-
-# Test
-npm test
-
-# Run locally
-COOLIFY_BASE_URL="https://your-coolify.com" \
-COOLIFY_ACCESS_TOKEN="your-token" \
-node dist/index.js
+COOLIFY_BASE_URL="https://your-coolify.com" COOLIFY_ACCESS_TOKEN="token" node dist/index.js
 ```
 
-## Available Tools
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [contributor docs](https://coolify-mcp.stumason.dev/contributing/adding-tools).
 
-### Infrastructure
+## Links
 
-- `get_version` - Get Coolify API version
-- `get_mcp_version` - Get coolify-mcp server version (useful to verify which version is installed)
-- `get_infrastructure_overview` - Get a high-level overview of all infrastructure (servers, projects, applications, databases, services)
-- `system` - Instance operations with `action: health|list_resources|enable_api|disable_api`. `list_resources` returns an essential projection (uuid/name/type/status) by default; `include_full: true` returns the raw rows with credentials masked (see [Secure by Default](#secure-by-default))
+- [Coolify](https://coolify.io/) — the open-source, self-hostable PaaS this server drives
+- [MCP Registry](https://registry.modelcontextprotocol.io) — listed as `io.github.StuMason/coolify`
+- [laravel-coolify](https://github.com/StuMason/laravel-coolify) — deploy Laravel to Coolify with a dashboard, Artisan commands, and generated Dockerfiles
+- [Model Context Protocol](https://modelcontextprotocol.io/)
 
-### Diagnostics (Smart Lookup)
-
-These tools accept human-friendly identifiers instead of just UUIDs:
-
-- `diagnose_app` - Get comprehensive app diagnostics (status, logs, env vars, deployments). Accepts UUID, name, or domain (e.g., "stuartmason.co.uk" or "my-app")
-- `diagnose_server` - Get server diagnostics (status, resources, domains, validation). Accepts UUID, name, or IP address (e.g., "coolify-apps" or "192.168.1.100")
-- `find_issues` - Scan entire infrastructure for unhealthy apps, databases, services, and unreachable servers
-
-### Servers
-
-- `list_servers` - List all servers (returns summary)
-- `get_server` - Get server details
-- `server_resources` - Get resources running on a server
-- `server_domains` - Get domains configured on a server
-- `validate_server` - Validate server connection
-
-### Projects
-
-- `projects` - Manage projects with `action: list|get|create|update|delete`
-
-### Environments
-
-- `environments` - Manage environments with `action: list|get|create|delete`
-
-### Applications
-
-- `list_applications` - List all applications (returns summary)
-- `get_application` - Get application details
-- `application_logs` - Get application logs
-- `application` - Create, update, or delete apps with `action: create_public|create_github|create_key|create_dockerimage|create_dockerfile|update|delete`
-  - Deploy from public repos, private GitHub, SSH keys, Docker images, or a raw Dockerfile
-  - For docker-compose apps use the `service` tool — Coolify removed `POST /applications/dockercompose` in v4.1.0 in favour of services
-  - Configure health checks (path, interval, retries, etc.)
-  - Set `custom_network_aliases` on update for app-to-app DNS — app containers get no stable uuid hostname (only databases do), so this is the way to give an app a fixed name on a shared network
-- `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
-- `control` - Start/stop/restart with `resource: application, action: start|stop|restart`
-
-### Databases
-
-- `list_databases` - List all databases (returns summary)
-- `get_database` - Get database details
-- `database` - Create or delete databases with `action: create|delete, type: postgresql|mysql|mariadb|mongodb|redis|keydb|clickhouse|dragonfly`
-- `database_backups` - Manage backup schedules with `action: list_schedules|get_schedule|create|update|delete|list_executions|get_execution`
-  - Configure frequency, retention policies, S3 storage
-  - Enable/disable schedules without deletion
-  - View backup execution history
-- `control` - Start/stop/restart with `resource: database, action: start|stop|restart`
-
-### Services
-
-- `list_services` - List all services (returns summary)
-- `get_service` - Get service details
-- `service` - Create, update, or delete services with `action: create|update|delete`
-- `env_vars` - Manage env vars with `resource: service, action: list|create|delete`
-- `control` - Start/stop/restart with `resource: service, action: start|stop|restart`
-
-### Storages & Scheduled Tasks
-
-- `storages` - Manage persistent/file storages with `action: list|create|update|delete` for applications, databases, and services
-- `scheduled_tasks` - Manage cron tasks with `action: list|create|update|delete|list_executions|run_once` for applications and services — `run_once` runs a one-off command in the container and returns its output
-
-### Deployments
-
-- `list_deployments` - List running deployments (returns summary)
-- `deploy` - Deploy by tag or UUID; pass `wait: true` (with optional `timeout_seconds`) to poll to a terminal status and get a bounded log tail on failure
-- `deployment` - Manage deployments with `action: get|cancel|list_for_app` (supports `lines` and `page` params for paginated log output with `logs_meta`)
-
-### Private Keys
-
-- `private_keys` - Manage SSH keys with `action: list|get|create|update|delete`
-
-### GitHub Apps
-
-- `github_apps` - Manage GitHub App integrations with `action: list|get|create|update|delete`
-
-### Teams
-
-- `teams` - Manage teams with `action: list|get|get_members|get_current|get_current_members`
-
-### Cloud Tokens & Hetzner
-
-- `cloud_tokens` - Manage cloud provider tokens (Hetzner/DigitalOcean) with `action: list|get|create|update|delete|validate`
-- `hetzner` - Provision via Coolify's Hetzner integration with `action: list_locations|list_server_types|list_images|list_ssh_keys|create_server` (requires a configured cloud-provider token)
-
-### Documentation
-
-- `search_docs` - Search Coolify documentation using full-text search. Indexes 1,500+ doc chunks on first call, returns ranked results with titles, URLs, and snippets (~849 tokens for 5 results)
-
-### Batch Operations
-
-Power user tools for operating on multiple resources at once:
-
-- `restart_project_apps` - Restart all applications in a project
-- `bulk_env_update` - Update or create an environment variable across multiple applications (upsert behavior)
-- `stop_all_apps` - Emergency stop all running applications (requires confirmation)
-- `redeploy_project` - Redeploy all applications in a project with force rebuild
-
-## Why Coolify MCP?
-
-- **Context-Optimized**: Responses are 90-99% smaller than raw API, preventing context window exhaustion
-- **Secure by Default**: Credentials are masked at the API boundary — env var values, database passwords, connection URLs, webhook secrets — with explicit `reveal: true` opt-in
-- **One-Click Install**: Drag the [`.mcpb` bundle](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) into Claude Desktop — no Node, no JSON editing
-- **Smart Lookup**: Find apps by domain (`stuartmason.co.uk`), servers by IP, not just UUIDs
-- **Docs Search**: Built-in full-text search across Coolify documentation — your AI assistant can look up how-tos and troubleshooting without leaving the conversation
-- **Batch Operations**: Restart entire projects, bulk update env vars, emergency stop all apps
-- **Production Ready**: 98%+ test coverage, TypeScript strict mode, comprehensive error handling
-
-## Related Links
-
-- [stumason.dev](https://stumason.dev) - Author's site
-- [MCP Registry](https://registry.modelcontextprotocol.io) - Find this server as `io.github.StuMason/coolify`
-- [Coolify](https://coolify.io/) - The open-source & self-hostable Heroku/Netlify/Vercel alternative
-- [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol powering AI tool integrations
-
-## Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-MIT - see [LICENSE](LICENSE) for details.
-
-## Support
-
-- [GitHub Issues](https://github.com/StuMason/coolify-mcp/issues)
-- [Coolify Community](https://coolify.io/docs/contact)
-
----
-
-<p align="center">
-  Built by <a href="https://stumason.dev">Stu Mason</a> · If you find this useful, please ⭐ star the repo!
-</p>
+MIT © [Stu Mason](https://stumason.dev) — if this is useful, ⭐ the repo.
