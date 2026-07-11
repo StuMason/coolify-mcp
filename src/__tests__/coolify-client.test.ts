@@ -5170,6 +5170,23 @@ describe('CoolifyClient', () => {
         expect(envs[1].value).toBeNull();
       });
 
+      it('passes non-object environment_variables entries through untouched', async () => {
+        // Defensive-walker guard: if a Coolify version emits something other
+        // than objects in the collection, don't crash and don't alter it.
+        const weird = {
+          ...fluffyResource,
+          environment_variables: [null, 'FOO=bar', { uuid: 'env-1', key: 'K', value: 'v' }],
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([weird]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        const envs = first.environment_variables as Array<unknown>;
+        expect(envs[0]).toBeNull();
+        expect(envs[1]).toBe('FOO=bar');
+        expect((envs[2] as Record<string, unknown>).value).toBe('***');
+      });
+
       it('reveal=true round-trips the #209 fields as plaintext', async () => {
         const dbResource = {
           ...fluffyResource,
