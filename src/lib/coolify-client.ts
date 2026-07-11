@@ -437,19 +437,58 @@ function toResourceListItemEssential(item: ResourceListItemFull): ResourceListIt
  * deploy webhooks — anyone with one can forge deploys for that repo
  * independently of the Coolify API token. `http_basic_auth_password` is the
  * password gating front-of-app access.
+ *
+ * The database and compose entries come from a source audit of Coolify
+ * v4.1.2 (#209): no Standalone* model defines `$hidden`, and Laravel
+ * serializes `encrypted` casts as decrypted plaintext, so every database row
+ * on `/resources` carries its password in the clear. `internal_db_url` /
+ * `external_db_url` are appended accessors that embed the password in a
+ * connection URL on all eight database types — including Redis, whose
+ * password surfaces ONLY through those URLs (the column was moved to env
+ * vars). Compose bodies are masked because Coolify resolves
+ * `SERVICE_PASSWORD_*` placeholders into `docker_compose`, and
+ * `custom_labels` because Traefik basic-auth labels carry htpasswd hashes.
  */
 const SENSITIVE_RESOURCE_FIELDS = [
+  // Webhook + basic-auth (#204 / #206)
   'manual_webhook_secret_github',
   'manual_webhook_secret_gitlab',
   'manual_webhook_secret_gitea',
   'manual_webhook_secret_bitbucket',
   'http_basic_auth_password',
+  // Database passwords (#209) — serialized decrypted at the API
+  'postgres_password',
+  'mysql_password',
+  'mysql_root_password',
+  'mariadb_password',
+  'mariadb_root_password',
+  'mongo_initdb_root_password',
+  'redis_password',
+  'keydb_password',
+  'dragonfly_password',
+  'clickhouse_admin_password',
+  // Connection-URL appends (#209) — embed the password on every db type
+  'internal_db_url',
+  'external_db_url',
+  // Compose bodies + Traefik labels (#209) — carry resolved credentials
+  'docker_compose_raw',
+  'docker_compose',
+  'docker_compose_pr_raw',
+  'docker_compose_pr',
+  'custom_labels',
 ] as const;
 
 /**
  * Replace each {@link SENSITIVE_RESOURCE_FIELDS} entry with `'***'` on a full
  * resource row. Null/undefined values are preserved (since `null` conveys
  * "no secret set" and matters to callers); only populated values get masked.
+ *
+ * Also walks a nested `environment_variables[]` collection if one is present
+ * and masks `value` / `real_value` on each entry (mirroring {@link maskEnvVar}).
+ * Coolify v4.1.2 never inlines env vars on `/resources` rows — the relation
+ * is lazy and the controller never loads it — but other versions or forks
+ * might, and the nested copy would otherwise bypass the env_vars pipeline's
+ * masking entirely (#209).
  */
 function maskResourceItemFull(item: ResourceListItemFull): ResourceListItemFull {
   const masked: ResourceListItemFull = { ...item };
@@ -457,6 +496,15 @@ function maskResourceItemFull(item: ResourceListItemFull): ResourceListItemFull 
     if (masked[field] != null) {
       masked[field] = MASKED_VALUE;
     }
+  }
+  if (Array.isArray(masked.environment_variables)) {
+    masked.environment_variables = masked.environment_variables.map((entry) => {
+      if (entry === null || typeof entry !== 'object') return entry;
+      const env = { ...(entry as Record<string, unknown>) };
+      if (env.value != null) env.value = MASKED_VALUE;
+      if (env.real_value != null) env.real_value = MASKED_VALUE;
+      return env;
+    });
   }
   return masked;
 }
