@@ -902,11 +902,57 @@ export class CoolifyClient {
     return reveal ? envVars : envVars.map(maskEnvVar);
   }
 
+  /**
+   * Coolify's API writes **two identical rows** on every env `create` — an
+   * upstream bug reproduced on the raw REST API against Coolify 4.1.2 (issue
+   * #257). The duplicate is invisible until it diverges, at which point
+   * last-wins semantics let the stale twin silently control the value (the
+   * Umami and cockpit-sync incidents). `update` matches by key and only ever
+   * reaches the first row, so it can't repair the split.
+   *
+   * We absorb the bug at the wrapper: after a create, list the resource's envs
+   * and delete any row with the same key whose uuid is not the one create just
+   * returned. Cleanup is best-effort — a failure here never masks a successful
+   * create (returning the created row is what the caller depends on).
+   */
+  private async dedupeAfterCreate(
+    created: UuidResponse,
+    key: string,
+    listEnvs: () => Promise<EnvironmentVariable[]>,
+    deleteEnv: (envUuid: string) => Promise<MessageResponse>,
+  ): Promise<void> {
+    let envs: EnvironmentVariable[];
+    try {
+      envs = await listEnvs();
+    } catch {
+      return;
+    }
+
+    const duplicates = envs.filter((env) => env.key === key && env.uuid !== created.uuid);
+
+    for (const duplicate of duplicates) {
+      try {
+        await deleteEnv(duplicate.uuid);
+      } catch {
+        // Leaving a duplicate is no worse than the pre-fix behaviour.
+      }
+    }
+  }
+
   async createApplicationEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/applications/${uuid}/envs`, {
+    const created = await this.request<UuidResponse>(`/applications/${uuid}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
+
+    await this.dedupeAfterCreate(
+      created,
+      data.key,
+      () => this.request<EnvironmentVariable[]>(`/applications/${uuid}/envs`),
+      (envUuid) => this.deleteApplicationEnvVar(uuid, envUuid),
+    );
+
+    return created;
   }
 
   async updateApplicationEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
@@ -1133,10 +1179,19 @@ export class CoolifyClient {
   }
 
   async createServiceEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/services/${uuid}/envs`, {
+    const created = await this.request<UuidResponse>(`/services/${uuid}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
+
+    await this.dedupeAfterCreate(
+      created,
+      data.key,
+      () => this.request<EnvironmentVariable[]>(`/services/${uuid}/envs`),
+      (envUuid) => this.deleteServiceEnvVar(uuid, envUuid),
+    );
+
+    return created;
   }
 
   async updateServiceEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
@@ -1485,10 +1540,19 @@ export class CoolifyClient {
   }
 
   async createDatabaseEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/databases/${uuid}/envs`, {
+    const created = await this.request<UuidResponse>(`/databases/${uuid}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
+
+    await this.dedupeAfterCreate(
+      created,
+      data.key,
+      () => this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`),
+      (envUuid) => this.deleteDatabaseEnvVar(uuid, envUuid),
+    );
+
+    return created;
   }
 
   async updateDatabaseEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {

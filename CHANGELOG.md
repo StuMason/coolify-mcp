@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Env `create` auto-dedupes Coolify's duplicate row (#257)** — the Coolify REST API writes **two identical rows** on every `POST /{resource}/{uuid}/envs`, reproduced on raw `curl` against Coolify 4.1.2, so it's upstream, not this MCP. The twin is invisible until it diverges, at which point last-wins semantics let the stale row silently control the value (the Umami outage and the 3-day cockpit-sync failure were both this bug); `update` matches by key and only ever reaches the first row, so it can't repair the split. `createApplicationEnvVar` / `createServiceEnvVar` / `createDatabaseEnvVar` now list the resource's envs after a create and delete any same-key row whose uuid ≠ the one create returned. Cleanup is best-effort — a failure there never masks a successful create. Worth reporting upstream to coollabsio/coolify too.
+
 ## [2.12.0] - 2026-05-30
 
 ### Security

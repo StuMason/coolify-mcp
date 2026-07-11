@@ -1960,6 +1960,90 @@ describe('CoolifyClient', () => {
       });
     });
 
+    it('deletes the duplicate row Coolify writes on create (#257)', async () => {
+      // Upstream Coolify writes two identical rows on every env create; the
+      // wrapper lists after create and deletes the twin whose uuid != returned.
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'keep-uuid' })); // POST
+      mockFetch.mockResolvedValueOnce(
+        mockResponse([
+          { uuid: 'keep-uuid', key: 'DUP_VAR' },
+          { uuid: 'dupe-uuid', key: 'DUP_VAR' },
+        ]),
+      ); // GET list
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted' })); // DELETE
+
+      const result = await client.createApplicationEnvVar('app-uuid', {
+        key: 'DUP_VAR',
+        value: 'v',
+      });
+
+      expect(result).toEqual({ uuid: 'keep-uuid' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/envs/dupe-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      // The row create returned is never the one deleted.
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/applications/app-uuid/envs/keep-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('deletes nothing when create produced a single row', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'solo-uuid' })); // POST
+      mockFetch.mockResolvedValueOnce(mockResponse([{ uuid: 'solo-uuid', key: 'SOLO' }])); // GET
+
+      await client.createApplicationEnvVar('app-uuid', { key: 'SOLO', value: 'v' });
+
+      const deletes = mockFetch.mock.calls.filter((call) => call[1]?.method === 'DELETE');
+      expect(deletes).toHaveLength(0);
+    });
+
+    it('returns the created row even when duplicate cleanup fails', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'keep-uuid' })); // POST
+      mockFetch.mockRejectedValueOnce(new Error('list failed')); // GET blows up
+
+      const result = await client.createApplicationEnvVar('app-uuid', { key: 'X', value: 'v' });
+
+      expect(result).toEqual({ uuid: 'keep-uuid' });
+    });
+
+    it('dedupes service env create (#257)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'keep-uuid' })); // POST
+      mockFetch.mockResolvedValueOnce(
+        mockResponse([
+          { uuid: 'keep-uuid', key: 'SVC' },
+          { uuid: 'dupe-uuid', key: 'SVC' },
+        ]),
+      ); // GET
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted' })); // DELETE
+
+      await client.createServiceEnvVar('svc-uuid', { key: 'SVC', value: 'v' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/envs/dupe-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('dedupes database env create (#257)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'keep-uuid' })); // POST
+      mockFetch.mockResolvedValueOnce(
+        mockResponse([
+          { uuid: 'keep-uuid', key: 'DBV' },
+          { uuid: 'dupe-uuid', key: 'DBV' },
+        ]),
+      ); // GET
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deleted' })); // DELETE
+
+      await client.createDatabaseEnvVar('db-uuid', { key: 'DBV', value: 'v' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/envs/dupe-uuid',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
     it('should update application env var', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Updated' }));
 
