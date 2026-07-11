@@ -4977,12 +4977,20 @@ describe('CoolifyClient', () => {
       expect('status' in result[0]).toBe(false);
     });
 
-    it('returns the raw Coolify payload when include_full is true', async () => {
+    it('returns the full Coolify payload when include_full is true (sensitive fields masked)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
       const result = await client.listResources({ include_full: true });
-      expect(result).toEqual([fluffyResource]);
+      // custom_labels is masked by default since #209; everything else round-trips
+      expect(result).toEqual([{ ...fluffyResource, custom_labels: '***' }]);
       const [first] = result as Array<Record<string, unknown>>;
       expect(first.config_hash).toBe(fluffyResource.config_hash);
+    });
+
+    it('round-trips the raw payload with include_full + reveal', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([fluffyResource]));
+      const result = await client.listResources({ include_full: true, reveal: true });
+      expect(result).toEqual([fluffyResource]);
+      const [first] = result as Array<Record<string, unknown>>;
       expect(first.custom_labels).toBe(fluffyResource.custom_labels);
     });
 
@@ -5068,6 +5076,119 @@ describe('CoolifyClient', () => {
         mockFetch.mockResolvedValueOnce(mockResponse([sensitiveResource]));
         const result = await client.listResources({ reveal: true });
         expect(Object.keys(result[0]).sort()).toEqual(['name', 'status', 'type', 'uuid']);
+      });
+
+      // #209 — database rows on /resources serialize their passwords decrypted
+      // (no Coolify model defines $hidden; encrypted casts decrypt on toArray).
+      it('masks database password fields on include_full=true (#209)', async () => {
+        const dbResource = {
+          ...fluffyResource,
+          postgres_password: 'pg-secret',
+          mysql_password: 'my-secret',
+          mysql_root_password: 'my-root-secret',
+          mariadb_password: 'maria-secret',
+          mariadb_root_password: 'maria-root-secret',
+          mongo_initdb_root_password: 'mongo-secret',
+          redis_password: 'redis-secret',
+          keydb_password: 'keydb-secret',
+          dragonfly_password: 'dragonfly-secret',
+          clickhouse_admin_password: 'click-secret',
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([dbResource]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.postgres_password).toBe('***');
+        expect(first.mysql_password).toBe('***');
+        expect(first.mysql_root_password).toBe('***');
+        expect(first.mariadb_password).toBe('***');
+        expect(first.mariadb_root_password).toBe('***');
+        expect(first.mongo_initdb_root_password).toBe('***');
+        expect(first.redis_password).toBe('***');
+        expect(first.keydb_password).toBe('***');
+        expect(first.dragonfly_password).toBe('***');
+        expect(first.clickhouse_admin_password).toBe('***');
+      });
+
+      // #209 — internal/external_db_url appends embed the password in a
+      // connection URL on every db type; Redis's password leaks ONLY here.
+      it('masks internal_db_url and external_db_url on include_full=true (#209)', async () => {
+        const redisResource = {
+          ...fluffyResource,
+          internal_db_url: 'redis://default:redis-secret@abc123:6379/0',
+          external_db_url: 'redis://default:redis-secret@db.example.com:6379/0',
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([redisResource]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.internal_db_url).toBe('***');
+        expect(first.external_db_url).toBe('***');
+      });
+
+      // #209 — Coolify resolves SERVICE_PASSWORD_* into docker_compose, and
+      // Traefik basic-auth labels in custom_labels carry htpasswd hashes.
+      it('masks compose bodies and custom_labels on include_full=true (#209)', async () => {
+        const serviceResource = {
+          ...fluffyResource,
+          docker_compose_raw: 'c2VydmljZXM6IHt9',
+          docker_compose: 'services:\n  db:\n    environment:\n      PASSWORD: resolved',
+          docker_compose_pr_raw: 'c2VydmljZXM6IHt9',
+          docker_compose_pr: 'services: {}',
+          custom_labels: 'dHJhZWZpay5iYXNpY2F1dGg9aHRwYXNzd2Q=',
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([serviceResource]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        expect(first.docker_compose_raw).toBe('***');
+        expect(first.docker_compose).toBe('***');
+        expect(first.docker_compose_pr_raw).toBe('***');
+        expect(first.docker_compose_pr).toBe('***');
+        expect(first.custom_labels).toBe('***');
+      });
+
+      // #209 — defensive: v4.1.2 never inlines environment_variables[] on
+      // /resources rows, but if a version/fork does, the nested copy must not
+      // bypass the env_vars pipeline's masking.
+      it('masks value/real_value on a nested environment_variables[] collection (#209)', async () => {
+        const withNestedEnvs = {
+          ...fluffyResource,
+          environment_variables: [
+            { uuid: 'env-1', key: 'API_KEY', value: 'plain-secret', real_value: 'real-secret' },
+            { uuid: 'env-2', key: 'EMPTY', value: null },
+          ],
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([withNestedEnvs]));
+        const [first] = (await client.listResources({ include_full: true })) as Array<
+          Record<string, unknown>
+        >;
+        const envs = first.environment_variables as Array<Record<string, unknown>>;
+        expect(envs[0].key).toBe('API_KEY');
+        expect(envs[0].value).toBe('***');
+        expect(envs[0].real_value).toBe('***');
+        expect(envs[1].value).toBeNull();
+      });
+
+      it('reveal=true round-trips the #209 fields as plaintext', async () => {
+        const dbResource = {
+          ...fluffyResource,
+          postgres_password: 'pg-secret',
+          internal_db_url: 'postgres://u:pg-secret@host:5432/db',
+          docker_compose: 'services: {}',
+          environment_variables: [{ uuid: 'env-1', key: 'API_KEY', value: 'plain-secret' }],
+        };
+        mockFetch.mockResolvedValueOnce(mockResponse([dbResource]));
+        const [first] = (await client.listResources({
+          include_full: true,
+          reveal: true,
+        })) as Array<Record<string, unknown>>;
+        expect(first.postgres_password).toBe('pg-secret');
+        expect(first.internal_db_url).toBe('postgres://u:pg-secret@host:5432/db');
+        expect(first.docker_compose).toBe('services: {}');
+        expect((first.environment_variables as Array<Record<string, unknown>>)[0].value).toBe(
+          'plain-secret',
+        );
       });
     });
   });

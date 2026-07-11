@@ -7,15 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Security
 
-- **`custom_network_aliases` on `application` update** (#254) — gives an app container a stable DNS name for app-to-app traffic on a shared network. App containers get `<uuid>-<deploy-suffix>` container names that change every deploy (only databases get a uuid hostname), so this field is the only way to wire e.g. `ASR_URL=http://edator-asr:9000` between apps. Added to `UpdateApplicationRequest` and the `application` tool schema (update only — Coolify's create endpoints don't accept it).
-- **MCPB bundle for one-click Claude Desktop install** — every release now attaches `coolify-mcp.mcpb` to the GitHub release; drag it into Claude Desktop Settings → Extensions and enter your Coolify URL + token. Built from `manifest.json` via `@anthropic-ai/mcpb` in the publish workflow. No Node install or JSON config editing needed.
-- **Automated MCP Registry publishing** — the publish workflow now pushes `server.json` to registry.modelcontextprotocol.io via `mcp-publisher` (GitHub OIDC) on every release, so the registry listing can no longer go stale.
-
-### Fixed
-
-- **`server.json` drift** — the registry manifest was stuck at 2.7.3 / "38 tools" while npm was on 2.13.0 / 42 tools. Now synced, and `npm version` runs `scripts/sync-manifests.mjs` to bump `server.json` + `manifest.json` in the same commit; `src/__tests__/manifests.test.ts` fails CI if they ever diverge from `package.json` again.
+- **`list_resources include_full` masks database passwords, connection URLs, compose bodies, and nested env vars** (#209) — a source audit of Coolify v4.1.2 found that no `Standalone*` model defines `$hidden` and Laravel serializes `encrypted` casts as decrypted plaintext, so every database row on `/api/v1/resources` carried its password in the clear. `SENSITIVE_RESOURCE_FIELDS` now additionally masks: the nine database password columns (`postgres_password`, `mysql_password`, `mysql_root_password`, `mariadb_password`, `mariadb_root_password`, `mongo_initdb_root_password`, `redis_password`, `keydb_password`, `dragonfly_password`, `clickhouse_admin_password`), the `internal_db_url` / `external_db_url` appends that embed the password in a connection URL on all eight database types (the only place Redis's password surfaces — its column was moved to env vars in 2024), compose bodies (`docker_compose_raw`, `docker_compose`, `docker_compose_pr_raw`, `docker_compose_pr`) since Coolify resolves `SERVICE_PASSWORD_*` placeholders into them, and `custom_labels` (Traefik basic-auth htpasswd hashes). A defensive walker also masks `value` / `real_value` on any nested `environment_variables[]` collection — absent at v4.1.2 but a leak vector on versions that inline it. `reveal: true` still round-trips plaintext. Mirrors the #204 / #206 posture.
 
 ## [2.13.0] - 2026-07-02
 
