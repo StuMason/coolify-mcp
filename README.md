@@ -7,6 +7,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
 [![CI](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/StuMason/coolify-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/StuMason/coolify-mcp)
+[![Claude Desktop one-click install](https://img.shields.io/badge/Claude%20Desktop-one--click%20install-d97757)](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
 
 > **The most comprehensive MCP server for Coolify** - 42 optimized tools, smart diagnostics, documentation search, and batch operations for managing your self-hosted PaaS through AI assistants.
 
@@ -47,12 +49,24 @@ This MCP server provides **42 token-optimized tools** for **debugging, managemen
 
 The server uses **85% fewer tokens** than a naive implementation (6,600 vs 43,000) by consolidating related operations into single tools with action parameters. This prevents context window exhaustion in AI assistants.
 
+### Secure by Default
+
+Your AI assistant should be able to _manage_ infrastructure without silently _reading every credential in it_. Secrets are masked at the API boundary — an LLM client granted "list" access never sees plaintext credentials unless you explicitly opt in:
+
+| Surface                             | Masked by default                                                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env_vars` (app/service/database)   | Variable values (`value` / `real_value`)                                                                                                                                        |
+| `system list_resources` (full mode) | Webhook HMAC secrets, basic-auth passwords, all database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env-var values (#209) |
+| `deployment get`                    | Raw upstream payload never returned — projected response strips server settings, log-drain tokens, webhook secrets (#232)                                                       |
+
+Pass `reveal: true` on `env_vars list` / `list_resources` when the caller genuinely needs plaintext ("what is FOO set to?"). Masking is applied inside the HTTP client, so every code path inherits it.
+
 ## Installation
 
 ### Prerequisites
 
-- Node.js >= 18
-- A running Coolify instance (tested with v4.0.0-beta.460)
+- Node.js >= 20 (not needed for the one-click Claude Desktop install — Node ships inside Claude Desktop)
+- A running Coolify instance (tested from v4.0.0-beta.460 through v4.1.2)
 - Coolify API access token (generate in Coolify Settings > API)
 
 ### Claude Desktop — one-click install (recommended)
@@ -315,6 +329,7 @@ node dist/index.js
 - `get_version` - Get Coolify API version
 - `get_mcp_version` - Get coolify-mcp server version (useful to verify which version is installed)
 - `get_infrastructure_overview` - Get a high-level overview of all infrastructure (servers, projects, applications, databases, services)
+- `system` - Instance operations with `action: health|list_resources|enable_api|disable_api`. `list_resources` returns an essential projection (uuid/name/type/status) by default; `include_full: true` returns the raw rows with credentials masked (see [Secure by Default](#secure-by-default))
 
 ### Diagnostics (Smart Lookup)
 
@@ -349,6 +364,7 @@ These tools accept human-friendly identifiers instead of just UUIDs:
   - Deploy from public repos, private GitHub, SSH keys, Docker images, or a raw Dockerfile
   - For docker-compose apps use the `service` tool — Coolify removed `POST /applications/dockercompose` in v4.1.0 in favour of services
   - Configure health checks (path, interval, retries, etc.)
+  - Set `custom_network_aliases` on update for app-to-app DNS — app containers get no stable uuid hostname (only databases do), so this is the way to give an app a fixed name on a shared network
 - `env_vars` - Manage env vars with `resource: application, action: list|create|update|delete`
 - `control` - Start/stop/restart with `resource: application, action: start|stop|restart`
 
@@ -371,10 +387,15 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 - `env_vars` - Manage env vars with `resource: service, action: list|create|delete`
 - `control` - Start/stop/restart with `resource: service, action: start|stop|restart`
 
+### Storages & Scheduled Tasks
+
+- `storages` - Manage persistent/file storages with `action: list|create|update|delete` for applications, databases, and services
+- `scheduled_tasks` - Manage cron tasks with `action: list|create|update|delete|list_executions|run_once` for applications and services — `run_once` runs a one-off command in the container and returns its output
+
 ### Deployments
 
 - `list_deployments` - List running deployments (returns summary)
-- `deploy` - Deploy by tag or UUID
+- `deploy` - Deploy by tag or UUID; pass `wait: true` (with optional `timeout_seconds`) to poll to a terminal status and get a bounded log tail on failure
 - `deployment` - Manage deployments with `action: get|cancel|list_for_app` (supports `lines` and `page` params for paginated log output with `logs_meta`)
 
 ### Private Keys
@@ -389,9 +410,10 @@ These tools accept human-friendly identifiers instead of just UUIDs:
 
 - `teams` - Manage teams with `action: list|get|get_members|get_current|get_current_members`
 
-### Cloud Tokens
+### Cloud Tokens & Hetzner
 
 - `cloud_tokens` - Manage cloud provider tokens (Hetzner/DigitalOcean) with `action: list|get|create|update|delete|validate`
+- `hetzner` - Provision via Coolify's Hetzner integration with `action: list_locations|list_server_types|list_images|list_ssh_keys|create_server` (requires a configured cloud-provider token)
 
 ### Documentation
 
@@ -409,6 +431,8 @@ Power user tools for operating on multiple resources at once:
 ## Why Coolify MCP?
 
 - **Context-Optimized**: Responses are 90-99% smaller than raw API, preventing context window exhaustion
+- **Secure by Default**: Credentials are masked at the API boundary — env var values, database passwords, connection URLs, webhook secrets — with explicit `reveal: true` opt-in
+- **One-Click Install**: Drag the [`.mcpb` bundle](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) into Claude Desktop — no Node, no JSON editing
 - **Smart Lookup**: Find apps by domain (`stuartmason.co.uk`), servers by IP, not just UUIDs
 - **Docs Search**: Built-in full-text search across Coolify documentation — your AI assistant can look up how-tos and troubleshooting without leaving the conversation
 - **Batch Operations**: Restart entire projects, bulk update env vars, emergency stop all apps

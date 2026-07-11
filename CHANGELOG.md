@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-07-11
+
+### Documentation
+
+- **README refresh** — one-click MCPB install badge + registry badge, new "Secure by Default" section documenting the full masking posture across `env_vars` / `list_resources` / `deployment get`, corrected prerequisites (Node >= 20, Coolify tested through v4.1.2), and Available Tools now covers `system`, `storages`, `scheduled_tasks`, `hetzner`, `deploy wait`, and `custom_network_aliases`.
+
 ### Added
 
 - **`custom_network_aliases` on `application` update** (#254) — gives an app container a stable DNS name for app-to-app traffic on a shared network. App containers get `<uuid>-<deploy-suffix>` container names that change every deploy (only databases get a uuid hostname), so this field is the only way to wire e.g. `ASR_URL=http://edator-asr:9000` between apps. Added to `UpdateApplicationRequest` and the `application` tool schema (update only — Coolify's create endpoints don't accept it).
