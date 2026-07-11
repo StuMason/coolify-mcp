@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'package.json'
+  # Manual re-run of the MCP Registry publish only (e.g. after a failed
+  # registry step) — the npm/MCPB/release steps stay skipped because the
+  # version already exists on npm.
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -97,9 +101,11 @@ jobs:
           generate_release_notes: false
 
       - name: Publish to MCP Registry
-        if: steps.version.outputs.exists == 'false'
+        if: steps.version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz" | tar xz mcp-publisher
+          # Asset naming is goreleaser-style (linux_amd64), NOT uname-style
+          # (linux_x86_64) — hardcode since GitHub runners are always linux/amd64
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
           ./mcp-publisher login github-oidc
           # npm propagation can lag right after publish — retry a few times
           for i in 1 2 3; do
