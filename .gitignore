@@ -51,3 +51,4 @@ coverage/
 
 # Playwright MCP runtime artefacts (screenshots, snapshots)
 .playwright-mcp/
+*.mcpb

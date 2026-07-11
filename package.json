@@ -33,6 +33,7 @@
     "format:check": "prettier --check .",
     "prepare": "husky",
     "prepublishOnly": "npm test && npm run lint",
+    "version": "node scripts/sync-manifests.mjs && prettier --write server.json manifest.json && git add server.json manifest.json",
     "start": "node dist/index.js"
   },
   "keywords": [

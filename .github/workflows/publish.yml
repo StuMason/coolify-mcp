@@ -53,6 +53,15 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: npm publish --access public
 
+      - name: Build MCPB bundle
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          # Rebuild node_modules with production deps only (dist/ is already built);
+          # --ignore-scripts skips the husky prepare hook, which is a dev dependency
+          rm -rf node_modules
+          npm ci --omit=dev --ignore-scripts
+          npx --yes @anthropic-ai/mcpb pack . coolify-mcp.mcpb
+
       - name: Extract changelog for version
         if: steps.version.outputs.exists == 'false'
         id: changelog
@@ -80,9 +89,25 @@ jobs:
             ---
 
             📦 [View on npm](https://www.npmjs.com/package/@masonator/coolify-mcp/v/${{ steps.version.outputs.current }})
+
+            🖱️ One-click Claude Desktop install: download `coolify-mcp.mcpb` below and drag it into Settings → Extensions.
+          files: coolify-mcp.mcpb
           draft: false
           prerelease: false
           generate_release_notes: false
+
+      - name: Publish to MCP Registry
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          # npm propagation can lag right after publish — retry a few times
+          for i in 1 2 3; do
+            ./mcp-publisher publish && exit 0
+            echo "Registry publish attempt $i failed; retrying in 30s..."
+            sleep 30
+          done
+          exit 1
 
       - name: Skip publish (version exists)
         if: steps.version.outputs.exists == 'true'

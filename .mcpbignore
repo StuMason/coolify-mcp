@@ -1,0 +1,32 @@
+# MCPB bundle contents: manifest.json, dist/, production node_modules/,
+# package.json, README.md, LICENSE. Everything else stays out.
+src/
+docs/
+site/
+skills/
+scripts/
+coverage/
+.github/
+.husky/
+.claude/
+.cursor/
+*.md
+!README.md
+*.mcpb
+server.json
+repomix-output.xml
+.repomixignore
+debug.js
+Dockerfile
+Dockerfile.docs
+.dockerignore
+eslint.config.js
+jest.config.js
+tsconfig.json
+.prettierrc
+.lintstagedrc.json
+.markdownlint-cli2.jsonc
+.gitignore
+package-lock.json
+.env
+.env.*

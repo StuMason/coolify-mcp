@@ -1,0 +1,51 @@
+{
+  "manifest_version": "0.2",
+  "name": "coolify-mcp",
+  "display_name": "Coolify MCP",
+  "version": "2.13.0",
+  "description": "42 optimized tools for managing Coolify infrastructure, diagnostics, and docs search",
+  "author": {
+    "name": "Stuart Mason",
+    "url": "https://stumason.dev"
+  },
+  "homepage": "https://stumason.dev",
+  "documentation": "https://github.com/StuMason/coolify-mcp#readme",
+  "support": "https://github.com/StuMason/coolify-mcp/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StuMason/coolify-mcp"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "COOLIFY_BASE_URL": "${user_config.coolify_base_url}",
+        "COOLIFY_ACCESS_TOKEN": "${user_config.coolify_access_token}"
+      }
+    }
+  },
+  "user_config": {
+    "coolify_base_url": {
+      "type": "string",
+      "title": "Coolify Base URL",
+      "description": "URL of your Coolify instance, e.g. https://coolify.example.com",
+      "required": true
+    },
+    "coolify_access_token": {
+      "type": "string",
+      "title": "Coolify API Token",
+      "description": "API token from Keys & Tokens in your Coolify dashboard",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}

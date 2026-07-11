@@ -55,7 +55,11 @@ The server uses **85% fewer tokens** than a naive implementation (6,600 vs 43,00
 - A running Coolify instance (tested with v4.0.0-beta.460)
 - Coolify API access token (generate in Coolify Settings > API)
 
-### Claude Desktop
+### Claude Desktop — one-click install (recommended)
+
+Download [`coolify-mcp.mcpb`](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) from the latest release and drag it into Claude Desktop **Settings → Extensions**. You'll be prompted for your Coolify URL and API token — no config file editing, no Node install required.
+
+### Claude Desktop — manual config
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
