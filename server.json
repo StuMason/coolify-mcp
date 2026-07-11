@@ -7,12 +7,12 @@
     "source": "github"
   },
   "websiteUrl": "https://stumason.dev",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@masonator/coolify-mcp",
-      "version": "2.13.0",
+      "version": "2.14.0",
       "transport": {
         "type": "stdio"
       },
