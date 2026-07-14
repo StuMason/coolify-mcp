@@ -1183,7 +1183,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'env_vars',
-      "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
+      "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). On list, pass key to return only that variable — always combine reveal with key so only the requested value (not every secret on the resource) is exposed. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
       {
         resource: z.enum(['application', 'service', 'database']),
         action: z.enum(['list', 'create', 'update', 'delete', 'bulk_update']),
@@ -1221,11 +1221,19 @@ export class CoolifyMcpServer extends McpServer {
         reveal,
         data,
       }) => {
+        // On `list`, an optional `key` narrows the response to that single
+        // variable. This matters most with reveal=true: without it, asking
+        // for one value dumps every secret on the resource to the MCP client.
+        const filterByKey = <T extends { key: string }>(vars: T[]): T[] =>
+          key ? vars.filter((v) => v.key === key) : vars;
+
         if (resource === 'application') {
           switch (action) {
             case 'list':
-              return wrap(() =>
-                this.client.listApplicationEnvVars(uuid, { summary: true, reveal }),
+              return wrap(async () =>
+                filterByKey(
+                  await this.client.listApplicationEnvVars(uuid, { summary: true, reveal }),
+                ),
               );
             case 'create':
               if (!key || !value)
@@ -1261,7 +1269,9 @@ export class CoolifyMcpServer extends McpServer {
         } else if (resource === 'service') {
           switch (action) {
             case 'list':
-              return wrap(() => this.client.listServiceEnvVars(uuid, { reveal }));
+              return wrap(async () =>
+                filterByKey(await this.client.listServiceEnvVars(uuid, { reveal })),
+              );
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
@@ -1286,7 +1296,7 @@ export class CoolifyMcpServer extends McpServer {
         } else {
           switch (action) {
             case 'list':
-              return wrap(() => this.client.listDatabaseEnvVars(uuid));
+              return wrap(async () => filterByKey(await this.client.listDatabaseEnvVars(uuid)));
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
