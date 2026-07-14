@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "coolify-mcp",
   "display_name": "Coolify MCP",
-  "version": "2.14.0",
+  "version": "2.14.1",
   "description": "42 optimized tools for managing Coolify infrastructure, diagnostics, and docs search",
   "author": {
     "name": "Stuart Mason",
