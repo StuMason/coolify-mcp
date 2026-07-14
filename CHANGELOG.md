@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.1] - 2026-07-14
+
+### Security
+
+- **`env_vars` list now honors the `key` parameter** (#271, #272 — thanks [@artgas1](https://github.com/artgas1)) — the tool schema accepted `key` on every action, but the three `list` branches ignored it, so the natural "what is FOO set to?" call (`action=list`, `key=FOO`, `reveal=true`) returned **every** variable on the resource in plaintext instead of the one requested. `list` + `key` now filters the response to that single variable across application / service / database, masked or revealed; without `key` the full (masked-by-default) list is unchanged. The tool description now steers callers to always pair `reveal` with `key` so a single-value read can never dump the resource's whole secret set again.
+
 ### Documentation
 
 - **README rewritten, 462 → ~130 lines** — killed the duplicated Available Tools section (every tool was documented twice), the response-size table, workflow sermons, and mid-page plugs; depth now lives on [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev). Removed the "98%+ test coverage" claim: jest computes coverage with `src/lib/mcp-server.ts` (the entire tool layer) excluded and enforces an 80% threshold, so the number was misleading. Remaining claims (42 tools, 85% token reduction, response-size reductions, smart lookup) were fact-checked against the codebase and CHANGELOG measurements.
