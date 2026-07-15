@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`env_vars` list now masks database secrets by default** (#277) — the `list` action's database branch called `listDatabaseEnvVars(uuid)` without threading the `reveal` flag, and the client method never masked anything, so database env vars were returned in **plaintext** regardless of `reveal` — while application and service lists correctly masked by default. Database env vars are the most sensitive data this server touches (DB passwords, connection strings), so this bypassed the entire masking safeguard and contradicted the tool's documented default. `listDatabaseEnvVars` now masks `value` / `real_value` by default (mirroring `listServiceEnvVars`) and only returns plaintext when the caller passes `reveal=true`.
+
 ## [2.14.1] - 2026-07-14
 
 ### Security
