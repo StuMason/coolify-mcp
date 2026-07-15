@@ -1575,8 +1575,12 @@ export class CoolifyClient {
   // Database Environment Variable endpoints
   // ===========================================================================
 
-  async listDatabaseEnvVars(uuid: string): Promise<EnvironmentVariable[]> {
-    return this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+  async listDatabaseEnvVars(
+    uuid: string,
+    options?: { reveal?: boolean },
+  ): Promise<EnvironmentVariable[]> {
+    const envVars = await this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+    return options?.reveal === true ? envVars : envVars.map(maskEnvVar);
   }
 
   async createDatabaseEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {

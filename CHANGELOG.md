@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`env_vars` list now masks database values by default** (#275) — the tool advertises that values are masked (`***`) unless `reveal=true` is passed, and that held for applications and services but **not** databases: `list` on a database resource returned every value in plaintext and ignored `reveal` entirely. Since database env vars are almost always credentials and connection strings, this silently routed the most sensitive secrets straight past the masking layer. `listDatabaseEnvVars` now masks by default and honors `reveal`, matching the application / service behaviour and the documented default.
+
 ## [2.14.1] - 2026-07-14
 
 ### Security

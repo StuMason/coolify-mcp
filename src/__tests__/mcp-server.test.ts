@@ -415,7 +415,7 @@ describe('CoolifyMcpServer v2', () => {
     });
 
     it('list without key returns all variables (unchanged behaviour)', async () => {
-      jest.spyOn(server['client'], 'listDatabaseEnvVars').mockResolvedValue([
+      const spy = jest.spyOn(server['client'], 'listDatabaseEnvVars').mockResolvedValue([
         { uuid: 'env-1', key: 'A', value: '***' },
         { uuid: 'env-2', key: 'B', value: '***' },
       ] as never);
@@ -426,7 +426,24 @@ describe('CoolifyMcpServer v2', () => {
         uuid: 'db-uuid',
       })) as { content: Array<{ text: string }> };
 
+      // reveal defaults to undefined → client masks (matches app/service default) (#275)
+      expect(spy).toHaveBeenCalledWith('db-uuid', { reveal: undefined });
       expect(JSON.parse(result.content[0].text)).toHaveLength(2);
+    });
+
+    it('forwards reveal=true to listDatabaseEnvVars (#275)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'listDatabaseEnvVars')
+        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: 'hunter2' }] as never);
+
+      await callEnvVars(server, {
+        resource: 'database',
+        action: 'list',
+        uuid: 'db-uuid',
+        reveal: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-uuid', { reveal: true });
     });
   });
 
