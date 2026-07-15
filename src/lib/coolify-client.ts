@@ -1575,8 +1575,20 @@ export class CoolifyClient {
   // Database Environment Variable endpoints
   // ===========================================================================
 
-  async listDatabaseEnvVars(uuid: string): Promise<EnvironmentVariable[]> {
-    return this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+  /**
+   * List env vars for a database.
+   *
+   * Default behaviour masks `value` (and `real_value`) with a sentinel string
+   * so secrets are not leaked to MCP clients. Pass `reveal: true` when the
+   * caller explicitly needs the plaintext value. Database env vars routinely
+   * hold DB credentials and connection strings, so masking matters most here.
+   */
+  async listDatabaseEnvVars(
+    uuid: string,
+    options?: { reveal?: boolean },
+  ): Promise<EnvironmentVariable[]> {
+    const envVars = await this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+    return options?.reveal === true ? envVars : envVars.map(maskEnvVar);
   }
 
   async createDatabaseEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {

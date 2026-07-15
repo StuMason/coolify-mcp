@@ -428,6 +428,21 @@ describe('CoolifyMcpServer v2', () => {
 
       expect(JSON.parse(result.content[0].text)).toHaveLength(2);
     });
+
+    it('forwards reveal to listDatabaseEnvVars so masking can be opted out (#274)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'listDatabaseEnvVars')
+        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: 'hunter2' }] as never);
+
+      await callEnvVars(server, {
+        resource: 'database',
+        action: 'list',
+        uuid: 'db-uuid',
+        reveal: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-uuid', { reveal: true });
+    });
   });
 
   describe('system tool handler', () => {

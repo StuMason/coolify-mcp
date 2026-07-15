@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`env_vars` list now masks database secrets by default** (#274) — the tool description promised every resource type masks values as `***` unless `reveal=true` is passed, but the database `list` branch called `listDatabaseEnvVars` with no options, so `CoolifyClient.listDatabaseEnvVars` returned **plaintext** straight away and the `reveal` flag was ignored entirely. Database env vars routinely hold DB passwords and connection strings, so this was the highest-value leak of the three. `listDatabaseEnvVars` now masks `value`/`real_value` by default (mirroring the application/service methods) and the `env_vars` handler forwards `reveal` to it, so databases finally match the documented default: masked unless the caller explicitly opts into plaintext.
+
 ## [2.14.1] - 2026-07-14
 
 ### Security
