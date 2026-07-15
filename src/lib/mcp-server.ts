@@ -1296,7 +1296,9 @@ export class CoolifyMcpServer extends McpServer {
         } else {
           switch (action) {
             case 'list':
-              return wrap(async () => filterByKey(await this.client.listDatabaseEnvVars(uuid)));
+              return wrap(async () =>
+                filterByKey(await this.client.listDatabaseEnvVars(uuid, { reveal })),
+              );
             case 'create':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };

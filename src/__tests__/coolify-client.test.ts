@@ -4480,30 +4480,48 @@ describe('CoolifyClient', () => {
   // ===========================================================================
 
   describe('listDatabaseEnvVars', () => {
-    it('should list database env vars', async () => {
-      const mockEnvs = [
-        {
-          id: 1,
-          uuid: 'env-1',
-          key: 'DB_HOST',
-          value: 'localhost',
-          is_buildtime: false,
-          is_literal: false,
-          is_multiline: false,
-          is_preview: false,
-          is_shared: false,
-          is_shown_once: false,
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-      ];
+    const mockEnvs = [
+      {
+        id: 1,
+        uuid: 'env-1',
+        key: 'DB_PASSWORD',
+        value: 'super-secret',
+        real_value: 'super-secret',
+        is_buildtime: false,
+        is_literal: false,
+        is_multiline: false,
+        is_preview: false,
+        is_shared: false,
+        is_shown_once: false,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+    ];
+
+    it('should list database env vars with values masked by default (#277)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(mockEnvs));
       const result = await client.listDatabaseEnvVars('db-uuid');
-      expect(result).toEqual(mockEnvs);
+      expect(result[0].value).toBe('***');
+      expect(result[0].real_value).toBe('***');
+      // metadata preserved
+      expect(result[0]).toMatchObject({ uuid: 'env-1', key: 'DB_PASSWORD' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/databases/db-uuid/envs',
         expect.any(Object),
       );
+    });
+
+    it('should list database env vars with values masked when reveal=false (#277)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockEnvs));
+      const result = await client.listDatabaseEnvVars('db-uuid', { reveal: false });
+      expect(result[0].value).toBe('***');
+      expect(result[0].real_value).toBe('***');
+    });
+
+    it('should list database env vars with real values when reveal=true (#277)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockEnvs));
+      const result = await client.listDatabaseEnvVars('db-uuid', { reveal: true });
+      expect(result).toEqual(mockEnvs);
     });
   });
 
