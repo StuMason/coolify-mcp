@@ -42,6 +42,36 @@ describeFn('Smoke Integration Tests', () => {
     }, 10000);
   });
 
+  describe('database env var masking (#276)', () => {
+    it('masks database env var values by default and reveals with reveal=true', async () => {
+      const databases = await client.listDatabases();
+      if (databases.length === 0) {
+        console.warn('No databases on instance — skipping database env var masking smoke test');
+        return;
+      }
+
+      const uuid = databases[0].uuid;
+      const masked = await client.listDatabaseEnvVars(uuid);
+      const revealed = await client.listDatabaseEnvVars(uuid, { reveal: true });
+
+      if (masked.length === 0) {
+        console.warn(`Database ${uuid} has no env vars — skipping masking assertions`);
+        return;
+      }
+
+      // Default (no reveal): every value must be the mask sentinel, never plaintext.
+      for (const v of masked) {
+        expect(v.value).toBe('***');
+        if ('real_value' in v && v.real_value !== undefined) {
+          expect(v.real_value).toBe('***');
+        }
+      }
+
+      // reveal=true: at least one value should differ from the mask (real secret).
+      expect(revealed.some((v) => v.value !== '***')).toBe(true);
+    }, 15000);
+  });
+
   describe('error handling', () => {
     it('should handle validation errors with string messages (issue #107)', async () => {
       // Creating a service with docker_compose_raw but no type triggers

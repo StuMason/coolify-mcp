@@ -428,6 +428,35 @@ describe('CoolifyMcpServer v2', () => {
 
       expect(JSON.parse(result.content[0].text)).toHaveLength(2);
     });
+
+    it('database list forwards reveal to listDatabaseEnvVars (#276)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'listDatabaseEnvVars')
+        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: 'hunter2' }] as never);
+
+      await callEnvVars(server, {
+        resource: 'database',
+        action: 'list',
+        uuid: 'db-uuid',
+        reveal: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-uuid', { reveal: true });
+    });
+
+    it('database list defaults reveal to undefined so values are masked (#276)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'listDatabaseEnvVars')
+        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: '***' }] as never);
+
+      await callEnvVars(server, {
+        resource: 'database',
+        action: 'list',
+        uuid: 'db-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-uuid', { reveal: undefined });
+    });
   });
 
   describe('system tool handler', () => {
