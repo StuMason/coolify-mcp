@@ -7,8 +7,11 @@
  */
 import { createRequire } from 'module';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
   CoolifyMcpServer,
+  TOOL_ANNOTATIONS,
   VERSION,
   truncateLogs,
   getApplicationActions,
@@ -1667,6 +1670,186 @@ describe('truncateLogs', () => {
 // =============================================================================
 // Action Generators Tests
 // =============================================================================
+
+describe('tool annotations (#260)', () => {
+  let server: CoolifyMcpServer;
+  let registered: Record<string, { annotations?: Record<string, boolean> }>;
+
+  beforeEach(() => {
+    server = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+    registered = (
+      server as unknown as {
+        _registeredTools: Record<string, { annotations?: Record<string, boolean> }>;
+      }
+    )._registeredTools;
+  });
+
+  it('annotates every registered tool', () => {
+    const unannotated = Object.entries(registered)
+      .filter(([, t]) => !t.annotations)
+      .map(([name]) => name);
+    expect(unannotated).toEqual([]);
+  });
+
+  it('keeps the annotations table and the registered tools exactly in step', () => {
+    // Either direction is a bug: a table entry with no tool is dead config, a
+    // tool with no entry cannot register at all (defineTool throws).
+    expect(Object.keys(TOOL_ANNOTATIONS).sort()).toEqual(Object.keys(registered).sort());
+  });
+
+  it('never marks a tool both read-only and destructive', () => {
+    const contradictory = Object.entries(registered)
+      .filter(([, t]) => t.annotations?.readOnlyHint && t.annotations?.destructiveHint)
+      .map(([name]) => name);
+    expect(contradictory).toEqual([]);
+  });
+
+  it('marks the read-only surface, which is what clients parallel-dispatch', () => {
+    const readOnly = Object.entries(registered)
+      .filter(([, t]) => t.annotations?.readOnlyHint === true)
+      .map(([name]) => name)
+      .sort();
+
+    expect(readOnly).toEqual(
+      [
+        'application_logs',
+        'diagnose_app',
+        'diagnose_server',
+        'find_issues',
+        'get_application',
+        'get_database',
+        'get_infrastructure_overview',
+        'get_mcp_version',
+        'get_server',
+        'get_service',
+        'get_version',
+        'list_applications',
+        'list_databases',
+        'list_deployments',
+        'list_servers',
+        'list_services',
+        'logs',
+        'search_docs',
+        'server_domains',
+        'server_resources',
+        'teams',
+      ].sort(),
+    );
+  });
+
+  it('marks every tool with a delete, stop or replace action as destructive', () => {
+    const destructive = Object.entries(registered)
+      .filter(([, t]) => t.annotations?.destructiveHint === true)
+      .map(([name]) => name)
+      .sort();
+
+    expect(destructive).toEqual(
+      [
+        'application',
+        'bulk_env_update',
+        'cloud_tokens',
+        'control',
+        'database',
+        'database_backups',
+        'deploy',
+        'deployment',
+        'env_vars',
+        'environments',
+        'github_apps',
+        'private_keys',
+        'projects',
+        'redeploy_project',
+        'restart_project_apps',
+        'scheduled_tasks',
+        'service',
+        'stop_all_apps',
+        'storages',
+        'system',
+      ].sort(),
+    );
+  });
+
+  it('treats get_mcp_version as the one tool touching nothing external', () => {
+    // Everything else reaches the Coolify API; this returns a local constant.
+    expect(registered['get_mcp_version'].annotations?.openWorldHint).toBe(false);
+    const openWorld = Object.entries(registered).filter(
+      ([, t]) => t.annotations?.openWorldHint === false,
+    );
+    expect(openWorld).toHaveLength(1);
+  });
+
+  it('marks validate_server idempotent rather than destructive', () => {
+    // Re-running a validation converges on the same state, so a client has no
+    // reason to gate it behind confirmation.
+    expect(registered['validate_server'].annotations).toMatchObject({
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+  });
+
+  it('does not mark hetzner destructive — every action is additive', () => {
+    // It provisions paid servers, which is consequential, but destructiveHint
+    // means "may replace or remove", not "may cost money".
+    expect(registered['hetzner'].annotations).toMatchObject({ destructiveHint: false });
+  });
+
+  // Everything above reads _registeredTools, which verifies registration but
+  // not the wire format. These two drive a real client over an in-memory
+  // transport, so they assert what a client actually receives.
+  describe('over a real tools/list round trip', () => {
+    const listTools = async () => {
+      const srv = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+      const client = new Client({ name: 'test', version: '0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([srv.connect(serverTransport), client.connect(clientTransport)]);
+      const { tools } = await client.listTools();
+      await client.close();
+      return tools;
+    };
+
+    it('delivers annotations to the client, not just to the registry', async () => {
+      const tools = await listTools();
+
+      expect(tools).toHaveLength(Object.keys(TOOL_ANNOTATIONS).length);
+      const unannotated = tools.filter((t) => !t.annotations).map((t) => t.name);
+      expect(unannotated).toEqual([]);
+
+      const logs = tools.find((t) => t.name === 'logs');
+      expect(logs?.annotations?.readOnlyHint).toBe(true);
+      const stopAll = tools.find((t) => t.name === 'stop_all_apps');
+      expect(stopAll?.annotations?.destructiveHint).toBe(true);
+    });
+
+    // #260 claimed annotations were free because they ride the existing
+    // tools/list response. They ride it, but they are not free — and this
+    // repo's headline is a ~6,600 token tool list, so the number needs a guard.
+    // Measured on the real payload rather than a reconstruction of it.
+    it('keeps the annotation payload small by emitting only non-default hints', async () => {
+      const tools = await listTools();
+      const withAnnotations = JSON.stringify(tools).length;
+      const without = JSON.stringify(
+        tools.map(({ annotations: _annotations, ...rest }) => rest),
+      ).length;
+      const addedBytes = withAnnotations - without;
+
+      // Asserted per tool, not as a fixed ceiling: a fixed total would trip on
+      // roughly the 52nd tool and blame the spec defaults for what was
+      // actually just growth. All four hints spelled out is ~90 bytes/tool, so
+      // 50 catches the thing being guarded against and survives new tools.
+      expect(addedBytes / tools.length).toBeLessThan(50);
+    });
+  });
+
+  it('refuses to register a tool missing from the annotations table', () => {
+    const define = (
+      server as unknown as {
+        defineTool: (n: string, d: string, s: object, cb: () => unknown) => void;
+      }
+    ).defineTool.bind(server);
+
+    expect(() => define('totally_new_tool', 'x', {}, () => ({}))).toThrow(/TOOL_ANNOTATIONS/);
+  });
+});
 
 describe('logs tool (#300)', () => {
   let server: CoolifyMcpServer;
