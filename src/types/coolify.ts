@@ -858,6 +858,27 @@ export interface ServiceSubResource {
 }
 
 /**
+ * A Coolify tag. Tags group resources across projects, and `deploy` already
+ * accepts a tag name — {@link CoolifyClient.deployByTagOrUuid} resolves it and
+ * triggers a deployment for everything carrying it.
+ */
+export interface Tag {
+  uuid: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Attach request. Upstream accepts either `tag_name` (single) or `tag_names`
+ * (array); this client always sends `tag_names` so there is one shape to reason
+ * about, with a single-element array covering the singular case.
+ */
+export interface AttachTagsRequest {
+  tag_names: string[];
+}
+
+/**
  * Log endpoints return `{ logs: "..." }` — verified against a live Coolify
  * instance, and matching upstream's OpenAPI. Older instances have been observed
  * returning a bare string, so {@link CoolifyClient} normalises both.

@@ -47,9 +47,9 @@ The model uses `deploy` with the application UUID. Currently blocks until the de
 - `stop_all_apps` (the emergency-stop button)
 - `bulk_env_update`
 
-The v2.x tools don't yet declare `destructiveHint` / `readOnlyHint` annotations to drive client confirmation UX. That's a v3 add (see [v3 vision](/roadmap/v3-vision)).
+Every tool declares `readOnlyHint` / `destructiveHint` annotations, so clients that support them can parallel-dispatch read-only tools and ask for confirmation only on the ones that change state.
 
 ## What next?
 
-- [Tools reference](/tools/) — every one of the 43 tools, grouped by concern, marked read or destructive.
+- [Tools reference](/tools/) — every one of the 44 tools, grouped by concern, marked read or destructive.
 - [How coolify-mcp works](/concepts/how-it-works) — the architecture, the file structure, the security model.

@@ -114,6 +114,8 @@ import type {
   ResourceListItem,
   ResourceListItemFull,
   ServiceSubResource,
+  Tag,
+  AttachTagsRequest,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -333,6 +335,11 @@ export function errorHint(status: number, path: string): string | undefined {
   }
   if (status === 401 || status === 403) {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
+  }
+  if (status === 404 && /\/tags(\/|$)/.test(path)) {
+    // Both causes look identical from the status, so name both rather than
+    // pointing confidently at the wrong one.
+    return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
@@ -1139,6 +1146,69 @@ export class CoolifyClient {
       show_timestamps: showTimestamps,
     });
     return unwrapLogs(await this.request<unknown>(`/services/${uuid}/logs${query}`));
+  }
+
+  // ===========================================================================
+  // Tags (v4.2)
+  // ===========================================================================
+
+  /**
+   * Every tag on the **current team** — tokens are team-scoped, so this is not
+   * the whole instance. Useful for discovering a name to attach or deploy by.
+   */
+  async listTags(): Promise<Tag[]> {
+    return this.request<Tag[]>('/tags');
+  }
+
+  async listApplicationTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/applications/${uuid}/tags`);
+  }
+
+  async listDatabaseTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/databases/${uuid}/tags`);
+  }
+
+  async listServiceTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/services/${uuid}/tags`);
+  }
+
+  async attachApplicationTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/applications/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async attachDatabaseTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/databases/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async attachServiceTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/services/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async detachApplicationTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async detachDatabaseTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async detachServiceTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
   }
 
   async listServiceApplications(uuid: string): Promise<ServiceSubResource[]> {

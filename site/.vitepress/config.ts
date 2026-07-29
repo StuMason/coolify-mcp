@@ -4,7 +4,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid';
 export default withMermaid(
   defineConfig({
     title: 'coolify-mcp',
-    description: 'MCP server for Coolify — 43 token-optimized tools for AI assistants',
+    description: 'MCP server for Coolify — 44 token-optimized tools for AI assistants',
 
     cleanUrls: true,
     // lastUpdated needs git available at build time; disabled until we wire
@@ -26,7 +26,7 @@ export default withMermaid(
         {
           name: 'og:description',
           content:
-            '43 token-optimized MCP tools. Drop into Claude / Cursor / Code. Drive your Coolify with natural language.',
+            '44 token-optimized MCP tools. Drop into Claude / Cursor / Code. Drive your Coolify with natural language.',
         },
       ],
     ],
