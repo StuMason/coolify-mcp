@@ -7,6 +7,8 @@
  */
 import { createRequire } from 'module';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import {
   CoolifyMcpServer,
   TOOL_ANNOTATIONS,
@@ -1791,20 +1793,51 @@ describe('tool annotations (#260)', () => {
     expect(registered['hetzner'].annotations).toMatchObject({ destructiveHint: false });
   });
 
-  // #260 claimed annotations were free because they ride the existing
-  // tools/list response. They ride it, but they are not free — and this repo's
-  // headline is a ~6,600 token tool list, so the number needs a guard.
-  it('keeps the annotation payload small by emitting only non-default hints', () => {
-    const withAnnotations = Object.entries(registered).map(([name, t]) => ({
-      name,
-      annotations: t.annotations,
-    }));
-    const without = Object.entries(registered).map(([name]) => ({ name }));
-    const addedBytes = JSON.stringify(withAnnotations).length - JSON.stringify(without).length;
+  // Everything above reads _registeredTools, which verifies registration but
+  // not the wire format. These two drive a real client over an in-memory
+  // transport, so they assert what a client actually receives.
+  describe('over a real tools/list round trip', () => {
+    const listTools = async () => {
+      const srv = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+      const client = new Client({ name: 'test', version: '0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([srv.connect(serverTransport), client.connect(clientTransport)]);
+      const { tools } = await client.listTools();
+      await client.close();
+      return tools;
+    };
 
-    // Spelling out spec defaults (readOnlyHint=false, openWorldHint=true, ...)
-    // more than doubled this. Fails loudly if someone reintroduces them.
-    expect(addedBytes).toBeLessThan(2000);
+    it('delivers annotations to the client, not just to the registry', async () => {
+      const tools = await listTools();
+
+      expect(tools).toHaveLength(Object.keys(TOOL_ANNOTATIONS).length);
+      const unannotated = tools.filter((t) => !t.annotations).map((t) => t.name);
+      expect(unannotated).toEqual([]);
+
+      const logs = tools.find((t) => t.name === 'logs');
+      expect(logs?.annotations?.readOnlyHint).toBe(true);
+      const stopAll = tools.find((t) => t.name === 'stop_all_apps');
+      expect(stopAll?.annotations?.destructiveHint).toBe(true);
+    });
+
+    // #260 claimed annotations were free because they ride the existing
+    // tools/list response. They ride it, but they are not free — and this
+    // repo's headline is a ~6,600 token tool list, so the number needs a guard.
+    // Measured on the real payload rather than a reconstruction of it.
+    it('keeps the annotation payload small by emitting only non-default hints', async () => {
+      const tools = await listTools();
+      const withAnnotations = JSON.stringify(tools).length;
+      const without = JSON.stringify(
+        tools.map(({ annotations: _annotations, ...rest }) => rest),
+      ).length;
+      const addedBytes = withAnnotations - without;
+
+      // Asserted per tool, not as a fixed ceiling: a fixed total would trip on
+      // roughly the 52nd tool and blame the spec defaults for what was
+      // actually just growth. All four hints spelled out is ~90 bytes/tool, so
+      // 50 catches the thing being guarded against and survives new tools.
+      expect(addedBytes / tools.length).toBeLessThan(50);
+    });
   });
 
   it('refuses to register a tool missing from the annotations table', () => {

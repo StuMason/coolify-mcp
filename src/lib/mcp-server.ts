@@ -277,8 +277,10 @@ interface DeployWaitResult {
 
 /**
  * Tool annotations, spec-stable since 2025-03-26 and honoured by SDK 1.x
- * `registerTool`. They ride the existing `tools/list` response, so they cost no
- * extra tokens.
+ * `registerTool`. They ride the existing `tools/list` response but are NOT
+ * free: ~415 tokens as emitted here, and ~751 with the spec defaults spelled
+ * out. Measured, not assumed — see the byte-budget test in mcp-server.test.ts
+ * before re-adding any default hint.
  *
  * Kept as one table rather than scattered across 43 call sites so the safety
  * classification of the whole surface can be audited in one place — which is
@@ -294,6 +296,14 @@ interface DeployWaitResult {
  *
  * Consolidated tools take worst-case values: any tool with a `delete` action is
  * destructive even though most of its actions are not.
+ *
+ * That worst-casing has a real cost worth naming: `env_vars` list, `deployment`
+ * get/list_for_app and `system` health/list_resources are pure reads sitting
+ * under destructive tools, so they lose parallel dispatch and gain confirmation
+ * prompts. Inherent to consolidation, and not worth splitting tools over — but
+ * it matters for the V3 read-only mode (#303), because filtering on this map
+ * would drop those read actions too, which is not what someone asking for
+ * read-only access expects. Gate that on action, not just on the tool.
  */
 // Only non-default hints are emitted. Per spec the defaults are
 // readOnlyHint=false, destructiveHint=true, idempotentHint=false and
@@ -301,10 +311,13 @@ interface DeployWaitResult {
 // and tells a compliant client nothing it did not already assume.
 // `destructiveHint: true` is the deliberate exception: it is the default, but
 // it is also the safety signal, and stating it explicitly is worth the bytes.
-const READ_ONLY: ToolAnnotations = { readOnlyHint: true };
-const DESTRUCTIVE: ToolAnnotations = { destructiveHint: true };
+// Frozen because twenty tools share the DESTRUCTIVE reference and registerTool
+// stores it on the registered tool — one stray mutation would silently
+// reclassify all of them.
+const READ_ONLY = Object.freeze({ readOnlyHint: true }) satisfies ToolAnnotations;
+const DESTRUCTIVE = Object.freeze({ destructiveHint: true }) satisfies ToolAnnotations;
 
-export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+export const TOOL_ANNOTATIONS = {
   // --- Read-only -----------------------------------------------------------
   get_version: READ_ONLY,
   // Local constant, no API call — the one tool that touches nothing external.
@@ -362,19 +375,31 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   hetzner: { destructiveHint: false },
   // Re-running a validation converges on the same state.
   validate_server: { destructiveHint: false, idempotentHint: true },
-};
+} satisfies Record<string, ToolAnnotations>;
+
+/**
+ * Every tool name known to the annotations table. `defineTool` takes this
+ * rather than `string`, so registering a tool that has no annotations is a
+ * compile error instead of a runtime throw. The throw stays as a backstop for
+ * anything reaching the method dynamically.
+ */
+export type ToolName = keyof typeof TOOL_ANNOTATIONS;
 
 export class CoolifyMcpServer extends McpServer {
+  private readonly client: CoolifyClient;
+  private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
+
   /**
    * Register a tool, attaching its annotations from {@link TOOL_ANNOTATIONS}.
    *
    * Wraps SDK `registerTool` (the legacy `tool()` overloads are deprecated) so
-   * annotations cannot be forgotten at a call site: every tool goes through
-   * here, and a name missing from the table throws at construction rather than
-   * silently shipping unannotated.
+   * annotations cannot be forgotten at a call site. `name` is typed to the
+   * table's own keys, so a tool with no annotations fails `tsc` rather than
+   * throwing when someone runs the server; the runtime throw remains as a
+   * backstop for dynamic callers.
    */
   private defineTool<Args extends ZodRawShapeCompat>(
-    name: string,
+    name: ToolName,
     description: string,
     inputSchema: Args,
     cb: ToolCallback<Args>,
@@ -387,9 +412,6 @@ export class CoolifyMcpServer extends McpServer {
     }
     this.registerTool(name, { description, inputSchema, annotations }, cb);
   }
-
-  private readonly client: CoolifyClient;
-  private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
 
   constructor(config: CoolifyConfig) {
     super({ name: 'coolify', version: VERSION });
