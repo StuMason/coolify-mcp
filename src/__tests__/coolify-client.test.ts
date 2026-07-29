@@ -5405,6 +5405,55 @@ describe('CoolifyClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    it('re-probes POST when a remembered GET starts 405ing (instance upgraded mid-session)', async () => {
+      // Learn the legacy GET against a pre-4.2 instance...
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'a' }));
+      await client.validateServer('a');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // ...then the instance is upgraded to v4.2, so the remembered GET now 405s.
+      mockFetch
+        .mockResolvedValueOnce(methodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'b' }));
+      await expect(client.validateServer('b')).resolves.toEqual({ uuid: 'b' });
+
+      // Call 3 is the stale GET, call 4 re-probes POST rather than 405ing forever.
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'http://localhost:3000/api/v1/servers/b/validate',
+        expect.objectContaining({ method: 'GET' }),
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'http://localhost:3000/api/v1/servers/b/validate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+
+      // The stale preference is gone, so the next call goes straight to POST.
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'c' }));
+      await client.validateServer('c');
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'http://localhost:3000/api/v1/servers/c/validate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('propagates a non-405 failure from a remembered GET without re-probing POST', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'a' }));
+      await client.validateServer('a');
+
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+      await expect(client.validateServer('missing')).rejects.toThrow('Server not found.');
+
+      // 2 for the initial probe + 1 GET. No POST re-probe on a genuine error.
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
     it('does not cache the fallback when the GET retry also fails', async () => {
       mockFetch
         .mockResolvedValueOnce(laravelMethodNotAllowed())
