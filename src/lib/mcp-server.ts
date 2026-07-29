@@ -2341,7 +2341,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'tags',
-      "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the instance (use it to discover a name); with resource+uuid it returns that resource's tags. attach creates tags that don't exist yet.",
+      "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the CURRENT TEAM (tokens are team-scoped, so a tag on another team will not appear); with resource+uuid it returns that resource's tags. attach is ADDITIVE — it adds the named tags and leaves existing ones in place, creating any that do not exist yet — and returns the resource's full tag set afterwards. Requires Coolify v4.2+.",
       {
         action: z.enum(['list', 'attach', 'detach']),
         resource: z.enum(['application', 'database', 'service']).optional(),
@@ -2350,7 +2350,7 @@ export class CoolifyMcpServer extends McpServer {
           .optional()
           .describe('Resource uuid. Omit with action=list to list every tag on the instance.'),
         tag_names: z
-          .array(z.string())
+          .array(z.string().min(2))
           .optional()
           .describe('Tag names to attach (each min 2 characters). Required for attach.'),
         tag_uuid: z

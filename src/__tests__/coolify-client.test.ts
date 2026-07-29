@@ -5871,6 +5871,14 @@ describe('errorHint', () => {
     expect(errorHint(405, '/enable')).toMatch(/GET to POST/);
   });
 
+  it('hints at the v4.2 requirement for a 404 on a tag route', () => {
+    // Without this the generic uuid hint fires and sends the caller chasing a
+    // uuid problem, when the endpoint simply does not exist before v4.2.
+    expect(errorHint(404, '/applications/app-uuid/tags')).toMatch(/v4\.2/);
+    expect(errorHint(404, '/tags')).toMatch(/v4\.2/);
+    expect(errorHint(404, '/services/svc-uuid/tags/tag-uuid')).toMatch(/v4\.2/);
+  });
+
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {
     expect(errorHint(404, '/applications/app-uuid')).toMatch(/different resource type/);
   });

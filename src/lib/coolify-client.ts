@@ -336,6 +336,9 @@ export function errorHint(status: number, path: string): string | undefined {
   if (status === 401 || status === 403) {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
   }
+  if (status === 404 && /\/tags(\/|$)/.test(path)) {
+    return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275). Check your instance version with get_version.';
+  }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
   }
@@ -1147,7 +1150,10 @@ export class CoolifyClient {
   // Tags (v4.2)
   // ===========================================================================
 
-  /** Every tag on the instance. Useful for discovering a name to attach or deploy by. */
+  /**
+   * Every tag on the **current team** — tokens are team-scoped, so this is not
+   * the whole instance. Useful for discovering a name to attach or deploy by.
+   */
   async listTags(): Promise<Tag[]> {
     return this.request<Tag[]>('/tags');
   }

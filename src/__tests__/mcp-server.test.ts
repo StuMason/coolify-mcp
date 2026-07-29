@@ -1877,30 +1877,41 @@ describe('tags tool (#298)', () => {
     expect(spy).toHaveBeenCalled();
   });
 
-  it('lists tags for a specific resource', async () => {
-    const spy = jest.spyOn(server['client'], 'listServiceTags').mockResolvedValue([]);
-    await callTags({ action: 'list', resource: 'service', uuid: 'svc-uuid' });
-    expect(spy).toHaveBeenCalledWith('svc-uuid');
+  // Each action across every resource. A diagonal (one action per resource)
+  // leaves six of the nine ternary branches unexercised, so swapping two client
+  // methods in a dispatch chain would ship green.
+  it.each([
+    ['application', 'listApplicationTags'],
+    ['database', 'listDatabaseTags'],
+    ['service', 'listServiceTags'],
+  ] as const)('list dispatches %s to %s', async (resource, method) => {
+    const spy = jest.spyOn(server['client'], method).mockResolvedValue([]);
+    await callTags({ action: 'list', resource, uuid: 'res-uuid' });
+    expect(spy).toHaveBeenCalledWith('res-uuid');
   });
 
-  it('attaches tags, always sending the array form', async () => {
-    const spy = jest.spyOn(server['client'], 'attachApplicationTags').mockResolvedValue([]);
-    await callTags({
-      action: 'attach',
-      resource: 'application',
-      uuid: 'app-uuid',
-      tag_names: ['prod'],
-    });
-    // One shape to reason about — a single name goes as a one-element array.
-    expect(spy).toHaveBeenCalledWith('app-uuid', { tag_names: ['prod'] });
-  });
+  it.each([
+    ['application', 'attachApplicationTags'],
+    ['database', 'attachDatabaseTags'],
+    ['service', 'attachServiceTags'],
+  ] as const)(
+    'attach dispatches %s to %s, always sending the array form',
+    async (resource, method) => {
+      const spy = jest.spyOn(server['client'], method).mockResolvedValue([]);
+      await callTags({ action: 'attach', resource, uuid: 'res-uuid', tag_names: ['prod'] });
+      // One shape to reason about — a single name goes as a one-element array.
+      expect(spy).toHaveBeenCalledWith('res-uuid', { tag_names: ['prod'] });
+    },
+  );
 
-  it('detaches a tag by uuid', async () => {
-    const spy = jest
-      .spyOn(server['client'], 'detachDatabaseTag')
-      .mockResolvedValue({ message: 'ok' });
-    await callTags({ action: 'detach', resource: 'database', uuid: 'db-uuid', tag_uuid: 't1' });
-    expect(spy).toHaveBeenCalledWith('db-uuid', 't1');
+  it.each([
+    ['application', 'detachApplicationTag'],
+    ['database', 'detachDatabaseTag'],
+    ['service', 'detachServiceTag'],
+  ] as const)('detach dispatches %s to %s', async (resource, method) => {
+    const spy = jest.spyOn(server['client'], method).mockResolvedValue({ message: 'ok' });
+    await callTags({ action: 'detach', resource, uuid: 'res-uuid', tag_uuid: 't1' });
+    expect(spy).toHaveBeenCalledWith('res-uuid', 't1');
   });
 
   it('requires resource and uuid for anything other than a bare list', async () => {

@@ -2,7 +2,7 @@
 
 All 44 tools in coolify-mcp v2.11, grouped by concern. The full canonical list is registered in [`src/lib/mcp-server.ts`](https://github.com/StuMason/coolify-mcp/blob/main/src/lib/mcp-server.ts).
 
-> Tools marked **read-only** are safe to let your MCP client run without per-call confirmation. Tools marked **destructive** change state and should be confirmed — v3 will surface these via `destructiveHint` annotations (see [v3 vision](/roadmap/v3-vision)).
+> Tools marked **read-only** are safe to let your MCP client run without per-call confirmation. Tools marked **destructive** change state and should be confirmed. Every tool declares this to your client via `readOnlyHint` / `destructiveHint` annotations, so clients that support them can parallel-dispatch reads and prompt only where it matters.
 
 ## Infrastructure
 
@@ -79,6 +79,8 @@ All 44 tools in coolify-mcp v2.11, grouped by concern. The full canonical list i
 | `storages`        | mixed       | Persistent or file storages for app / database / service                                                                                         |
 | `scheduled_tasks` | mixed       | CRUD + `list_executions` for app or service                                                                                                      |
 | `control`         | destructive | Generic start / stop / restart by uuid                                                                                                           |
+| `logs`            | read        | Container logs for app / database / service. Services need `container` — list them with `service` `action: 'list_containers'`                    |
+| `tags`            | destructive | `action: 'list' \| 'attach' \| 'detach'` for app / database / service. Tag resources, then `deploy` them together by tag. Coolify v4.2+          |
 | `hetzner`         | mixed       | `action: 'list_locations' \| 'list_server_types' \| 'list_images' \| 'list_ssh_keys' \| 'create_server'` (requires hetzner cloud-provider token) |
 
 ## Cloud + auth
