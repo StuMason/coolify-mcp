@@ -202,8 +202,13 @@ describe('elicitation: capability gating', () => {
     // Losing the details is a reason to ask a vaguer question, not to skip the
     // question — and the human should be told the lookup failed.
     expect(h.prompts).toHaveLength(1);
-    expect(h.prompts[0]).toContain('Could not load details first');
+    expect(h.prompts[0]).toContain('Could not load the details first');
     expect(h.prompts[0]).toContain('coolify unreachable');
+    // Vaguer, but not contentless. "Proceed with this destructive operation?"
+    // reads identically for deleting one service and for stopping the estate,
+    // and this degraded path fires exactly when Coolify is flaky — when people
+    // are least inclined to read carefully.
+    expect(h.prompts[0]).toContain('stop every running application');
     expect(stopAllApps).toHaveBeenCalled();
     await h.close();
   });
@@ -252,7 +257,7 @@ describe('elicitation: capability gating', () => {
       elicitInput: () => Promise.reject('raw string failure'),
     } as unknown as Server;
 
-    const outcome = await confirmDestructive(stub, () => 'proceed?');
+    const outcome = await confirmDestructive(stub, 'do the thing', () => 'proceed?');
 
     expect(outcome.approved).toBe(false);
     expect(outcome.approved === false && outcome.message).toContain('raw string failure');
@@ -316,7 +321,7 @@ describe('elicitation: cancellation and no-ops', () => {
       },
     } as unknown as Server;
 
-    await confirmDestructive(stub, () => 'proceed?', controller.signal);
+    await confirmDestructive(stub, 'do the thing', () => 'proceed?', controller.signal);
 
     expect(seen?.signal).toBe(controller.signal);
     expect(seen?.timeout).toBe(ELICIT_TIMEOUT_MS);
@@ -449,6 +454,28 @@ describe('elicitation: prompt injection via resource names', () => {
 
     expect(h.prompts[0]).not.toContain('\nRoutine.');
     await h.close();
+  });
+
+  it('strips link syntax so a name cannot render as a clickable link', () => {
+    const safe = sanitizeForPrompt('[Approve](https://evil.example)');
+
+    expect(safe).not.toContain('[');
+    expect(safe).not.toContain(']');
+    // The parens survive, which is fine: without the bracket pair they are
+    // literal text, not link syntax.
+    expect(safe).toBe('Approve(https://evil.example)');
+  });
+
+  it('strips emphasis and code spans', () => {
+    expect(sanitizeForPrompt('**SAFE - routine**')).toBe('SAFE - routine');
+    expect(sanitizeForPrompt('`sudo rm -rf`')).toBe('sudo rm -rf');
+  });
+
+  it('leaves underscores alone, because env var names are full of them', () => {
+    // Mangling `API_KEY` into `APIKEY` in the one dialog meant to let someone
+    // recognise what they are approving is worse than the emphasis it would
+    // prevent.
+    expect(sanitizeForPrompt('DATABASE_URL')).toBe('DATABASE_URL');
   });
 
   it('leaves a real uuid untouched', () => {

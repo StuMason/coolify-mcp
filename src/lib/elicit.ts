@@ -80,6 +80,9 @@ function abortText(reason: string): string {
  *
  * @param server   The low-level `Server` (i.e. `mcpServer.server`), which owns
  *                 both the client capabilities and `elicitInput`.
+ * @param label    One line naming the operation, independent of any lookup.
+ *                 Used when `summarize` fails, so the degraded prompt still
+ *                 says what it is asking about.
  * @param summarize Produces the prompt text, or `null` when the pre-flight
  *                 found nothing to confirm. A callback rather than a string so
  *                 that call sites needing an API round trip to state their blast
@@ -90,6 +93,7 @@ function abortText(reason: string): string {
  */
 export async function confirmDestructive(
   server: Server,
+  label: string,
   summarize: () => string | null | Promise<string | null>,
   signal?: AbortSignal,
 ): Promise<ConfirmOutcome> {
@@ -110,9 +114,15 @@ export async function confirmDestructive(
     // The pre-flight lookup failed. Still ask — a human confirming a vaguer
     // question is a better outcome than an unconfirmed destructive call, and
     // the failure itself is worth putting in front of them.
+    // `label` is why this stays a real question. Without it the degraded
+    // prompt reads "Proceed with this destructive operation?" whether the
+    // operation deletes one service or stops every application on the estate —
+    // the weakest possible ask, fired on exactly the condition (a flaky or
+    // unreachable Coolify) where a human is most likely to be clicking through
+    // things quickly.
     message =
-      `Proceed with this destructive operation? ` +
-      `(Could not load details first: ${error instanceof Error ? error.message : String(error)})`;
+      `${label}\n\nProceed? ` +
+      `(Could not load the details first: ${error instanceof Error ? error.message : String(error)})`;
   }
 
   let result;
@@ -165,6 +175,24 @@ const MAX_NAMED = 8;
 /** Cap on a single interpolated name, so one long name cannot bury the question. */
 const MAX_NAME_LENGTH = 64;
 
+/**
+ * Characters that turn a plain name into markdown. Stripped rather than
+ * escaped — a mangled name is a better outcome in a security dialog than a
+ * rendered one.
+ *
+ * Deliberately **not** `_` or parentheses, though both carry some markdown
+ * meaning. `API_KEY` is the shape of almost every env var name this will ever
+ * render, and turning it into `APIKEY` in the one dialog whose job is to let
+ * someone recognise what they are approving is a worse failure than the thing
+ * it prevents. Parentheses only matter following a `[...]`, which cannot
+ * survive this filter anyway.
+ *
+ * What is left out is the part that can mislead about destination or
+ * authority: link syntax and code spans. Residual risk is emphasis via
+ * `__underscores__`, which is cosmetic.
+ */
+const MARKDOWN_CHARS = /[`*[\]<>]/g;
+
 /** C0 and C1 control ranges — where newlines and carriage returns live. */
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
@@ -190,12 +218,20 @@ const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
  * A real 36-character UUID is well inside {@link MAX_NAME_LENGTH}, so genuine
  * values render unchanged.
  *
- * Not an escaping problem (the text is rendered to a human, not parsed), so
- * this flattens control characters to spaces and clamps the length rather than
- * quoting anything.
+ * Markdown-significant characters are neutralised alongside the control ones.
+ * The prompts in this codebase use backticks for emphasis, which means they
+ * assume a client that renders markdown — and markdown rendering *is* parsing,
+ * whatever the text is nominally "for". Under that assumption a resource named
+ * `[Approve](https://evil.example)` becomes a link and `**SAFE - routine**`
+ * becomes bold reassurance, inside a dialog whose whole job is to look
+ * trustworthy. The length clamp caps that but does not remove it.
  */
 export function sanitizeForPrompt(name: string): string {
-  const flattened = name.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim();
+  const flattened = name
+    .replace(CONTROL_CHARS, ' ')
+    .replace(MARKDOWN_CHARS, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (flattened.length <= MAX_NAME_LENGTH) return flattened;
   return `${flattened.slice(0, MAX_NAME_LENGTH - 1)}…`;
 }

@@ -166,6 +166,7 @@ describe('CoolifyMcpServer v2', () => {
 
       // Batch operations
       expect(typeof client.restartProjectApps).toBe('function');
+      expect(typeof client.applicationsInProject).toBe('function');
       expect(typeof client.bulkEnvUpdate).toBe('function');
       expect(typeof client.stopAllApps).toBe('function');
       expect(typeof client.redeployProjectApps).toBe('function');

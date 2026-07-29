@@ -2695,6 +2695,15 @@ export class CoolifyClient {
    * the resolution is project → environment ids → applications in those
    * environments. Verified live: this maps all 26 applications to a project.
    *
+   * `getProject` rather than the narrower `listProjectEnvironments`
+   * (`GET /projects/{uuid}/environments`) because one call answers both halves
+   * of the question — it returns the environments *and* confirms the project
+   * exists — and it is verified against a live 4.1.2, which the narrower
+   * endpoint is not. `environments` is optional on the `Project` type, so the
+   * check below is what stops that choice degrading into a silent zero; if a
+   * future instance stops expanding it, the fix is to fall back to
+   * `listProjectEnvironments` here rather than to soften the check.
+   *
    * @param apps Pre-fetched applications, when a caller has already listed them
    *   (the #261 confirmation prompt does). Avoids a second unpaginated fetch
    *   and, more importantly, makes the operation act on the same set the human

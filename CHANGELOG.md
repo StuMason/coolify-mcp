@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Found while building the #261 confirmation prompt for `redeploy_project`, which would otherwise have shipped saying "Redeploy 0 applications in this project?" — a confirmation understating its own blast radius, which is the one direction it must never be wrong in.
 
+  **Observable behaviour change:** both tools now **error** when a project's environments cannot be resolved (unknown uuid, partial response, insufficient permissions), where previously they returned `{"summary":{"total":0,"succeeded":0,"failed":0}}`. A project that genuinely contains no applications still returns the zero summary — the distinction being drawn is "nothing to do" versus "could not find out", and only the second is an error. Anyone scripting against the old always-succeeds shape should expect a thrown error instead.
+
 ### Changed
 
 - **`Application.destination` added to the types** — `GET /applications` nests an expanded `destination` object (`id`, `uuid`, `name`, `server_id`) and does **not** populate the flat `server_uuid`, which the type has always declared. Verified against a live 4.1.2 instance while building the stop-all confirmation: the first version of that prompt counted servers by `server_uuid` and was dead code that could never have fired. The second version used `.filter(Boolean)` on `server_id`, which silently discards Coolify's built-in localhost server — it is id `0`, and every application on the test estate reports it. Both were found by running the code against a real instance rather than by re-reading the spec, which is the same lesson as the 2.15.0 regression.

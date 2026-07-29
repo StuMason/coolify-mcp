@@ -469,6 +469,11 @@ export class CoolifyMcpServer extends McpServer {
    * the question, and may return `null` to mean "nothing to confirm" — an
    * emergency stop on an idle estate should not raise a dialog.
    *
+   * `label` names the operation without needing any lookup, so that when
+   * `summarize` fails the human is still told what they are approving. The
+   * degraded prompt fires exactly when Coolify is flaky, which is when people
+   * are least inclined to read carefully.
+   *
    * `signal` is the tool call's own abort signal and must be threaded through:
    * without it, a client that times the `tools/call` out at 60s leaves the
    * prompt live, and a later accept executes the operation with nobody
@@ -476,10 +481,11 @@ export class CoolifyMcpServer extends McpServer {
    */
   private async guardDestructive<T>(
     signal: AbortSignal | undefined,
+    label: string,
     summarize: () => string | null | Promise<string | null>,
     operation: () => Promise<T>,
   ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
-    const outcome = await confirmDestructive(this.server, summarize, signal);
+    const outcome = await confirmDestructive(this.server, label, summarize, signal);
     if (!outcome.approved) {
       return { content: [{ type: 'text' as const, text: outcome.message }] };
     }
@@ -740,6 +746,7 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
               extra.signal,
+              `Delete a Coolify project and everything in it.`,
               async () => {
                 const project = await this.client.getProject(uuid);
                 return `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})? This cannot be undone.`;
@@ -782,6 +789,7 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
             return this.guardDestructive(
               extra.signal,
+              `Delete an environment from a Coolify project.`,
               () =>
                 `Delete environment "${sanitizeForPrompt(name)}" from project ${sanitizeForPrompt(project_uuid)}? This cannot be undone.`,
               () => this.client.deleteProjectEnvironment(project_uuid, name),
@@ -1156,6 +1164,7 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
               extra.signal,
+              `Delete an application, and by default its persistent volumes.`,
               async () => {
                 const app = await this.client.getApplication(uuid);
                 return deleteResourcePrompt('application', app.name || uuid, uuid, delete_volumes);
@@ -1292,6 +1301,7 @@ export class CoolifyMcpServer extends McpServer {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
           return this.guardDestructive(
             extra.signal,
+            `Delete a database, and by default its persistent volumes.`,
             async () => {
               const db = await this.client.getDatabase(uuid);
               return deleteResourcePrompt('database', db.name || uuid, uuid, delete_volumes);
@@ -1401,6 +1411,7 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
               extra.signal,
+              `Delete a service, and by default its persistent volumes.`,
               async () => {
                 const svc = await this.client.getService(uuid);
                 return deleteResourcePrompt('service', svc.name || uuid, uuid, delete_volumes);
@@ -2439,6 +2450,7 @@ export class CoolifyMcpServer extends McpServer {
             // is precisely a decision a human should be making.
             return this.guardDestructive(
               extra.signal,
+              `Disable the Coolify API, which stops every tool in this server.`,
               () =>
                 `Disable the Coolify API?\n\n` +
                 `Every tool in this MCP server stops working immediately, including ` +
@@ -2549,6 +2561,7 @@ export class CoolifyMcpServer extends McpServer {
         let approved: Application[] | undefined;
         return this.guardDestructive(
           extra.signal,
+          `Restart every application in a Coolify project.`,
           async () => {
             approved = await this.client.applicationsInProject(project_uuid);
             if (approved.length === 0) return null;
@@ -2586,6 +2599,7 @@ export class CoolifyMcpServer extends McpServer {
         }
         return this.guardDestructive(
           extra.signal,
+          `Set env var "${sanitizeForPrompt(key)}" across ${app_uuids.length} applications.`,
           // No pre-flight needed: the caller already told us the blast radius.
           () =>
             `Set env var "${sanitizeForPrompt(key)}" on ${app_uuids.length} applications?\n\n` +
@@ -2615,6 +2629,7 @@ export class CoolifyMcpServer extends McpServer {
         let approved: Application[] | undefined;
         return this.guardDestructive(
           extra.signal,
+          `EMERGENCY STOP: stop every running application on this Coolify instance.`,
           async () => {
             const apps = (await this.client.listApplications()) as Application[];
             const running = apps.filter((app) => isRunningStatus(app.status));
@@ -2668,6 +2683,7 @@ export class CoolifyMcpServer extends McpServer {
         let approved: Application[] | undefined;
         return this.guardDestructive(
           extra.signal,
+          `Redeploy every application in a Coolify project.`,
           async () => {
             approved = await this.client.applicationsInProject(project_uuid);
             if (approved.length === 0) return null;
