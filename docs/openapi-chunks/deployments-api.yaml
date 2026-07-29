@@ -3,102 +3,215 @@ info:
   title: Coolify
   version: '0.1'
 paths:
+  /deploy:
+    post:
+      tags:
+        - Deployments
+      summary: Deploy
+      description: 'Deploy by tag or UUID using query parameters or a JSON body.'
+      operationId: deploy-by-tag-or-uuid
+      parameters:
+        -
+          name: tag
+          in: query
+          description: 'Tag name(s). Comma separated list is also accepted.'
+          schema:
+            type: string
+        -
+          name: uuid
+          in: query
+          description: 'Resource UUID(s). Comma separated list is also accepted.'
+          schema:
+            type: string
+        -
+          name: force
+          in: query
+          description: 'Force rebuild (without cache)'
+          schema:
+            type: boolean
+        -
+          name: pr
+          in: query
+          description: 'Pull Request Id for deploying specific PR builds. Cannot be used with tag parameter.'
+          schema:
+            type: integer
+        -
+          name: pull_request_id
+          in: query
+          description: 'Preview deployment identifier. Alias of pr.'
+          schema:
+            type: integer
+        -
+          name: docker_tag
+          in: query
+          description: 'Docker image tag for Docker Image preview deployments. Requires pull_request_id.'
+          schema:
+            type: string
+      responses:
+        '200':
+          description: "Get deployment(s) UUID's"
+          content:
+            application/json:
+              schema:
+                properties:
+                  deployments: { type: array, items: { properties: { message: { type: string }, resource_uuid: { type: string }, deployment_uuid: { type: string } }, type: object } }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
   /deployments:
     get:
       tags:
         - Deployments
       summary: List
-      description: List currently running deployments
+      description: 'List currently running deployments'
       operationId: list-deployments
       responses:
         '200':
-          description: Get all currently running deployments.
+          description: 'Get all currently running deployments.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/ApplicationDeploymentQueue'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
-  /deployments/{uuid}:
+        -
+          bearerAuth: []
+  '/deployments/{uuid}':
     get:
       tags:
         - Deployments
       summary: Get
-      description: Get deployment by UUID.
+      description: 'Get deployment by UUID.'
       operationId: get-deployment-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Deployment UUID
+          description: 'Deployment UUID'
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Get deployment by UUID.
+          description: 'Get deployment by UUID.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationDeploymentQueue'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
-  /deploy:
-    get:
+        -
+          bearerAuth: []
+  '/deployments/{uuid}/cancel':
+    post:
       tags:
         - Deployments
-      summary: Deploy
-      description: Deploy by tag or uuid. `Post` request also accepted.
-      operationId: deploy-by-tag-or-uuid
+      summary: Cancel
+      description: 'Cancel a deployment by UUID.'
+      operationId: cancel-deployment-by-uuid
       parameters:
-        - name: tag
-          in: query
-          description: Tag name(s). Comma separated list is also accepted.
+        -
+          name: uuid
+          in: path
+          description: 'Deployment UUID'
+          required: true
           schema:
             type: string
-        - name: uuid
-          in: query
-          description: Resource UUID(s). Comma separated list is also accepted.
-          schema:
-            type: string
-        - name: force
-          in: query
-          description: Force rebuild (without cache)
-          schema:
-            type: boolean
       responses:
         '200':
-          description: Get deployment(s) UUID's
+          description: 'Deployment cancelled successfully.'
           content:
             application/json:
               schema:
                 properties:
-                  deployments:
-                    type: array
-                    items:
-                      properties:
-                        message:
-                          type: string
-                        resource_uuid:
-                          type: string
-                        deployment_uuid:
-                          type: string
-                      type: object
+                  message: { type: string, example: 'Deployment cancelled successfully.' }
+                  deployment_uuid: { type: string, example: cm37r6cqj000008jm0veg5tkm }
+                  status: { type: string, example: cancelled-by-user }
                 type: object
         '400':
-          $ref: '#/components/responses/400'
+          description: 'Deployment cannot be cancelled (already finished/failed/cancelled).'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Deployment cannot be cancelled. Current status: finished' }
+                type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: "User doesn't have permission to cancel this deployment."
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'You do not have permission to cancel this deployment.' }
+                type: object
+        '404':
+          $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
+  '/deployments/applications/{uuid}':
+    get:
+      tags:
+        - Deployments
+      summary: 'List application deployments'
+      description: 'List application deployments by using the app uuid'
+      operationId: list-deployments-by-app-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+        -
+          name: skip
+          in: query
+          description: 'Number of records to skip.'
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        -
+          name: take
+          in: query
+          description: 'Number of records to take.'
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+      responses:
+        '200':
+          description: 'List application deployments by using the app uuid.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []

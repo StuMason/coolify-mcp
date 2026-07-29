@@ -8,31 +8,32 @@ paths:
       tags:
         - Projects
       summary: List
-      description: List projects.
+      description: 'List projects.'
       operationId: list-projects
       responses:
         '200':
-          description: Get all projects.
+          description: 'Get all projects.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Project'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     post:
       tags:
         - Projects
       summary: Create
-      description: Create Project.
+      description: 'Create Project.'
       operationId: create-project
       requestBody:
-        description: Project created.
+        description: 'Project created.'
         required: true
         content:
           application/json:
@@ -40,101 +41,112 @@ paths:
               properties:
                 name:
                   type: string
-                  description: The name of the project.
+                  description: 'The name of the project.'
                 description:
                   type: string
-                  description: The description of the project.
+                  description: 'The description of the project.'
               type: object
       responses:
         '201':
-          description: Project created.
+          description: 'Project created.'
           content:
             application/json:
               schema:
                 properties:
-                  uuid:
-                    type: string
-                    example: og888os
-                    description: The UUID of the project.
+                  uuid: { type: string, example: og888os, description: 'The UUID of the project.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
-  /projects/{uuid}:
+        -
+          bearerAuth: []
+  '/projects/{uuid}':
     get:
       tags:
         - Projects
       summary: Get
-      description: Get project by UUID.
+      description: 'Get project by UUID.'
       operationId: get-project-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Project UUID
+          description: 'Project UUID'
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Project details
+          description: 'Project details'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
-          description: Project not found.
+          description: 'Project not found.'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     delete:
       tags:
         - Projects
       summary: Delete
-      description: Delete project by UUID.
+      description: 'Delete project by UUID.'
       operationId: delete-project-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: UUID of the application.
+          description: 'UUID of the application.'
           required: true
           schema:
             type: string
-            format: uuid
       responses:
         '200':
-          description: Project deleted.
+          description: 'Project deleted.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: Project deleted.
+                  message: { type: string, example: 'Project deleted.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     patch:
       tags:
         - Projects
       summary: Update
-      description: Update Project.
+      description: 'Update Project.'
       operationId: update-project-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the project.'
+          required: true
+          schema:
+            type: string
       requestBody:
-        description: Project updated.
+        description: 'Project updated.'
         required: true
         content:
           application/json:
@@ -142,68 +154,194 @@ paths:
               properties:
                 name:
                   type: string
-                  description: The name of the project.
+                  description: 'The name of the project.'
                 description:
                   type: string
-                  description: The description of the project.
+                  description: 'The description of the project.'
               type: object
       responses:
         '201':
-          description: Project updated.
+          description: 'Project updated.'
           content:
             application/json:
               schema:
                 properties:
-                  uuid:
-                    type: string
-                    example: og888os
-                  name:
-                    type: string
-                    example: Project Name
-                  description:
-                    type: string
-                    example: Project Description
+                  uuid: { type: string, example: og888os }
+                  name: { type: string, example: 'Project Name' }
+                  description: { type: string, example: 'Project Description' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
-  /projects/{uuid}/{environment_name_or_uuid}:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/{environment_name_or_uuid}':
     get:
       tags:
         - Projects
       summary: Environment
-      description: Get environment by name or UUID.
+      description: 'Get environment by name or UUID.'
       operationId: get-environment-by-name-or-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Project UUID
+          description: 'Project UUID'
           required: true
           schema:
             type: string
-        - name: environment_name_or_uuid
+        -
+          name: environment_name_or_uuid
           in: path
-          description: Environment name or UUID
+          description: 'Environment name or UUID'
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Environment details
+          description: 'Environment details'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Environment'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
+  '/projects/{uuid}/environments':
+    get:
+      tags:
+        - Projects
+      summary: 'List Environments'
+      description: 'List all environments in a project.'
+      operationId: get-environments
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of environments'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Environment'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          description: 'Project not found.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - Projects
+      summary: 'Create Environment'
+      description: 'Create environment in project.'
+      operationId: create-environment
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: 'Environment created.'
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'The name of the environment.'
+              type: object
+      responses:
+        '201':
+          description: 'Environment created.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string, example: env123, description: 'The UUID of the environment.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          description: 'Project not found.'
+        '409':
+          description: 'Environment with this name already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/environments/{environment_name_or_uuid}':
+    delete:
+      tags:
+        - Projects
+      summary: 'Delete Environment'
+      description: 'Delete environment by name or UUID. Environment must be empty.'
+      operationId: delete-environment
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Environment deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Environment deleted.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          description: 'Environment has resources, so it cannot be deleted.'
+        '404':
+          description: 'Project or environment not found.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

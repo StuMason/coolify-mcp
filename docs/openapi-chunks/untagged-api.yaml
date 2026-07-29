@@ -3,103 +3,689 @@ info:
   title: Coolify
   version: '0.1'
 paths:
-  /version:
+  /cloud-tokens:
     get:
-      summary: Version
-      description: Get Coolify version.
-      operationId: version
+      tags:
+        - 'Cloud Tokens'
+      summary: 'List Cloud Provider Tokens'
+      description: 'List all cloud provider tokens for the authenticated team.'
+      operationId: list-cloud-tokens
       responses:
         '200':
-          description: Returns the version of the application
+          description: 'Get all cloud provider tokens.'
           content:
             application/json:
               schema:
-                type: string
-              example: v4.0.0
-        '400':
-          $ref: '#/components/responses/400'
+                type: array
+                items:
+                  properties: { uuid: { type: string }, name: { type: string }, provider: { type: string, enum: [hetzner, digitalocean, vultr] }, team_id: { type: integer }, servers_count: { type: integer }, created_at: { type: string }, updated_at: { type: string } }
+                  type: object
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
-  /enable:
-    get:
-      summary: Enable API
-      description: Enable API (only with root permissions).
-      operationId: enable-api
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Cloud Tokens'
+      summary: 'Create Cloud Provider Token'
+      description: 'Create a new cloud provider token. The token will be validated before being stored.'
+      operationId: create-cloud-token
+      requestBody:
+        description: 'Cloud provider token details'
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - provider
+                - token
+                - name
+              properties:
+                provider:
+                  type: string
+                  enum: [hetzner, digitalocean, vultr]
+                  example: hetzner
+                  description: 'The cloud provider.'
+                token:
+                  type: string
+                  example: your-api-token-here
+                  description: 'The API token for the cloud provider.'
+                name:
+                  type: string
+                  example: 'My Hetzner Token'
+                  description: 'A friendly name for the token.'
+              type: object
       responses:
-        '200':
-          description: Enable API.
+        '201':
+          description: 'Cloud provider token created.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: API enabled.
+                  uuid: { type: string, example: og888os, description: 'The UUID of the token.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
-        '403':
-          description: You are not allowed to enable the API.
+        '400':
+          $ref: '#/components/responses/400'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/cloud-tokens/{uuid}':
+    get:
+      tags:
+        - 'Cloud Tokens'
+      summary: 'Get Cloud Provider Token'
+      description: 'Get cloud provider token by UUID.'
+      operationId: get-cloud-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Token UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Get cloud provider token by UUID'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: You are not allowed to enable the API.
+                  uuid: { type: string }
+                  name: { type: string }
+                  provider: { type: string }
+                  team_id: { type: integer }
+                  servers_count: { type: integer }
+                  created_at: { type: string }
+                  updated_at: { type: string }
                 type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - 'Cloud Tokens'
+      summary: 'Delete Cloud Provider Token'
+      description: 'Delete cloud provider token by UUID. Cannot delete if token is used by any servers.'
+      operationId: delete-cloud-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the cloud provider token.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloud provider token deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Cloud provider token deleted.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Cloud Tokens'
+      summary: 'Update Cloud Provider Token'
+      description: 'Update cloud provider token name.'
+      operationId: update-cloud-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Token UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: 'Cloud provider token updated.'
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'The friendly name for the token.'
+              type: object
+      responses:
+        '200':
+          description: 'Cloud provider token updated.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/cloud-tokens/{uuid}/validate':
+    post:
+      tags:
+        - 'Cloud Tokens'
+      summary: 'Validate Cloud Provider Token'
+      description: 'Validate a cloud provider token against the provider API.'
+      operationId: validate-cloud-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Token UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Token validation result.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  valid: { type: boolean, example: true }
+                  message: { type: string, example: 'Token is valid.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
   /disable:
-    get:
-      summary: Disable API
-      description: Disable API (only with root permissions).
+    post:
+      summary: 'Disable API'
+      description: 'Disable API (only with root permissions).'
       operationId: disable-api
       responses:
         '200':
-          description: Disable API.
+          description: 'Disable API.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: API disabled.
+                  message: { type: string, example: 'API disabled.' }
+                type: object
+        '403':
+          description: 'You are not allowed to disable the API.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'You are not allowed to disable the API.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /enable:
+    post:
+      summary: 'Enable API'
+      description: 'Enable API (only with root permissions).'
+      operationId: enable-api
+      responses:
+        '200':
+          description: 'Enable API.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'API enabled.' }
+                type: object
+        '403':
+          description: 'You are not allowed to enable the API.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'You are not allowed to enable the API.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /github-apps:
+    get:
+      tags:
+        - 'GitHub Apps'
+      summary: List
+      description: 'List all GitHub apps.'
+      operationId: list-github-apps
+      responses:
+        '200':
+          description: 'List of GitHub apps.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, organization: { type: string, nullable: true }, api_url: { type: string }, html_url: { type: string }, custom_user: { type: string }, custom_port: { type: integer }, app_id: { type: integer }, installation_id: { type: integer }, client_id: { type: string }, private_key_id: { type: integer }, is_system_wide: { type: boolean }, is_public: { type: boolean }, team_id: { type: integer }, type: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'GitHub Apps'
+      summary: 'Create GitHub App'
+      description: 'Create a new GitHub app.'
+      operationId: create-github-app
+      requestBody:
+        description: 'GitHub app creation payload.'
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+                - html_url
+                - app_id
+                - installation_id
+                - client_id
+                - client_secret
+                - private_key_uuid
+              properties:
+                name:
+                  type: string
+                  description: 'Name of the GitHub app.'
+                organization:
+                  type: string
+                  nullable: true
+                  description: 'Organization to associate the app with.'
+                api_url:
+                  type: string
+                  description: 'API URL for the GitHub app (e.g., https://api.github.com).'
+                html_url:
+                  type: string
+                  description: 'HTML URL for the GitHub app (e.g., https://github.com).'
+                custom_user:
+                  type: string
+                  description: 'Custom user for SSH access (default: git).'
+                custom_port:
+                  type: integer
+                  description: 'Custom port for SSH access (default: 22).'
+                app_id:
+                  type: integer
+                  description: 'GitHub App ID from GitHub.'
+                installation_id:
+                  type: integer
+                  description: 'GitHub Installation ID.'
+                client_id:
+                  type: string
+                  description: 'GitHub OAuth App Client ID.'
+                client_secret:
+                  type: string
+                  description: 'GitHub OAuth App Client Secret.'
+                webhook_secret:
+                  type: string
+                  description: 'Webhook secret for GitHub webhooks.'
+                private_key_uuid:
+                  type: string
+                  description: 'UUID of an existing private key for GitHub App authentication.'
+                is_system_wide:
+                  type: boolean
+                  description: 'Is this app system-wide (cloud only).'
+              type: object
+      responses:
+        '201':
+          description: 'GitHub app created successfully.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  id: { type: integer }
+                  uuid: { type: string }
+                  name: { type: string }
+                  organization: { type: string, nullable: true }
+                  api_url: { type: string }
+                  html_url: { type: string }
+                  custom_user: { type: string }
+                  custom_port: { type: integer }
+                  app_id: { type: integer }
+                  installation_id: { type: integer }
+                  client_id: { type: string }
+                  private_key_id: { type: integer }
+                  is_system_wide: { type: boolean }
+                  team_id: { type: integer }
                 type: object
         '400':
           $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
-        '403':
-          description: You are not allowed to disable the API.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/github-apps/{github_app_id}':
+    delete:
+      tags:
+        - 'GitHub Apps'
+      summary: 'Delete GitHub App'
+      description: "Delete a GitHub app if it's not being used by any applications."
+      operationId: deleteGithubApp
+      parameters:
+        -
+          name: github_app_id
+          in: path
+          description: 'GitHub App ID'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'GitHub app deleted successfully'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: You are not allowed to disable the API.
+                  message: { type: string, example: 'GitHub app deleted successfully' }
+                type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: 'GitHub app not found'
+        '409':
+          description: 'Conflict - GitHub app is in use'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'This GitHub app is being used by 5 application(s). Please delete all applications first.' }
                 type: object
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'GitHub Apps'
+      summary: 'Update GitHub App'
+      description: 'Update an existing GitHub app.'
+      operationId: updateGithubApp
+      parameters:
+        -
+          name: github_app_id
+          in: path
+          description: 'GitHub App ID'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'GitHub App name'
+                organization:
+                  type: string
+                  nullable: true
+                  description: 'GitHub organization'
+                api_url:
+                  type: string
+                  description: 'GitHub API URL'
+                html_url:
+                  type: string
+                  description: 'GitHub HTML URL'
+                custom_user:
+                  type: string
+                  description: 'Custom user for SSH'
+                custom_port:
+                  type: integer
+                  description: 'Custom port for SSH'
+                app_id:
+                  type: integer
+                  description: 'GitHub App ID'
+                installation_id:
+                  type: integer
+                  description: 'GitHub Installation ID'
+                client_id:
+                  type: string
+                  description: 'GitHub Client ID'
+                client_secret:
+                  type: string
+                  description: 'GitHub Client Secret'
+                webhook_secret:
+                  type: string
+                  description: 'GitHub Webhook Secret'
+                private_key_uuid:
+                  type: string
+                  description: 'Private key UUID'
+                is_system_wide:
+                  type: boolean
+                  description: 'Is system wide (non-cloud instances only)'
+              type: object
+      responses:
+        '200':
+          description: 'GitHub app updated successfully'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'GitHub app updated successfully' }
+                  data: { type: object, description: 'Updated GitHub app data' }
+                type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: 'GitHub app not found'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/github-apps/{github_app_id}/repositories':
+    get:
+      tags:
+        - 'GitHub Apps'
+      summary: 'Load Repositories for a GitHub App'
+      description: 'Fetch repositories from GitHub for a given GitHub app.'
+      operationId: load-repositories
+      parameters:
+        -
+          name: github_app_id
+          in: path
+          description: 'GitHub App ID'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Repositories loaded successfully.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  repositories: { type: array, items: { type: object } }
+                type: object
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/github-apps/{github_app_id}/repositories/{owner}/{repo}/branches':
+    get:
+      tags:
+        - 'GitHub Apps'
+      summary: 'Load Branches for a GitHub Repository'
+      description: 'Fetch branches from GitHub for a given repository.'
+      operationId: load-branches
+      parameters:
+        -
+          name: github_app_id
+          in: path
+          description: 'GitHub App ID'
+          required: true
+          schema:
+            type: integer
+        -
+          name: owner
+          in: path
+          description: 'Repository owner'
+          required: true
+          schema:
+            type: string
+        -
+          name: repo
+          in: path
+          description: 'Repository name'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Branches loaded successfully.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  branches: { type: array, items: { type: object } }
+                type: object
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
   /health:
     get:
       summary: Healthcheck
-      description: Healthcheck endpoint.
+      description: 'Healthcheck endpoint.'
       operationId: healthcheck
       responses:
         '200':
-          description: Healthcheck endpoint.
+          description: 'Healthcheck endpoint.'
           content:
-            application/json:
+            text/html:
               schema:
                 type: string
               example: OK
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+  /mcp/disable:
+    post:
+      summary: 'Disable MCP Server'
+      description: 'Disable the MCP server endpoint at /mcp (only with root permissions).'
+      operationId: disable-mcp
+      responses:
+        '200':
+          description: 'MCP server disabled.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'MCP server disabled.' }
+                type: object
+        '403':
+          description: 'You are not allowed to disable the MCP server.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'You are not allowed to disable the MCP server.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /mcp/enable:
+    post:
+      summary: 'Enable MCP Server'
+      description: 'Enable the MCP server endpoint at /mcp (only with root permissions).'
+      operationId: enable-mcp
+      responses:
+        '200':
+          description: 'MCP server enabled.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'MCP server enabled.' }
+                type: object
+        '403':
+          description: 'You are not allowed to enable the MCP server.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'You are not allowed to enable the MCP server.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /version:
+    get:
+      summary: Version
+      description: 'Get Coolify version.'
+      operationId: version
+      responses:
+        '200':
+          description: 'Returns the version of the application'
+          content:
+            text/html:
+              schema:
+                type: string
+              example: v4.0.0
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []

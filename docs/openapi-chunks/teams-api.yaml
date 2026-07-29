@@ -8,122 +8,129 @@ paths:
       tags:
         - Teams
       summary: List
-      description: Get all teams.
+      description: 'Get all teams.'
       operationId: list-teams
       responses:
         '200':
-          description: List of teams.
+          description: 'List of teams.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Team'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
-  /teams/{id}:
+        -
+          bearerAuth: []
+  '/teams/{id}':
     get:
       tags:
         - Teams
       summary: Get
-      description: Get team by TeamId.
+      description: 'Get team by TeamId.'
       operationId: get-team-by-id
       parameters:
-        - name: id
+        -
+          name: id
           in: path
-          description: Team ID
+          description: 'Team ID'
           required: true
           schema:
             type: integer
       responses:
         '200':
-          description: List of teams.
+          description: 'List of teams.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Team'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
-  /teams/{id}/members:
+        -
+          bearerAuth: []
+  '/teams/{id}/members':
     get:
       tags:
         - Teams
       summary: Members
-      description: Get members by TeamId.
+      description: 'Get members by TeamId.'
       operationId: get-members-by-team-id
       parameters:
-        - name: id
+        -
+          name: id
           in: path
-          description: Team ID
+          description: 'Team ID'
           required: true
           schema:
             type: integer
       responses:
         '200':
-          description: List of members.
+          description: 'List of members.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
   /teams/current:
     get:
       tags:
         - Teams
-      summary: Authenticated Team
-      description: Get currently authenticated team.
+      summary: 'Authenticated Team'
+      description: 'Get currently authenticated team.'
       operationId: get-current-team
       responses:
         '200':
-          description: Current Team.
+          description: 'Current Team.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Team'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
   /teams/current/members:
     get:
       tags:
         - Teams
-      summary: Authenticated Team Members
-      description: Get currently authenticated team members.
+      summary: 'Authenticated Team Members'
+      description: 'Get currently authenticated team members.'
       operationId: get-current-team-members
       responses:
         '200':
-          description: Currently authenticated team members.
+          description: 'Currently authenticated team members.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []

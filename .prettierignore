@@ -1,0 +1,15 @@
+# Vendored upstream artifact — kept byte-identical to
+# https://raw.githubusercontent.com/coollabsio/coolify/main/openapi.yaml so that
+# re-vendoring is a clean overwrite and `git diff` shows only what upstream
+# actually changed. Reformatting it would bury every real API change in
+# whitespace noise and defeat the point of vendoring it.
+docs/coolify-openapi.yaml
+
+# Generated from the spec above by `npm run build:chunks`. Never hand-edited,
+# and `npm run check:chunk-drift` compares them byte-for-byte against freshly
+# generated output — so reformatting them would permanently fail that check.
+docs/openapi-chunks/
+
+# Build output and coverage reports
+dist/
+coverage/

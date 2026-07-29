@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /destinations:
+    get:
+      tags:
+        - Destinations
+      summary: 'List destinations'
+      description: 'List all Docker network destinations for the authenticated team.'
+      operationId: list-destinations
+      responses:
+        '200':
+          description: 'Destinations for the authenticated team.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Destination'
+        '401':
+          $ref: '#/components/responses/401'
+      security:
+        -
+          bearerAuth: []
+  '/destinations/{uuid}':
+    get:
+      tags:
+        - Destinations
+      summary: 'Get destination'
+      description: 'Get a Docker network destination by UUID.'
+      operationId: get-destination-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Destination UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Destination details.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Destination'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - Destinations
+      summary: 'Delete destination'
+      description: 'Delete an unused Docker network destination.'
+      operationId: delete-destination-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Destination UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Destination deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: Deleted. }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'Destination has attached resources.'
+      security:
+        -
+          bearerAuth: []

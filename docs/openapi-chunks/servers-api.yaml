@@ -8,31 +8,32 @@ paths:
       tags:
         - Servers
       summary: List
-      description: List all servers.
+      description: 'List all servers.'
       operationId: list-servers
       responses:
         '200':
-          description: Get all servers.
+          description: 'Get all servers.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Server'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     post:
       tags:
         - Servers
       summary: Create
-      description: Create Server.
+      description: 'Create Server.'
       operationId: create-server
       requestBody:
-        description: Server created.
+        description: 'Server created.'
         required: true
         content:
           application/json:
@@ -40,142 +41,225 @@ paths:
               properties:
                 name:
                   type: string
-                  example: My Server
-                  description: The name of the server.
+                  example: 'My Server'
+                  description: 'The name of the server.'
                 description:
                   type: string
-                  example: My Server Description
-                  description: The description of the server.
+                  example: 'My Server Description'
+                  description: 'The description of the server.'
                 ip:
                   type: string
                   example: 127.0.0.1
-                  description: The IP of the server.
+                  description: 'The IP of the server.'
                 port:
                   type: integer
                   example: 22
-                  description: The port of the server.
+                  description: 'The port of the server.'
                 user:
                   type: string
                   example: root
-                  description: The user of the server.
+                  description: 'The user of the server.'
                 private_key_uuid:
                   type: string
                   example: og888os
-                  description: The UUID of the private key.
+                  description: 'The UUID of the private key.'
                 is_build_server:
                   type: boolean
                   example: false
-                  description: Is build server.
+                  description: 'Is build server.'
                 instant_validate:
                   type: boolean
                   example: false
-                  description: Instant validate.
+                  description: 'Instant validate.'
                 proxy_type:
                   type: string
-                  enum:
-                    - traefik
-                    - caddy
-                    - none
+                  enum: [traefik, caddy, none]
                   example: traefik
-                  description: The proxy type.
+                  description: 'The proxy type.'
               type: object
       responses:
         '201':
-          description: Server created.
+          description: 'Server created.'
           content:
             application/json:
               schema:
                 properties:
-                  uuid:
-                    type: string
-                    example: og888os
-                    description: The UUID of the server.
+                  uuid: { type: string, example: og888os, description: 'The UUID of the server.' }
                 type: object
+        '401':
+          $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{server_uuid}/destinations':
+    get:
+      tags:
+        - Destinations
+      summary: 'List destinations by server'
+      description: 'List Docker network destinations attached to a server owned by the authenticated team.'
+      operationId: list-server-destinations
+      parameters:
+        -
+          name: server_uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Destinations attached to the server.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Destination'
         '401':
           $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
-  /servers/{uuid}:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - Destinations
+      summary: 'Create destination'
+      description: 'Create a Docker network destination on a server owned by the authenticated team.'
+      operationId: create-server-destination
+      parameters:
+        -
+          name: server_uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - network
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                network:
+                  type: string
+                  maxLength: 255
+                  pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'
+                type:
+                  type: string
+                  enum: [standalone, swarm]
+              type: object
+      responses:
+        '201':
+          description: 'Destination created.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Destination'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'A destination with this network already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}':
     get:
       tags:
         - Servers
       summary: Get
-      description: Get server by UUID.
+      description: 'Get server by UUID.'
       operationId: get-server-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Server's UUID
+          description: "Server's UUID"
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Get server by UUID
+          description: 'Get server by UUID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Server'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     delete:
       tags:
         - Servers
       summary: Delete
-      description: Delete server by UUID.
+      description: 'Delete server by UUID.'
       operationId: delete-server-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: UUID of the server.
+          description: 'UUID of the server.'
           required: true
           schema:
             type: string
-            format: uuid
       responses:
         '200':
-          description: Server deleted.
+          description: 'Server deleted.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: Server deleted.
+                  message: { type: string, example: 'Server deleted.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     patch:
       tags:
         - Servers
       summary: Update
-      description: Update Server.
+      description: 'Update Server.'
       operationId: update-server-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Server UUID
+          description: 'Server UUID'
           required: true
           schema:
             type: string
       requestBody:
-        description: Server updated.
+        description: 'Server updated.'
         required: true
         content:
           application/json:
@@ -183,161 +267,317 @@ paths:
               properties:
                 name:
                   type: string
-                  description: The name of the server.
+                  description: 'The name of the server.'
                 description:
                   type: string
-                  description: The description of the server.
+                  description: 'The description of the server.'
                 ip:
                   type: string
-                  description: The IP of the server.
+                  description: 'The IP of the server.'
                 port:
                   type: integer
-                  description: The port of the server.
+                  description: 'The port of the server.'
                 user:
                   type: string
-                  description: The user of the server.
+                  description: 'The user of the server.'
                 private_key_uuid:
                   type: string
-                  description: The UUID of the private key.
+                  description: 'The UUID of the private key.'
                 is_build_server:
                   type: boolean
-                  description: Is build server.
+                  description: 'Is build server.'
                 instant_validate:
                   type: boolean
-                  description: Instant validate.
+                  description: 'Instant validate.'
                 proxy_type:
                   type: string
-                  enum:
-                    - traefik
-                    - caddy
-                    - none
-                  description: The proxy type.
+                  enum: [traefik, caddy, none]
+                  description: 'The proxy type.'
+                concurrent_builds:
+                  type: integer
+                  description: 'Number of concurrent builds.'
+                dynamic_timeout:
+                  type: integer
+                  description: 'Deployment timeout in seconds.'
+                deployment_queue_limit:
+                  type: integer
+                  description: 'Maximum number of queued deployments.'
+                server_disk_usage_notification_threshold:
+                  type: integer
+                  description: 'Server disk usage notification threshold (%).'
+                server_disk_usage_check_frequency:
+                  type: string
+                  description: 'Cron expression for disk usage check frequency.'
+                connection_timeout:
+                  type: integer
+                  description: 'SSH connection timeout in seconds (1-300). Default: 10.'
               type: object
       responses:
         '201':
-          description: Server updated.
+          description: 'Server updated.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Server'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
-  /servers/{uuid}/resources:
-    get:
-      tags:
-        - Servers
-      summary: Resources
-      description: Get resources by server.
-      operationId: get-resources-by-server-uuid
-      parameters:
-        - name: uuid
-          in: path
-          description: Server's UUID
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Get resources by server
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  properties:
-                    id:
-                      type: integer
-                    uuid:
-                      type: string
-                    name:
-                      type: string
-                    type:
-                      type: string
-                    created_at:
-                      type: string
-                    updated_at:
-                      type: string
-                    status:
-                      type: string
-                  type: object
-        '400':
-          $ref: '#/components/responses/400'
-        '401':
-          $ref: '#/components/responses/401'
-      security:
-        - bearerAuth: []
-  /servers/{uuid}/domains:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/domains':
     get:
       tags:
         - Servers
       summary: Domains
-      description: Get domains by server.
+      description: 'Get domains by server.'
       operationId: get-domains-by-server-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Server's UUID
+          description: "Server's UUID"
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Get domains by server
+          description: 'Get domains by server'
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  properties:
-                    ip:
-                      type: string
-                    domains:
-                      type: array
-                      items:
-                        type: string
+                  properties: { ip: { type: string }, domains: { type: array, items: { type: string } } }
                   type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
-  /servers/{uuid}/validate:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/resources':
     get:
       tags:
         - Servers
-      summary: Validate
-      description: Validate server by UUID.
-      operationId: validate-server-by-uuid
+      summary: Resources
+      description: 'Get resources by server.'
+      operationId: get-resources-by-server-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Server UUID
+          description: "Server's UUID"
           required: true
           schema:
             type: string
       responses:
+        '200':
+          description: 'Get resources by server'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, type: { type: string }, created_at: { type: string }, updated_at: { type: string }, status: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/validate':
+    post:
+      tags:
+        - Servers
+      summary: Validate
+      description: 'Validate server by UUID.'
+      operationId: validate-server-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              properties:
+                install:
+                  description: 'Install missing prerequisites and Docker. This can restart the Docker daemon.'
+                  type: boolean
+                  default: false
+              type: object
+      responses:
         '201':
-          description: Server validation started.
+          description: 'Server validation started.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: Validation started.
+                  message: { type: string, example: 'Validation started.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
+  /servers/digitalocean:
+    post:
+      tags:
+        - DigitalOcean
+      summary: 'Create a server on DigitalOcean'
+      operationId: create-digitalocean-server
+      responses:
+        '201':
+          description: 'DigitalOcean droplet created and linked to a Coolify server.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'DigitalOcean rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /servers/hetzner:
+    post:
+      tags:
+        - Hetzner
+      summary: 'Create Hetzner Server'
+      description: 'Create a new server on Hetzner and register it in Coolify.'
+      operationId: create-hetzner-server
+      requestBody:
+        description: 'Hetzner server creation parameters'
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - location
+                - server_type
+                - image
+                - private_key_uuid
+              properties:
+                cloud_provider_token_uuid:
+                  type: string
+                  example: abc123
+                  description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+                cloud_provider_token_id:
+                  type: string
+                  example: abc123
+                  description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+                  deprecated: true
+                location:
+                  type: string
+                  example: nbg1
+                  description: 'Hetzner location name'
+                server_type:
+                  type: string
+                  example: cx11
+                  description: 'Hetzner server type name'
+                image:
+                  type: integer
+                  example: 15512617
+                  description: 'Hetzner image ID'
+                name:
+                  type: string
+                  example: my-server
+                  description: 'Server name (auto-generated if not provided)'
+                private_key_uuid:
+                  type: string
+                  example: xyz789
+                  description: 'Private key UUID'
+                enable_ipv4:
+                  type: boolean
+                  example: true
+                  description: 'Enable IPv4 (default: true)'
+                enable_ipv6:
+                  type: boolean
+                  example: true
+                  description: 'Enable IPv6 (default: true)'
+                enable_backups:
+                  type: boolean
+                  example: false
+                  description: 'Enable Hetzner server backups after creation (adds 20% to the monthly server fee)'
+                hetzner_ssh_key_ids:
+                  type: array
+                  items: { type: integer }
+                  description: 'Additional Hetzner SSH key IDs'
+                hetzner_firewall_ids:
+                  type: array
+                  items: { type: integer }
+                  description: 'Existing Hetzner firewall IDs to apply during server creation'
+                hetzner_network_ids:
+                  type: array
+                  items: { type: integer }
+                  description: 'Existing Hetzner network IDs to attach during server creation'
+                cloud_init_script:
+                  type: string
+                  description: 'Cloud-init YAML script (optional)'
+                instant_validate:
+                  type: boolean
+                  example: false
+                  description: 'Validate server immediately after creation'
+              type: object
+      responses:
+        '201':
+          description: 'Hetzner server created.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string, example: og888os, description: 'The UUID of the server.' }
+                  hetzner_server_id: { type: integer, description: 'The Hetzner server ID.' }
+                  ip: { type: string, description: 'The server IP address.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+        '429':
+          $ref: '#/components/responses/429'
+      security:
+        -
+          bearerAuth: []
+  /servers/vultr:
+    post:
+      tags:
+        - Vultr
+      summary: 'Create Vultr Server'
+      description: 'Create a Vultr instance and link it as a Coolify server.'
+      operationId: create-vultr-server
+      responses:
+        '201':
+          description: 'Vultr server created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Vultr API rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
