@@ -353,6 +353,8 @@ export const TOOL_ANNOTATIONS = {
   github_apps: DESTRUCTIVE,
   cloud_tokens: DESTRUCTIVE,
   storages: DESTRUCTIVE,
+  // `detach` removes a tag from a resource.
+  tags: DESTRUCTIVE,
   scheduled_tasks: DESTRUCTIVE,
   database_backups: DESTRUCTIVE,
   // stop/restart take a running resource down.
@@ -2330,6 +2332,75 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() => this.client.enableApi());
           case 'disable_api':
             return wrap(() => this.client.disableApi());
+        }
+      },
+    );
+
+    // =========================================================================
+    // Tags (1 tool - consolidated)
+    // =========================================================================
+    this.defineTool(
+      'tags',
+      "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the instance (use it to discover a name); with resource+uuid it returns that resource's tags. attach creates tags that don't exist yet.",
+      {
+        action: z.enum(['list', 'attach', 'detach']),
+        resource: z.enum(['application', 'database', 'service']).optional(),
+        uuid: z
+          .string()
+          .optional()
+          .describe('Resource uuid. Omit with action=list to list every tag on the instance.'),
+        tag_names: z
+          .array(z.string())
+          .optional()
+          .describe('Tag names to attach (each min 2 characters). Required for attach.'),
+        tag_uuid: z
+          .string()
+          .optional()
+          .describe('Tag uuid to detach. Get it from action=list on the resource.'),
+      },
+      async ({ action, resource, uuid, tag_names, tag_uuid }) => {
+        const err = (text: string) => ({
+          content: [{ type: 'text' as const, text: `Error: ${text}` }],
+        });
+
+        if (action === 'list' && !resource && !uuid) {
+          return wrap(() => this.client.listTags());
+        }
+        if (!resource || !uuid) {
+          return err(
+            'resource and uuid are required, except for action=list with neither (which lists every tag on the instance)',
+          );
+        }
+
+        switch (action) {
+          case 'list':
+            return wrap(() =>
+              resource === 'application'
+                ? this.client.listApplicationTags(uuid)
+                : resource === 'database'
+                  ? this.client.listDatabaseTags(uuid)
+                  : this.client.listServiceTags(uuid),
+            );
+          case 'attach': {
+            if (!tag_names?.length) return err('tag_names required for attach');
+            const data = { tag_names };
+            return wrap(() =>
+              resource === 'application'
+                ? this.client.attachApplicationTags(uuid, data)
+                : resource === 'database'
+                  ? this.client.attachDatabaseTags(uuid, data)
+                  : this.client.attachServiceTags(uuid, data),
+            );
+          }
+          case 'detach':
+            if (!tag_uuid) return err('tag_uuid required for detach');
+            return wrap(() =>
+              resource === 'application'
+                ? this.client.detachApplicationTag(uuid, tag_uuid)
+                : resource === 'database'
+                  ? this.client.detachDatabaseTag(uuid, tag_uuid)
+                  : this.client.detachServiceTag(uuid, tag_uuid),
+            );
         }
       },
     );

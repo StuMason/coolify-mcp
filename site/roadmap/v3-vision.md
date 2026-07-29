@@ -34,7 +34,7 @@ flowchart TB
 flowchart LR
     subgraph v2["v2.x — tools-only"]
         v2c["Client"]
-        v2s["Server<br/>(43 tools)"]
+        v2s["Server<br/>(44 tools)"]
         v2k["Coolify"]
         v2c <--> v2s
         v2s <--> v2k

@@ -114,6 +114,8 @@ import type {
   ResourceListItem,
   ResourceListItemFull,
   ServiceSubResource,
+  Tag,
+  AttachTagsRequest,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -1139,6 +1141,66 @@ export class CoolifyClient {
       show_timestamps: showTimestamps,
     });
     return unwrapLogs(await this.request<unknown>(`/services/${uuid}/logs${query}`));
+  }
+
+  // ===========================================================================
+  // Tags (v4.2)
+  // ===========================================================================
+
+  /** Every tag on the instance. Useful for discovering a name to attach or deploy by. */
+  async listTags(): Promise<Tag[]> {
+    return this.request<Tag[]>('/tags');
+  }
+
+  async listApplicationTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/applications/${uuid}/tags`);
+  }
+
+  async listDatabaseTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/databases/${uuid}/tags`);
+  }
+
+  async listServiceTags(uuid: string): Promise<Tag[]> {
+    return this.request<Tag[]>(`/services/${uuid}/tags`);
+  }
+
+  async attachApplicationTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/applications/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async attachDatabaseTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/databases/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async attachServiceTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
+    return this.request<Tag[]>(`/services/${uuid}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async detachApplicationTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async detachDatabaseTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async detachServiceTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/tags/${tagUuid}`, {
+      method: 'DELETE',
+    });
   }
 
   async listServiceApplications(uuid: string): Promise<ServiceSubResource[]> {

@@ -32,7 +32,7 @@ v3 adopts the ones that move the needle for an infrastructure-management server.
 Can land before the v3 architecture work, with no breaking changes:
 
 - SDK upgrade `@modelcontextprotocol/sdk` 1.23 → 1.29
-- Tool annotations on all 43 tools
+- Tool annotations on all 44 tools
 - `outputSchema` on every `list_*` and `get_*` tool
 - Human `title` field on every tool
 

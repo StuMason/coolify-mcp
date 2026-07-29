@@ -7,7 +7,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Manage [Coolify](https://coolify.io/) through natural language — 43 token-optimized MCP tools for deploying, debugging, and operating your self-hosted PaaS from Claude, Cursor, or any MCP client.
+Manage [Coolify](https://coolify.io/) through natural language — 44 token-optimized MCP tools for deploying, debugging, and operating your self-hosted PaaS from Claude, Cursor, or any MCP client.
 
 📖 **Full docs: [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** — install guide, tools reference, architecture, security model, v3 roadmap.
 

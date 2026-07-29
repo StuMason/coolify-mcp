@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tags` tool: list, attach and detach tags on applications, databases and services** (#298) — Coolify v4.2 exposed tag management over the API ([coollabsio/coolify#9275](https://github.com/coollabsio/coolify/pull/9275)). `deploy` already accepted a tag name and triggered a deployment for everything carrying it, so the server could **deploy by** a tag but not create or assign one — tags only worked if a human had set them up in the UI first. That loop is now closed: tag several resources, then deploy them together with a single `deploy` call.
+
+  One consolidated tool with an `action` param, matching `env_vars` and `control`. `action=list` with no resource returns every tag on the instance, which is how you discover a name; with `resource`+`uuid` it returns that resource's tags. `attach` creates tags that do not exist yet. Upstream accepts either `tag_name` or `tag_names`, and this client always sends the array form so there is one shape to reason about. Tool count 43 → 44.
+
 - **Integration suite for v4.2 method compatibility** — `v42-compat.integration.test.ts` asserts the pre-4.2 behaviour on an older instance and the v4.2 behaviour on a newer one, so the suite is meaningful either way. Every assertion is side-effect free: a rejected method executes nothing, and `/deploy` with a tag matching no resource proves the method was accepted without deploying anything. `/disable` is never called, since it would cut off the API the client depends on.
 
 - **Version gating for the log integration tests** — database and service log endpoints are v4.2-only, so on an older instance they now report as genuinely **skipped** rather than failed, with the version printed. Resolved at module scope so jest can skip the suites outright: an early `return` inside a test still shows a green tick, which is the false confidence these tests exist to prevent. `dotenv` also runs with `override: true`, because an empty `COOLIFY_URL` in the ambient environment otherwise wins over `.env` and silently skips everything.

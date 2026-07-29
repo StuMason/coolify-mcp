@@ -5777,6 +5777,74 @@ describe('CoolifyClient', () => {
   });
 });
 
+describe('tags (#298)', () => {
+  let client: CoolifyClient;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    global.fetch = mockFetch as unknown as typeof fetch;
+    client = new CoolifyClient({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-api-key',
+    });
+  });
+
+  it('lists every tag on the instance', async () => {
+    mockFetch.mockResolvedValueOnce(mockResponse([{ uuid: 't1', name: 'prod' }]));
+
+    await expect(client.listTags()).resolves.toEqual([{ uuid: 't1', name: 'prod' }]);
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/v1/tags', expect.any(Object));
+  });
+
+  it.each([
+    ['listApplicationTags', 'applications'],
+    ['listDatabaseTags', 'databases'],
+    ['listServiceTags', 'services'],
+  ] as const)('%s hits /%s/{uuid}/tags', async (method, segment) => {
+    mockFetch.mockResolvedValueOnce(mockResponse([]));
+
+    await client[method]('res-uuid');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${segment}/res-uuid/tags`,
+      expect.any(Object),
+    );
+  });
+
+  it.each([
+    ['attachApplicationTags', 'applications'],
+    ['attachDatabaseTags', 'databases'],
+    ['attachServiceTags', 'services'],
+  ] as const)('%s POSTs tag_names to /%s/{uuid}/tags', async (method, segment) => {
+    mockFetch.mockResolvedValueOnce(mockResponse([{ uuid: 't1', name: 'prod' }]));
+
+    await client[method]('res-uuid', { tag_names: ['prod', 'eu'] });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${segment}/res-uuid/tags`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ tag_names: ['prod', 'eu'] }),
+      }),
+    );
+  });
+
+  it.each([
+    ['detachApplicationTag', 'applications'],
+    ['detachDatabaseTag', 'databases'],
+    ['detachServiceTag', 'services'],
+  ] as const)('%s DELETEs /%s/{uuid}/tags/{tag_uuid}', async (method, segment) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'ok' }));
+
+    await client[method]('res-uuid', 'tag-uuid');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${segment}/res-uuid/tags/tag-uuid`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+});
+
 describe('errorHint', () => {
   it('hints at the command-length limit for a 500 on a scheduled-tasks path', () => {
     expect(errorHint(500, '/applications/app-uuid/scheduled-tasks')).toMatch(/varchar\(255\)/);
