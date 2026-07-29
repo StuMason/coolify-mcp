@@ -498,6 +498,13 @@ export interface EnvVarSummary {
   value?: string;
   is_buildtime: boolean;
   is_runtime: boolean;
+  /**
+   * Whether this variable applies to preview deployments rather than production.
+   * Included in the summary because the same key legitimately exists in both
+   * scopes with different values, and a caller that cannot see the distinction
+   * reads it as a misconfiguration and "corrects" the wrong row (#291).
+   */
+  is_preview: boolean;
 }
 
 // =============================================================================

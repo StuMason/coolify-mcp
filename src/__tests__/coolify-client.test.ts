@@ -1919,7 +1919,8 @@ describe('CoolifyClient', () => {
 
       const result = await client.listApplicationEnvVars('app-uuid', { summary: true });
 
-      // Summary should only include uuid, key, value, is_buildtime, is_runtime — and value masked
+      // Summary should only include uuid, key, value, is_buildtime, is_runtime,
+      // is_preview — and value masked
       expect(result).toEqual([
         {
           uuid: 'env-var-uuid',
@@ -1927,8 +1928,63 @@ describe('CoolifyClient', () => {
           value: '***',
           is_buildtime: false,
           is_runtime: true,
+          is_preview: false,
         },
       ]);
+    });
+
+    // #291: the summary projection used to drop is_preview, leaving callers
+    // unable to tell a preview variable from a production one.
+    it('preserves is_preview through the summary projection (#291)', async () => {
+      const previewVar = {
+        id: 2,
+        uuid: 'preview-env-uuid',
+        key: 'API_URL',
+        value: 'https://preview.example.com',
+        is_buildtime: false,
+        is_runtime: true,
+        is_literal: false,
+        is_multiline: false,
+        is_preview: true,
+        is_shared: false,
+        is_shown_once: false,
+        application_id: 1,
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      };
+      mockFetch.mockResolvedValueOnce(mockResponse([previewVar]));
+
+      const result = await client.listApplicationEnvVars('app-uuid', {
+        summary: true,
+        reveal: true,
+      });
+
+      expect(result).toEqual([
+        {
+          uuid: 'preview-env-uuid',
+          key: 'API_URL',
+          value: 'https://preview.example.com',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: true,
+        },
+      ]);
+    });
+
+    it('sends is_preview on create so the preview scope is reachable (#291)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'env-uuid' }));
+
+      await client.createApplicationEnvVar('app-uuid', {
+        key: 'API_URL',
+        value: 'https://preview.example.com',
+        is_preview: true,
+      });
+
+      const body = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string) as Record<
+        string,
+        unknown
+      >;
+      expect(body.is_preview).toBe(true);
     });
 
     it('should list application env vars with summary and reveal=true returning real values (#159)', async () => {
@@ -1962,6 +2018,7 @@ describe('CoolifyClient', () => {
           value: 'secret123',
           is_buildtime: false,
           is_runtime: true,
+          is_preview: false,
         },
       ]);
     });
