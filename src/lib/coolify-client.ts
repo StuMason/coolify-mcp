@@ -285,7 +285,7 @@ export function errorHint(status: number, path: string): string | undefined {
     return 'Known cause: Coolify stores scheduled-task `command` in a varchar(255) column and rejects longer commands with a bodyless 500 — check the command length (limit 255 chars).';
   }
   if (status === 405) {
-    return 'The endpoint rejected this HTTP method. If it is a state-changing route, note that Coolify v4.2 moved those from GET to POST while older versions accept GET only; this client already sends POST and retries with GET, so a 405 reaching you means neither was accepted. Otherwise check the endpoint path against your Coolify version.';
+    return 'Coolify v4.2 moved state-changing endpoints from GET to POST; older versions accept GET only. This client retries automatically, so a 405 reaching you means both methods were rejected — check the endpoint path against your Coolify version.';
   }
   if (status === 401 || status === 403) {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
