@@ -49,46 +49,86 @@ export const GROUPS = {
   vultr: 'cloud-providers-api',
 };
 
-const HEADER = ['openapi: 3.1.0', 'info:', '  title: Coolify', "  version: '0.1'"];
+/**
+ * Top-level spec keys that are deliberately NOT carried into the chunks.
+ * `servers:` is the API base URL, which is meaningless in a per-resource
+ * reference. Anything else appearing here is a decision someone has to make,
+ * which is why {@link parseSpec} reports leftovers and a test asserts the set:
+ * a new upstream top-level key should fail loudly rather than be silently
+ * swallowed into schemas.yaml.
+ */
+export const DROPPED_TOP_LEVEL_KEYS = ['servers', 'tags'];
 
-/** Split the spec into its `paths:` entries and the trailing `components:` block. */
+/** Top-level keys that make up the header shared by every chunk. */
+const HEADER_KEYS = ['openapi', 'info'];
+
+/**
+ * Split the spec into its top-level sections.
+ *
+ * Sections are bounded by the next column-0 key rather than running to EOF, so
+ * `components:` cannot absorb whatever upstream appends after it. The spec
+ * currently has `tags:` after `components:`, which an unbounded slice would
+ * have folded into schemas.yaml.
+ */
 export function parseSpec(specText) {
   const lines = specText.split('\n');
-  const pathsIdx = lines.findIndex((l) => /^paths:\s*$/.test(l));
-  if (pathsIdx === -1) {
+
+  const starts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const match = /^([A-Za-z][\w-]*):/.exec(lines[i]);
+    if (match) starts.push({ key: match[1], index: i });
+  }
+
+  const sections = new Map();
+  for (let s = 0; s < starts.length; s++) {
+    const { key, index } = starts[s];
+    const end = s + 1 < starts.length ? starts[s + 1].index : lines.length;
+    sections.set(key, trimTrailingBlanks(lines.slice(index, end)));
+  }
+
+  if (!sections.has('paths')) {
     throw new Error("Could not find a top-level 'paths:' key in the OpenAPI spec");
   }
 
-  let pathsEnd = lines.length;
-  for (let i = pathsIdx + 1; i < lines.length; i++) {
-    if (/^[A-Za-z]/.test(lines[i])) {
-      pathsEnd = i;
-      break;
-    }
-  }
+  // Header is derived, not hardcoded, so an upstream bump to OpenAPI 3.2 or a
+  // new info.version propagates instead of every chunk asserting stale metadata.
+  const header = HEADER_KEYS.flatMap((k) => sections.get(k) ?? []);
 
   const entries = [];
   let current = null;
-  for (let i = pathsIdx + 1; i < pathsEnd; i++) {
-    const match = /^ {2}(?:'([^']+)'|"([^"]+)"|(\/\S+)):\s*$/.exec(lines[i]);
+  for (const line of sections.get('paths').slice(1)) {
+    const match = /^ {2}(?:'([^']+)'|"([^"]+)"|(\/\S+)):\s*$/.exec(line);
     if (match) {
       if (current) entries.push(current);
-      current = { path: match[1] ?? match[2] ?? match[3], lines: [lines[i]] };
+      current = { path: match[1] ?? match[2] ?? match[3], lines: [line] };
     } else if (current) {
-      current.lines.push(lines[i]);
+      current.lines.push(line);
     }
   }
   if (current) entries.push(current);
 
-  const componentsIdx = lines.findIndex((l) => /^components:\s*$/.test(l));
-  const components = componentsIdx === -1 ? [] : lines.slice(componentsIdx);
+  const known = new Set([...HEADER_KEYS, 'paths', 'components', ...DROPPED_TOP_LEVEL_KEYS]);
+  const unknownTopLevelKeys = [...sections.keys()].filter((k) => !known.has(k));
 
-  return { entries, components };
+  return {
+    header,
+    entries,
+    components: sections.get('components') ?? [],
+    unknownTopLevelKeys,
+  };
 }
 
 /** Build the full chunk file set as a { filename -> contents } map. */
 export function buildChunks(specText) {
-  const { entries, components } = parseSpec(specText);
+  const { header, entries, components, unknownTopLevelKeys } = parseSpec(specText);
+
+  if (unknownTopLevelKeys.length) {
+    throw new Error(
+      `Unrecognised top-level key(s) in the OpenAPI spec: ${unknownTopLevelKeys.join(', ')}. ` +
+        'Decide whether they belong in the chunks and update HEADER_KEYS or ' +
+        'DROPPED_TOP_LEVEL_KEYS in scripts/split-openapi-chunks.mjs.',
+    );
+  }
 
   const grouped = new Map();
   for (const entry of entries) {
@@ -103,12 +143,10 @@ export function buildChunks(specText) {
     const body = groupEntries
       .sort((a, b) => a.path.localeCompare(b.path))
       .flatMap((e) => trimTrailingBlanks(e.lines));
-    files[`${group}.yaml`] = [...HEADER, 'paths:', ...body, ''].join('\n');
+    files[`${group}.yaml`] = [...header, 'paths:', ...body, ''].join('\n');
   }
 
-  files['schemas.yaml'] = [...HEADER, 'paths: {}', ...trimTrailingBlanks(components), ''].join(
-    '\n',
-  );
+  files['schemas.yaml'] = [...header, 'paths: {}', ...components, ''].join('\n');
 
   return files;
 }
@@ -160,6 +198,10 @@ function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Matches scripts/check-client-spec-drift.mjs. Comparing against a raw
+// `file://${argv[1]}` template breaks on paths needing percent-encoding and on
+// Windows, and it fails OPEN: --check would exit 0 having checked nothing.
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
   main();
 }

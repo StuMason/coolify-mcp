@@ -3,7 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from '@jest/globals';
 import yaml from 'js-yaml';
-import { parseSpec, buildChunks, GROUPS, SPEC_PATH, CHUNKS_DIR } from '../split-openapi-chunks.mjs';
+import {
+  parseSpec,
+  buildChunks,
+  GROUPS,
+  DROPPED_TOP_LEVEL_KEYS,
+  SPEC_PATH,
+  CHUNKS_DIR,
+} from '../split-openapi-chunks.mjs';
+import { SPEC_PATH as DRIFT_SPEC_PATH } from '../check-client-spec-drift.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -121,13 +129,27 @@ describe('committed chunks vs the bundled spec', () => {
     expect(seen.length).toBe(new Set(seen).size);
   });
 
+  // Key-level assertions cannot catch the realistic failure for a line-based
+  // splitter: a dropped or duplicated line INSIDE a body leaves the key present
+  // and the content wrong. Compare the parsed bodies.
+  it('carries every path body verbatim, not just the keys', () => {
+    const merged: Record<string, unknown> = {};
+    for (const f of chunkFiles) {
+      const chunk = yaml.load(fs.readFileSync(path.join(CHUNKS_DIR, f), 'utf8')) as {
+        paths?: Record<string, unknown>;
+      };
+      Object.assign(merged, chunk.paths ?? {});
+    }
+    expect(merged).toEqual(spec.paths);
+  });
+
   it('carries every schema into schemas.yaml', () => {
     const schemas = yaml.load(fs.readFileSync(path.join(CHUNKS_DIR, 'schemas.yaml'), 'utf8')) as {
       components?: { schemas?: Record<string, unknown> };
     };
-    expect(Object.keys(schemas.components?.schemas ?? {}).sort()).toEqual(
-      Object.keys(spec.components?.schemas ?? {}).sort(),
-    );
+    // Deep equality, not key names: a re-vendor that rewrites a request body
+    // under an existing schema name would pass a keys-only check.
+    expect(schemas.components?.schemas).toEqual(spec.components?.schemas);
   });
 
   it('maps every first path segment in the spec to a real group or the untagged fallback', () => {
@@ -140,7 +162,41 @@ describe('committed chunks vs the bundled spec', () => {
     }
   });
 
+  it('drops only the top-level keys we have explicitly decided to drop', () => {
+    // `servers:` (the API base URL) and `tags:` (upstream's tag directory) are
+    // deliberately not carried into a per-resource reference. Asserting the set
+    // means a NEW upstream top-level key fails here — a decision to make, not
+    // something to be silently swallowed into schemas.yaml.
+    expect(DROPPED_TOP_LEVEL_KEYS).toEqual(['servers', 'tags']);
+
+    for (const key of DROPPED_TOP_LEVEL_KEYS) {
+      for (const f of chunkFiles) {
+        const contents = fs.readFileSync(path.join(CHUNKS_DIR, f), 'utf8');
+        expect(contents).not.toMatch(new RegExp(`^${key}:`, 'm'));
+      }
+    }
+  });
+
+  it('refuses to generate when the spec grows an unrecognised top-level key', () => {
+    const withUnknown = [
+      'openapi: 3.1.0',
+      'info:',
+      '  title: Coolify',
+      'paths:',
+      '  /a:',
+      '    get: {}',
+      'webhooks:',
+      '  something: else',
+    ].join('\n');
+
+    expect(() => buildChunks(withUnknown)).toThrow(/Unrecognised top-level key/);
+  });
+
   it('keeps the drift checker and the splitter reading the same spec file', () => {
+    // Comparing SPEC_PATH to a literal only restates the splitter's own
+    // constant — it cannot notice the two scripts drifting apart. Compare the
+    // modules to each other instead.
+    expect(SPEC_PATH).toBe(DRIFT_SPEC_PATH);
     expect(SPEC_PATH).toBe(path.join(ROOT, 'docs/coolify-openapi.yaml'));
   });
 });
