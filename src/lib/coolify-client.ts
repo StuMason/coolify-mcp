@@ -2705,7 +2705,24 @@ export class CoolifyClient {
       this.getProject(projectUuid),
       apps ? Promise.resolve(apps) : (this.listApplications() as Promise<Application[]>),
     ]);
-    const environmentIds = new Set((project.environments ?? []).map((env) => env.id));
+    // Throw rather than treat a missing `environments` as an empty one. An
+    // absent array means the project's environments could not be resolved —
+    // older instance, partial response, insufficient permissions — and
+    // defaulting it to `[]` would match zero applications and report a cheerful
+    // "0 succeeded", which is precisely the silent no-op this method exists to
+    // fix. An empty array is different and is left alone: that is a real answer
+    // about a real project.
+    //
+    // It matters most on the confirmation path: an unresolvable project would
+    // otherwise produce no dialog *and* no work, so the user would see neither
+    // a prompt nor an error.
+    if (!Array.isArray(project.environments)) {
+      throw new Error(
+        `Could not resolve environments for project ${projectUuid}: the API returned no environments array. ` +
+          `Without it there is no way to tell which applications belong to this project.`,
+      );
+    }
+    const environmentIds = new Set(project.environments.map((env) => env.id));
     return allApps.filter(
       (app) => app.environment_id !== undefined && environmentIds.has(app.environment_id),
     );

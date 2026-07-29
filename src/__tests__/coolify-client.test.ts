@@ -4185,6 +4185,30 @@ describe('CoolifyClient', () => {
         expect(result.summary.total).toBe(1);
         expect(mockFetch).toHaveBeenCalledTimes(1);
       });
+
+      it('should treat an explicitly empty approved set as "restart nothing"', async () => {
+        // `??=` preserves an empty array rather than re-resolving it. Easy to
+        // break with a `|| await …` in a later refactor, at which point an
+        // approved-nothing turns into a restart-everything.
+        const result = await client.restartProjectApps('proj-1', []);
+
+        expect(result.summary.total).toBe(0);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should throw rather than report zero when environments cannot be resolved', async () => {
+        // An absent `environments` array means the project could not be
+        // resolved. Defaulting it to `[]` would match nothing and report a
+        // cheerful "0 succeeded" — exactly the silent no-op this resolution
+        // path exists to fix, reintroduced from a different direction.
+        mockFetch
+          .mockResolvedValueOnce(mockResponse({ id: 1, uuid: 'proj-1', name: 'p' }))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps));
+
+        await expect(client.restartProjectApps('proj-1')).rejects.toThrow(
+          /Could not resolve environments/,
+        );
+      });
     });
 
     describe('bulkEnvUpdate', () => {

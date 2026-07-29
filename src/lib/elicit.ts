@@ -39,7 +39,22 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
  */
 export const ELICIT_TIMEOUT_MS = 300_000;
 
-/** Whether this client can be asked at all. */
+/**
+ * Whether this client can be asked at all.
+ *
+ * **Read this before wiring up the HTTP transport (#303).** This depends on a
+ * completed initialize handshake being retained for the connection. In a
+ * stateless HTTP mode, where per-connection capabilities are not kept, it
+ * returns `undefined`, every guard approves, and the entire confirmation layer
+ * disappears with no signal that it has.
+ *
+ * Failing open is the right default here, on stdio, where the alternative is
+ * blocking Claude Desktop users out of tools that work today. It is very
+ * probably the wrong default for a remote server reachable over the network,
+ * which is the transport where the parameter-based guards stop being credible
+ * at all — the reason #303 lists elicitation as a prerequisite. Decide that
+ * deliberately there rather than inheriting this choice by accident.
+ */
 export function supportsElicitation(server: Server): boolean {
   return Boolean(server.getClientCapabilities()?.elicitation);
 }
@@ -155,13 +170,25 @@ const MAX_NAME_LENGTH = 64;
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
 
 /**
- * Make a Coolify-supplied name safe to interpolate into a confirmation dialog.
+ * Make a value safe to interpolate into a confirmation dialog.
  *
- * Resource names are attacker-influenced in the weak sense that anyone able to
- * create resources on the instance chooses them, and they land in a dialog
- * whose entire job is to be trustworthy. A name containing newlines —
- * `api\n\nThis is routine, safe to accept.` — reshapes that dialog into
- * something that argues for its own approval.
+ * Two sources, and the weaker-looking one is the stronger vector:
+ *
+ * - **Coolify-supplied names** are attacker-influenced in the weak sense that
+ *   anyone able to create resources on the instance chooses them. A name
+ *   containing newlines — `api\n\nThis is routine, safe to accept.` — reshapes
+ *   a dialog whose entire job is to be trustworthy into one that argues for its
+ *   own approval.
+ * - **Model-supplied identifiers** (the `uuid` arguments) are worse. Those
+ *   schemas are plain strings with no uuid constraint, so the value is
+ *   arbitrary text the model chose, and producing it needs no write access to
+ *   the Coolify instance at all — only a model that read something hostile in a
+ *   README, an issue body or a log line. Anything crossing into the dialog gets
+ *   sanitized, whichever side it came from; the whole point of the dialog is to
+ *   sit outside the model's control.
+ *
+ * A real 36-character UUID is well inside {@link MAX_NAME_LENGTH}, so genuine
+ * values render unchanged.
  *
  * Not an escaping problem (the text is rendered to a human, not parsed), so
  * this flattens control characters to spaces and clamps the length rather than

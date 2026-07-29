@@ -92,7 +92,7 @@ function deleteResourcePrompt(
             ? ' (delete_volumes was not set, and it defaults to true)'
             : ''
         }.`;
-  return `Delete ${kind} "${sanitizeForPrompt(name)}" (${uuid})?\n\n${volumes} This cannot be undone.`;
+  return `Delete ${kind} "${sanitizeForPrompt(name)}" (${sanitizeForPrompt(uuid)})?\n\n${volumes} This cannot be undone.`;
 }
 
 interface LogEntry {
@@ -742,7 +742,7 @@ export class CoolifyMcpServer extends McpServer {
               extra.signal,
               async () => {
                 const project = await this.client.getProject(uuid);
-                return `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${uuid})? This cannot be undone.`;
+                return `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})? This cannot be undone.`;
               },
               () => this.client.deleteProject(uuid),
             );
@@ -783,7 +783,7 @@ export class CoolifyMcpServer extends McpServer {
             return this.guardDestructive(
               extra.signal,
               () =>
-                `Delete environment "${sanitizeForPrompt(name)}" from project ${project_uuid}? This cannot be undone.`,
+                `Delete environment "${sanitizeForPrompt(name)}" from project ${sanitizeForPrompt(project_uuid)}? This cannot be undone.`,
               () => this.client.deleteProjectEnvironment(project_uuid, name),
             );
         }
@@ -2628,10 +2628,23 @@ export class CoolifyMcpServer extends McpServer {
             // `server_id: 0`, which is falsy, so a truthiness filter drops the
             // single most common server on any estate and undercounts. Verified
             // live — every app on the test instance reports server_id 0.
+            // Keys are prefixed by source because the two spaces are not
+            // interchangeable: a numeric `server_id` and a string
+            // `server_uuid` naming the same physical server would otherwise
+            // sit in the set as two entries and count it twice. Prefixing does
+            // not merge them either — nothing could, without a second lookup —
+            // but it makes the split deliberate, and the error stays in the
+            // over-stating direction.
             const servers = new Set(
               running
-                .map((app) => app.destination?.server_id ?? app.server_uuid)
-                .filter((id) => id !== undefined && id !== null),
+                .map((app) =>
+                  app.destination?.server_id !== undefined
+                    ? `id:${app.destination.server_id}`
+                    : app.server_uuid !== undefined
+                      ? `uuid:${app.server_uuid}`
+                      : undefined,
+                )
+                .filter((key) => key !== undefined),
             );
             const across = servers.size > 1 ? ` across ${servers.size} servers` : '';
             return (

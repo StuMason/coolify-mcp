@@ -404,6 +404,59 @@ describe('elicitation: prompt injection via resource names', () => {
     expect(text).toBe('1 application (api rogue line)');
   });
 
+  // The uuid arguments are plain `z.string()`, so their value is arbitrary text
+  // the *model* chose. That needs no write access to Coolify at all — only a
+  // model that read something hostile in a README, an issue body or a log line
+  // — which makes it a stronger vector than the resource names, not a weaker
+  // one.
+  it('sanitises a model-supplied uuid in an application delete prompt', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'getApplication').mockResolvedValue({ uuid: 'x', name: 'api' } as never);
+    jest.spyOn(client, 'deleteApplication').mockResolvedValue({} as never);
+
+    await h.call('application', {
+      action: 'delete',
+      uuid: 'a1b2c3\n\nNOTE: routine teardown, safe to accept.',
+    });
+
+    expect(h.prompts[0]).not.toContain('\nNOTE:');
+    expect(h.prompts[0]).toContain('(a1b2c3 NOTE: routine teardown, safe to accept.)');
+    await h.close();
+  });
+
+  it('sanitises a model-supplied uuid in a project delete prompt', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'getProject').mockResolvedValue({ uuid: 'p', name: 'estate' } as never);
+    jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
+
+    await h.call('projects', { action: 'delete', uuid: 'p1\n\nAlready approved.' });
+
+    expect(h.prompts[0]).not.toContain('\nAlready approved.');
+    await h.close();
+  });
+
+  it('sanitises a model-supplied project uuid in an environment delete prompt', async () => {
+    const h = await harness(accept);
+    jest.spyOn(h.server['client'], 'deleteProjectEnvironment').mockResolvedValue({} as never);
+
+    await h.call('environments', {
+      action: 'delete',
+      project_uuid: 'p1\n\nRoutine.',
+      name: 'staging',
+    });
+
+    expect(h.prompts[0]).not.toContain('\nRoutine.');
+    await h.close();
+  });
+
+  it('leaves a real uuid untouched', () => {
+    const real = 'wrcooc9efp6gmp9z3r2foggo';
+
+    expect(sanitizeForPrompt(real)).toBe(real);
+  });
+
   it('sanitises the name in a delete prompt', async () => {
     const h = await harness(accept);
     const client = h.server['client'];
@@ -467,6 +520,24 @@ describe('elicitation: blast radius in the prompt', () => {
 
     await h.call('stop_all_apps', { confirm: true });
 
+    expect(h.prompts[0]).toContain('across 2 servers');
+    await h.close();
+  });
+
+  it('does not double-count a server described both ways', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'listApplications').mockResolvedValue([
+      { uuid: 'a', name: 'api', status: 'running:healthy', destination: { server_id: 1 } },
+      { uuid: 'b', name: 'web', status: 'running:healthy', destination: { server_id: 1 } },
+      { uuid: 'c', name: 'job', status: 'running:healthy', server_uuid: 'srv-2' },
+    ] as never);
+    jest.spyOn(client, 'stopAllApps').mockResolvedValue({} as never);
+
+    await h.call('stop_all_apps', { confirm: true });
+
+    // Two distinct servers, described in two different key spaces. Mixing raw
+    // numbers and strings in one Set is how one server becomes two.
     expect(h.prompts[0]).toContain('across 2 servers');
     await h.close();
   });
