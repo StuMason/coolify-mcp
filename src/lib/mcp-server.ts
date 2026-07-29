@@ -6,6 +6,9 @@
 import { createRequire } from 'module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import { z } from 'zod';
 import {
   CoolifyClient,
@@ -272,7 +275,119 @@ interface DeployWaitResult {
   additional_deployment_uuids?: string[];
 }
 
+/**
+ * Tool annotations, spec-stable since 2025-03-26 and honoured by SDK 1.x
+ * `registerTool`. They ride the existing `tools/list` response, so they cost no
+ * extra tokens.
+ *
+ * Kept as one table rather than scattered across 43 call sites so the safety
+ * classification of the whole surface can be audited in one place — which is
+ * the point of it. Tests assert this map and the registered tools stay 1:1.
+ *
+ * Semantics (per spec):
+ * - `readOnlyHint` — the tool does not modify its environment at all.
+ * - `destructiveHint` — may perform destructive updates, as opposed to purely
+ *   additive ones. Only meaningful when `readOnlyHint` is false.
+ * - `idempotentHint` — repeated calls with the same arguments have no
+ *   additional effect. Only meaningful when `readOnlyHint` is false.
+ * - `openWorldHint` — interacts with an external entity (here, the Coolify API).
+ *
+ * Consolidated tools take worst-case values: any tool with a `delete` action is
+ * destructive even though most of its actions are not.
+ */
+// Only non-default hints are emitted. Per spec the defaults are
+// readOnlyHint=false, destructiveHint=true, idempotentHint=false and
+// openWorldHint=true, so spelling those out costs tokens on every tools/list
+// and tells a compliant client nothing it did not already assume.
+// `destructiveHint: true` is the deliberate exception: it is the default, but
+// it is also the safety signal, and stating it explicitly is worth the bytes.
+const READ_ONLY: ToolAnnotations = { readOnlyHint: true };
+const DESTRUCTIVE: ToolAnnotations = { destructiveHint: true };
+
+export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  // --- Read-only -----------------------------------------------------------
+  get_version: READ_ONLY,
+  // Local constant, no API call — the one tool that touches nothing external.
+  get_mcp_version: { readOnlyHint: true, openWorldHint: false },
+  get_infrastructure_overview: READ_ONLY,
+  list_servers: READ_ONLY,
+  list_applications: READ_ONLY,
+  list_databases: READ_ONLY,
+  list_services: READ_ONLY,
+  list_deployments: READ_ONLY,
+  get_server: READ_ONLY,
+  get_application: READ_ONLY,
+  get_database: READ_ONLY,
+  get_service: READ_ONLY,
+  server_resources: READ_ONLY,
+  server_domains: READ_ONLY,
+  diagnose_app: READ_ONLY,
+  diagnose_server: READ_ONLY,
+  find_issues: READ_ONLY,
+  search_docs: READ_ONLY,
+  application_logs: READ_ONLY,
+  logs: READ_ONLY,
+  teams: READ_ONLY,
+
+  // --- Destructive: every one of these has a delete, stop, or replace ------
+  application: DESTRUCTIVE,
+  database: DESTRUCTIVE,
+  service: DESTRUCTIVE,
+  projects: DESTRUCTIVE,
+  environments: DESTRUCTIVE,
+  env_vars: DESTRUCTIVE,
+  private_keys: DESTRUCTIVE,
+  github_apps: DESTRUCTIVE,
+  cloud_tokens: DESTRUCTIVE,
+  storages: DESTRUCTIVE,
+  scheduled_tasks: DESTRUCTIVE,
+  database_backups: DESTRUCTIVE,
+  // stop/restart take a running resource down.
+  control: DESTRUCTIVE,
+  // A deploy replaces the running containers, so it is a destructive update
+  // rather than an additive one.
+  deploy: DESTRUCTIVE,
+  // `cancel` kills an in-flight deployment.
+  deployment: DESTRUCTIVE,
+  stop_all_apps: DESTRUCTIVE,
+  bulk_env_update: DESTRUCTIVE,
+  redeploy_project: DESTRUCTIVE,
+  restart_project_apps: DESTRUCTIVE,
+  // `disable_api` cuts off API access entirely.
+  system: DESTRUCTIVE,
+
+  // --- Writes that are neither read-only nor destructive -------------------
+  // Provisions servers and spends real money, but every action is additive:
+  // it creates, it never replaces or removes.
+  hetzner: { destructiveHint: false },
+  // Re-running a validation converges on the same state.
+  validate_server: { destructiveHint: false, idempotentHint: true },
+};
+
 export class CoolifyMcpServer extends McpServer {
+  /**
+   * Register a tool, attaching its annotations from {@link TOOL_ANNOTATIONS}.
+   *
+   * Wraps SDK `registerTool` (the legacy `tool()` overloads are deprecated) so
+   * annotations cannot be forgotten at a call site: every tool goes through
+   * here, and a name missing from the table throws at construction rather than
+   * silently shipping unannotated.
+   */
+  private defineTool<Args extends ZodRawShapeCompat>(
+    name: string,
+    description: string,
+    inputSchema: Args,
+    cb: ToolCallback<Args>,
+  ): void {
+    const annotations = TOOL_ANNOTATIONS[name];
+    if (!annotations) {
+      throw new Error(
+        `Tool "${name}" has no entry in TOOL_ANNOTATIONS. Add one — clients use these hints to decide whether a call needs confirmation.`,
+      );
+    }
+    this.registerTool(name, { description, inputSchema, annotations }, cb);
+  }
+
   private readonly client: CoolifyClient;
   private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
 
@@ -378,11 +493,11 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Meta (2 tools)
     // =========================================================================
-    this.tool('get_version', 'Coolify API version', {}, async () =>
+    this.defineTool('get_version', 'Coolify API version', {}, async () =>
       wrap(() => this.client.getVersion()),
     );
 
-    this.tool('get_mcp_version', 'MCP server version', {}, async () => ({
+    this.defineTool('get_mcp_version', 'MCP server version', {}, async () => ({
       content: [
         {
           type: 'text' as const,
@@ -394,7 +509,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Infrastructure Overview (1 tool)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'get_infrastructure_overview',
       'Overview of all resources with counts',
       {},
@@ -444,28 +559,28 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Diagnostics (3 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'diagnose_app',
       'App diagnostics by UUID/name/domain',
       { query: z.string() },
       async ({ query }) => wrap(() => this.client.diagnoseApplication(query)),
     );
 
-    this.tool(
+    this.defineTool(
       'diagnose_server',
       'Server diagnostics by UUID/name/IP',
       { query: z.string() },
       async ({ query }) => wrap(() => this.client.diagnoseServer(query)),
     );
 
-    this.tool('find_issues', 'Scan infrastructure for problems', {}, async () =>
+    this.defineTool('find_issues', 'Scan infrastructure for problems', {}, async () =>
       wrap(() => this.client.findInfrastructureIssues()),
     );
 
     // =========================================================================
     // Servers (5 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'list_servers',
       'List servers (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
@@ -473,19 +588,22 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listServers({ page, per_page, summary: true })),
     );
 
-    this.tool('get_server', 'Server details', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('get_server', 'Server details', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getServer(uuid)),
     );
 
-    this.tool('server_resources', 'Resources on server', { uuid: z.string() }, async ({ uuid }) =>
-      wrap(() => this.client.getServerResources(uuid)),
+    this.defineTool(
+      'server_resources',
+      'Resources on server',
+      { uuid: z.string() },
+      async ({ uuid }) => wrap(() => this.client.getServerResources(uuid)),
     );
 
-    this.tool('server_domains', 'Domains on server', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('server_domains', 'Domains on server', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getServerDomains(uuid)),
     );
 
-    this.tool(
+    this.defineTool(
       'validate_server',
       'Validate server connection',
       { uuid: z.string() },
@@ -495,7 +613,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Projects (1 tool - consolidated CRUD)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'projects',
       'Manage projects: list/get/create/update/delete',
       {
@@ -533,7 +651,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Environments (1 tool - consolidated CRUD)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'environments',
       'Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API)',
       {
@@ -568,7 +686,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Applications (4 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'list_applications',
       'List apps (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
@@ -581,14 +699,14 @@ export class CoolifyMcpServer extends McpServer {
         ),
     );
 
-    this.tool('get_application', 'App details', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('get_application', 'App details', { uuid: z.string() }, async ({ uuid }) =>
       wrapWithActions(
         () => this.client.getApplication(uuid),
         (app) => getApplicationActions(app.uuid, app.status),
       ),
     );
 
-    this.tool(
+    this.defineTool(
       'application',
       'Manage app: create/update/delete/delete_preview',
       {
@@ -942,7 +1060,7 @@ export class CoolifyMcpServer extends McpServer {
       },
     );
 
-    this.tool(
+    this.defineTool(
       'logs',
       "Get container logs for an application, database, or service. A service is a multi-container stack, so resource='service' requires `container` — the sub-service name, which you can list with the `service` tool's `list_containers` action. Use `lines` to bound the output and `show_timestamps` when you need to correlate events across resources (not supported on service containers).",
       {
@@ -981,7 +1099,7 @@ export class CoolifyMcpServer extends McpServer {
       },
     );
 
-    this.tool(
+    this.defineTool(
       'application_logs',
       'Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.',
       { uuid: z.string(), lines: z.number().optional() },
@@ -991,7 +1109,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Databases (3 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'list_databases',
       'List databases (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
@@ -999,11 +1117,11 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listDatabases({ page, per_page, summary: true })),
     );
 
-    this.tool('get_database', 'Database details', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('get_database', 'Database details', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getDatabase(uuid)),
     );
 
-    this.tool(
+    this.defineTool(
       'database',
       'Manage database: create/delete',
       {
@@ -1087,7 +1205,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Services (3 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'list_services',
       'List services (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
@@ -1095,11 +1213,11 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listServices({ page, per_page, summary: true })),
     );
 
-    this.tool('get_service', 'Service details', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('get_service', 'Service details', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getService(uuid)),
     );
 
-    this.tool(
+    this.defineTool(
       'service',
       'Manage service: create/update/delete/list_containers. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`.',
       {
@@ -1170,7 +1288,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Resource Control (1 tool - start/stop/restart for all types)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'control',
       'Start/stop/restart app, database, or service',
       {
@@ -1239,7 +1357,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Environment Variables (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'env_vars',
       "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). On list, pass key to return only that variable — always combine reveal with key so only the requested value (not every secret on the resource) is exposed. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys. Preview vs production: is_preview marks a variable as applying to preview (pull-request) deployments rather than production. These are SEPARATE scopes — the same key can legitimately exist in both with different values, and that is normal configuration, not a mistake to reconcile. Check is_preview on each entry before concluding a variable is set wrong, and pass is_preview on create/update to target the preview scope (omit it to target production).",
       {
@@ -1413,7 +1531,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Deployments (3 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'list_deployments',
       'List deployments (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
@@ -1426,7 +1544,7 @@ export class CoolifyMcpServer extends McpServer {
         ),
     );
 
-    this.tool(
+    this.defineTool(
       'deploy',
       'Deploy by tag/UUID',
       {
@@ -1467,7 +1585,7 @@ export class CoolifyMcpServer extends McpServer {
       },
     );
 
-    this.tool(
+    this.defineTool(
       'deployment',
       'Manage deployment: get/cancel/list_for_app. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs.',
       {
@@ -1540,7 +1658,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Private Keys (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'private_keys',
       'Manage SSH keys: list/get/create/update/delete',
       {
@@ -1585,7 +1703,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // GitHub Apps (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'github_apps',
       'Manage GitHub Apps: list/get/create/update/delete/list_repos/list_branches',
       {
@@ -1695,7 +1813,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Database Backups (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'database_backups',
       'Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete/delete_execution',
       {
@@ -1783,7 +1901,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Teams (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'teams',
       'Manage teams: list/get/get_members/get_current/get_current_members',
       {
@@ -1811,7 +1929,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Cloud Tokens (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'cloud_tokens',
       'Manage cloud provider tokens (Hetzner/DigitalOcean): list/get/create/update/delete/validate',
       {
@@ -1854,7 +1972,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Storages (1 tool - consolidated for app/db/service)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'storages',
       'Manage persistent/file storages for app, database, or service: list/create/update/delete',
       {
@@ -1968,7 +2086,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Scheduled Tasks (1 tool - consolidated for app/service)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'scheduled_tasks',
       'Manage scheduled tasks for app or service: list/create/update/delete/list_executions/run_once. ' +
         "list_executions: the command's stdout comes back in the execution's message field. " +
@@ -2082,7 +2200,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Hetzner Cloud (1 tool - consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'hetzner',
       'Hetzner cloud: list_locations/list_server_types/list_images/list_ssh_keys/create_server',
       {
@@ -2172,7 +2290,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // System (1 tool - health/list_resources/api_control consolidated)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'system',
       'System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload. When `include_full: true`, credentials are masked unless `reveal: true` is also set (matches the `env_vars` `reveal` ergonomics): webhook HMAC secrets, basic-auth password, database passwords, internal/external_db_url connection strings, compose bodies, custom_labels, and nested env-var values.',
       {
@@ -2197,7 +2315,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Documentation Search (1 tool)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'search_docs',
       'Search Coolify documentation for how-to guides, configuration, troubleshooting',
       {
@@ -2217,14 +2335,14 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     // Batch Operations (4 tools)
     // =========================================================================
-    this.tool(
+    this.defineTool(
       'restart_project_apps',
       'Restart all apps in project',
       { project_uuid: z.string() },
       async ({ project_uuid }) => wrap(() => this.client.restartProjectApps(project_uuid)),
     );
 
-    this.tool(
+    this.defineTool(
       'bulk_env_update',
       'Update env var across multiple apps',
       {
@@ -2238,7 +2356,7 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime)),
     );
 
-    this.tool(
+    this.defineTool(
       'stop_all_apps',
       'EMERGENCY: Stop all running apps',
       { confirm: z.literal(true) },
@@ -2249,7 +2367,7 @@ export class CoolifyMcpServer extends McpServer {
       },
     );
 
-    this.tool(
+    this.defineTool(
       'redeploy_project',
       'Redeploy all apps in project',
       { project_uuid: z.string(), force: z.boolean().optional() },

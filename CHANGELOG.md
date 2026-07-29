@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tool annotations on all 43 tools, and migration off the deprecated `tool()` API** (#260) — every tool now declares `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`. These are spec-stable since 2025-03-26 and already change client behaviour: Claude Code parallel-dispatches tools marked read-only, and VS Code Copilot stops raising confirmation dialogs for reads. 21 tools are read-only, 20 destructive, 2 neither (`hetzner` provisions but only ever adds; `validate_server` is idempotent).
+
+  Registration moved from the SDK's deprecated `tool()` overloads to `registerTool()`, which is also the shape SDK v2 keeps, so this is prep for #259. All 43 call sites go through one `defineTool` wrapper that looks annotations up from a single table — a tool missing from it **throws at construction** rather than silently shipping unannotated. The classification lives in one auditable place rather than scattered across 43 call sites, and tests assert the table and the registered tools stay exactly in step.
+
+  **Correction to the issue's premise:** #260 said annotations were zero-cost because they ride the existing `tools/list` response. They ride it, but they are not free — spelling out every hint measured at ~751 tokens against a ~6,600 token budget. Only non-default hints are emitted now (per spec: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=true`), which halves it to ~415 tokens, with a test that fails if the defaults creep back in.
+
+### Added
+
 - **`logs` tool: container logs for databases and services, not just applications** (#300) — `diagnose_app` could explain an unhealthy application by reading its logs, but the same question about a database or a service had no answer and sent you to the Coolify UI, which is exactly the moment you want logs.
 
   Added as **one consolidated `logs` tool** with a `resource` parameter (`application` / `database` / `service`), matching the `env_vars` and `control` pattern, rather than three or four sibling tools — the token budget is the point of the v2.0.0 design. `application_logs` still works and is marked superseded in its description; it will be removed in v3. Also adds `show_timestamps`, which upstream has always supported and this client never sent.
