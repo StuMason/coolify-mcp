@@ -1,6 +1,6 @@
 # Tools reference
 
-All 42 tools in coolify-mcp v2.11, grouped by concern. The full canonical list is registered in [`src/lib/mcp-server.ts`](https://github.com/StuMason/coolify-mcp/blob/main/src/lib/mcp-server.ts).
+All 43 tools in coolify-mcp v2.11, grouped by concern. The full canonical list is registered in [`src/lib/mcp-server.ts`](https://github.com/StuMason/coolify-mcp/blob/main/src/lib/mcp-server.ts).
 
 > Tools marked **read-only** are safe to let your MCP client run without per-call confirmation. Tools marked **destructive** change state and should be confirmed — v3 will surface these via `destructiveHint` annotations (see [v3 vision](/roadmap/v3-vision)).
 

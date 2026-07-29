@@ -4,7 +4,7 @@ layout: home
 hero:
   name: coolify-mcp
   text: A Coolify control surface for your AI assistant
-  tagline: 42 token-optimized MCP tools. Use it with Claude, Cursor, or any MCP client to manage your self-hosted infrastructure through natural language.
+  tagline: 43 token-optimized MCP tools. Use it with Claude, Cursor, or any MCP client to manage your self-hosted infrastructure through natural language.
   image:
     src: /favicon.svg
     alt: coolify-mcp

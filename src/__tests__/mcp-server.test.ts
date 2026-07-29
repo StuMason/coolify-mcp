@@ -1668,12 +1668,111 @@ describe('truncateLogs', () => {
 // Action Generators Tests
 // =============================================================================
 
+describe('logs tool (#300)', () => {
+  let server: CoolifyMcpServer;
+
+  beforeEach(() => {
+    server = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+  });
+
+  const callLogs = async (args: Record<string, unknown>) => {
+    const tool = (
+      server as unknown as {
+        _registeredTools: Record<
+          string,
+          { handler: (a: unknown, b: unknown) => Promise<{ content: Array<{ text: string }> }> }
+        >;
+      }
+    )._registeredTools['logs'];
+    return tool.handler(args, {});
+  };
+
+  it('routes to the application endpoint', async () => {
+    const spy = jest.spyOn(server['client'], 'getApplicationLogs').mockResolvedValue('app logs');
+    await callLogs({ resource: 'application', uuid: 'app-uuid', lines: 20 });
+    expect(spy).toHaveBeenCalledWith('app-uuid', 20, undefined);
+  });
+
+  it('routes to the database endpoint', async () => {
+    const spy = jest.spyOn(server['client'], 'getDatabaseLogs').mockResolvedValue('db logs');
+    await callLogs({ resource: 'database', uuid: 'db-uuid', show_timestamps: true });
+    expect(spy).toHaveBeenCalledWith('db-uuid', undefined, true);
+  });
+
+  it('routes to the service endpoint with the container name', async () => {
+    const spy = jest.spyOn(server['client'], 'getServiceLogs').mockResolvedValue('svc logs');
+    await callLogs({ resource: 'service', uuid: 'svc-uuid', container: 'postgres' });
+    expect(spy).toHaveBeenCalledWith('svc-uuid', 'postgres', undefined, undefined);
+  });
+
+  // A service is several containers, so "the service logs" has no single answer.
+  // Better to say so than to silently pick one.
+  it('refuses a service request with no container and points at list_containers', async () => {
+    const spy = jest.spyOn(server['client'], 'getServiceLogs');
+    const result = (await callLogs({ resource: 'service', uuid: 'svc-uuid' })) as {
+      content: Array<{ text: string }>;
+    };
+
+    expect(result.content[0].text).toContain('container required');
+    expect(result.content[0].text).toContain('list_containers');
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('service list_containers action (#300)', () => {
+  let server: CoolifyMcpServer;
+
+  beforeEach(() => {
+    server = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+  });
+
+  const callService = async (args: Record<string, unknown>) => {
+    const tool = (
+      server as unknown as {
+        _registeredTools: Record<
+          string,
+          { handler: (a: unknown, b: unknown) => Promise<{ content: Array<{ text: string }> }> }
+        >;
+      }
+    )._registeredTools['service'];
+    return tool.handler(args, {});
+  };
+
+  it('returns the applications and databases inside a service', async () => {
+    jest
+      .spyOn(server['client'], 'listServiceApplications')
+      .mockResolvedValue([{ uuid: 'a1', name: 'app-one' }]);
+    jest
+      .spyOn(server['client'], 'listServiceDatabases')
+      .mockResolvedValue([{ uuid: 'd1', name: 'postgres' }]);
+
+    const result = (await callService({ action: 'list_containers', uuid: 'svc-uuid' })) as {
+      content: Array<{ text: string }>;
+    };
+    const parsed = JSON.parse(result.content[0].text) as {
+      applications: Array<{ name: string }>;
+      databases: Array<{ name: string }>;
+    };
+
+    // These names are exactly what `logs` needs as `container`.
+    expect(parsed.applications[0].name).toBe('app-one');
+    expect(parsed.databases[0].name).toBe('postgres');
+  });
+
+  it('requires a uuid', async () => {
+    const result = (await callService({ action: 'list_containers' })) as {
+      content: Array<{ text: string }>;
+    };
+    expect(result.content[0].text).toContain('uuid required');
+  });
+});
+
 describe('getApplicationActions', () => {
   it('should return view logs action for all apps', () => {
     const actions = getApplicationActions('app-uuid', 'stopped');
     expect(actions).toContainEqual({
-      tool: 'application_logs',
-      args: { uuid: 'app-uuid' },
+      tool: 'logs',
+      args: { resource: 'application', uuid: 'app-uuid' },
       hint: 'View logs',
     });
   });
@@ -1744,8 +1843,8 @@ describe('getDeploymentActions', () => {
       hint: 'View app',
     });
     expect(actions).toContainEqual({
-      tool: 'application_logs',
-      args: { uuid: 'app-uuid' },
+      tool: 'logs',
+      args: { resource: 'application', uuid: 'app-uuid' },
       hint: 'App logs',
     });
   });

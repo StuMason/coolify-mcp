@@ -132,7 +132,7 @@ export function truncateLogs(
 /** Generate contextual actions for an application based on its status */
 export function getApplicationActions(uuid: string, status?: string): ResponseAction[] {
   const actions: ResponseAction[] = [
-    { tool: 'application_logs', args: { uuid }, hint: 'View logs' },
+    { tool: 'logs', args: { resource: 'application', uuid }, hint: 'View logs' },
   ];
   const s = (status || '').toLowerCase();
   if (s.includes('running')) {
@@ -168,7 +168,11 @@ export function getDeploymentActions(
   }
   if (appUuid) {
     actions.push({ tool: 'get_application', args: { uuid: appUuid }, hint: 'View app' });
-    actions.push({ tool: 'application_logs', args: { uuid: appUuid }, hint: 'App logs' });
+    actions.push({
+      tool: 'logs',
+      args: { resource: 'application', uuid: appUuid },
+      hint: 'App logs',
+    });
   }
   return actions;
 }
@@ -939,8 +943,47 @@ export class CoolifyMcpServer extends McpServer {
     );
 
     this.tool(
+      'logs',
+      "Get container logs for an application, database, or service. A service is a multi-container stack, so resource='service' requires `container` — the sub-service name, which you can list with the `service` tool's `list_containers` action. Use `lines` to bound the output and `show_timestamps` when you need to correlate events across resources (not supported on service containers).",
+      {
+        resource: z.enum(['application', 'database', 'service']),
+        uuid: z.string(),
+        container: z
+          .string()
+          .optional()
+          .describe(
+            "Sub-service name, required when resource='service'. Get valid names from `service` action=list_containers.",
+          ),
+        lines: z.number().optional().describe('Number of log lines to return (default 100)'),
+        show_timestamps: z
+          .boolean()
+          .optional()
+          .describe('Prefix each line with its timestamp. Not supported for service containers.'),
+      },
+      async ({ resource, uuid, container, lines, show_timestamps }) => {
+        if (resource === 'service') {
+          if (!container) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: "Error: container required when resource='service' — a service runs several containers, so 'the service logs' is ambiguous. List valid names with the `service` tool, action=list_containers.",
+                },
+              ],
+            };
+          }
+          return wrap(() => this.client.getServiceLogs(uuid, container, lines, show_timestamps));
+        }
+        if (resource === 'database') {
+          return wrap(() => this.client.getDatabaseLogs(uuid, lines, show_timestamps));
+        }
+        return wrap(() => this.client.getApplicationLogs(uuid, lines, show_timestamps));
+      },
+    );
+
+    this.tool(
       'application_logs',
-      'Get app logs',
+      'Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.',
       { uuid: z.string(), lines: z.number().optional() },
       async ({ uuid, lines }) => wrap(() => this.client.getApplicationLogs(uuid, lines)),
     );
@@ -1058,9 +1101,9 @@ export class CoolifyMcpServer extends McpServer {
 
     this.tool(
       'service',
-      'Manage service: create/update/delete',
+      'Manage service: create/update/delete/list_containers. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`.',
       {
-        action: z.enum(['create', 'update', 'delete']),
+        action: z.enum(['create', 'update', 'delete', 'list_containers']),
         uuid: z.string().optional(),
         type: z.string().optional(),
         server_uuid: z.string().optional(),
@@ -1078,6 +1121,17 @@ export class CoolifyMcpServer extends McpServer {
       async (args) => {
         const { action, uuid, delete_volumes } = args;
         switch (action) {
+          case 'list_containers': {
+            if (!uuid)
+              return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+            return wrap(async () => {
+              const [applications, databases] = await Promise.all([
+                this.client.listServiceApplications(uuid),
+                this.client.listServiceDatabases(uuid),
+              ]);
+              return { applications, databases };
+            });
+          }
           case 'create':
             if (!args.server_uuid || !args.project_uuid) {
               return {
@@ -1151,7 +1205,11 @@ export class CoolifyMcpServer extends McpServer {
         const getControlActions = (): ResponseAction[] => {
           const actions: ResponseAction[] = [];
           if (resource === 'application') {
-            actions.push({ tool: 'application_logs', args: { uuid }, hint: 'View logs' });
+            actions.push({
+              tool: 'logs',
+              args: { resource: 'application', uuid },
+              hint: 'View logs',
+            });
             actions.push({ tool: 'get_application', args: { uuid }, hint: 'Check status' });
             if (action === 'start' || action === 'restart') {
               actions.push({

@@ -1794,6 +1794,98 @@ describe('CoolifyClient', () => {
       );
     });
 
+    // Verified against a live Coolify instance: log endpoints return
+    // { logs: "..." }, not a bare string. getApplicationLogs declared
+    // Promise<string> while returning that object unchanged — the tests below
+    // mocked a bare string, which is why the type lie went unnoticed (#300).
+    it('unwraps the { logs } envelope Coolify actually returns', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: 'line 1\nline 2' }));
+
+      const result = await client.getApplicationLogs('app-uuid', 50);
+
+      expect(result).toBe('line 1\nline 2');
+      expect(typeof result).toBe('string');
+    });
+
+    it('still accepts a bare string body from older instances', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse('raw log text', true, 200, 'text/plain; charset=utf-8'),
+      );
+
+      await expect(client.getApplicationLogs('app-uuid')).resolves.toBe('raw log text');
+    });
+
+    it('returns an empty string rather than undefined for an unrecognised body', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ unexpected: true }));
+
+      await expect(client.getApplicationLogs('app-uuid')).resolves.toBe('');
+    });
+
+    it('sends show_timestamps only when asked', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: '' }));
+      await client.getApplicationLogs('app-uuid', 10, true);
+      expect(mockFetch.mock.calls[0][0]).toContain('show_timestamps=true');
+
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: '' }));
+      await client.getApplicationLogs('app-uuid', 10);
+      expect(mockFetch.mock.calls[1][0]).not.toContain('show_timestamps');
+    });
+
+    it('gets database logs (#300)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: 'db line' }));
+
+      const result = await client.getDatabaseLogs('db-uuid', 50);
+
+      expect(result).toBe('db line');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/databases/db-uuid/logs?lines=50',
+        expect.any(Object),
+      );
+    });
+
+    it('gets service logs for a named container, which Coolify requires (#300)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: 'svc line' }));
+
+      const result = await client.getServiceLogs('svc-uuid', 'postgres', 25);
+
+      expect(result).toBe('svc line');
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/services/svc-uuid/logs?');
+      expect(url).toContain('sub_service_name=postgres');
+      expect(url).toContain('lines=25');
+    });
+
+    it('url-encodes a container name with awkward characters', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: '' }));
+
+      await client.getServiceLogs('svc-uuid', 'my service/db');
+
+      expect(mockFetch.mock.calls[0][0]).toContain('sub_service_name=my+service%2Fdb');
+    });
+
+    it('lists the containers inside a service (#300)', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse([{ uuid: 'a1', name: 'app-one' }]))
+        .mockResolvedValueOnce(mockResponse([{ uuid: 'd1', name: 'postgres' }]));
+
+      await expect(client.listServiceApplications('svc-uuid')).resolves.toEqual([
+        { uuid: 'a1', name: 'app-one' },
+      ]);
+      await expect(client.listServiceDatabases('svc-uuid')).resolves.toEqual([
+        { uuid: 'd1', name: 'postgres' },
+      ]);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'http://localhost:3000/api/v1/services/svc-uuid/applications',
+        expect.any(Object),
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'http://localhost:3000/api/v1/services/svc-uuid/databases',
+        expect.any(Object),
+      );
+    });
+
     it('should get application logs', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse('log line 1\nlog line 2'));
 
