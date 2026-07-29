@@ -2443,7 +2443,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Started' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/start',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -2455,7 +2455,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Stopped' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/stop',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -2467,7 +2467,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Restarted' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/restart',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -2479,7 +2479,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Restarted' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/restart?latest=true',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -2491,7 +2491,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'Restarted' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/services/test-uuid/restart',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -5255,7 +5255,7 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'API enabled.' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/enable',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -5267,7 +5267,158 @@ describe('CoolifyClient', () => {
       expect(result).toEqual({ message: 'API disabled.' });
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/disable',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Coolify v4.2 GET-to-POST compatibility (issue #292)
+  //
+  // v4.2 moved state-changing endpoints to POST. Three of them (/enable,
+  // /disable, /servers/{uuid}/validate) were GET-only before v4.2, so neither
+  // method works across both eras — the client sends POST and retries with GET
+  // on a 405. The rest were already `Route::match(['get','post'])` upstream and
+  // send POST unconditionally.
+  // ===========================================================================
+
+  describe('v4.2 method compatibility', () => {
+    /** A v4.2-style 405 from upstream's `post_required` handler. */
+    const methodNotAllowed = (): Response =>
+      mockResponse({ message: 'This endpoint has changed to a POST request.' }, false, 405);
+
+    /** A pre-v4.2 405: Laravel rejecting POST on a GET-only route. */
+    const laravelMethodNotAllowed = (): Response =>
+      mockResponse(
+        { message: 'The POST method is not supported for this route. Supported methods: GET.' },
+        false,
+        405,
+      );
+
+    it('sends POST for endpoints that accepted POST before v4.2 (no fallback needed)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployment queued.' }));
+      await client.deployByTagOrUuid('my-tag', false);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/deploy?tag=my-tag'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('tries POST first on a diverged endpoint and does not retry when it succeeds', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'server-uuid' }));
+      await client.validateServer('server-uuid');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/servers/server-uuid/validate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('falls back to GET when a pre-v4.2 instance rejects POST with 405', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'server-uuid' }));
+
+      const result = await client.validateServer('server-uuid');
+
+      expect(result).toEqual({ uuid: 'server-uuid' });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'http://localhost:3000/api/v1/servers/server-uuid/validate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'http://localhost:3000/api/v1/servers/server-uuid/validate',
         expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('remembers the fallback so the POST probe is paid at most once per endpoint', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'a' }))
+        .mockResolvedValueOnce(mockResponse({ uuid: 'b' }));
+
+      await client.validateServer('a');
+      await client.validateServer('b');
+
+      // 2 calls for the first (probe + fallback), 1 for the second: GET straight away.
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'http://localhost:3000/api/v1/servers/b/validate',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('caches per endpoint, not globally', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ message: 'API enabled.' }))
+        .mockResolvedValueOnce(mockResponse({ message: 'API disabled.' }));
+
+      await client.enableApi();
+      await client.disableApi();
+
+      // /disable has not been probed yet, so it still tries POST first.
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'http://localhost:3000/api/v1/disable',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('falls back for the v4.2-style 405 body too (defensive, direction-agnostic)', async () => {
+      mockFetch
+        .mockResolvedValueOnce(methodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ message: 'API enabled.' }));
+
+      await expect(client.enableApi()).resolves.toEqual({ message: 'API enabled.' });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT retry on non-405 failures, so a real error is never re-fired', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+
+      await expect(client.validateServer('missing')).rejects.toThrow('Server not found.');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a 500, which may mean the action partially ran', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({}, false, 500));
+
+      await expect(client.enableApi()).rejects.toThrow('HTTP 500');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates the GET failure when both methods are rejected', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ message: 'Nope.' }, false, 404));
+
+      await expect(client.validateServer('server-uuid')).rejects.toThrow('Nope.');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache the fallback when the GET retry also fails', async () => {
+      mockFetch
+        .mockResolvedValueOnce(laravelMethodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({}, false, 500))
+        .mockResolvedValueOnce(mockResponse({ uuid: 'server-uuid' }));
+
+      await expect(client.validateServer('server-uuid')).rejects.toThrow('HTTP 500');
+      await client.validateServer('server-uuid');
+
+      // Third call probes POST again rather than trusting an unproven fallback.
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'http://localhost:3000/api/v1/servers/server-uuid/validate',
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -5288,6 +5439,15 @@ describe('errorHint', () => {
   it('hints at the access token for 401 and 403', () => {
     expect(errorHint(401, '/version')).toMatch(/COOLIFY_ACCESS_TOKEN/);
     expect(errorHint(403, '/servers')).toMatch(/COOLIFY_ACCESS_TOKEN/);
+  });
+
+  it('mentions the v4.2 Member-role read-only change on 403', () => {
+    expect(errorHint(403, '/applications/app-uuid/start')).toMatch(/Member-role/);
+  });
+
+  it('hints at the v4.2 GET-to-POST move on a 405', () => {
+    expect(errorHint(405, '/servers/server-uuid/validate')).toMatch(/v4\.2/);
+    expect(errorHint(405, '/enable')).toMatch(/GET to POST/);
   });
 
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {
