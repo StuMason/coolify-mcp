@@ -5488,6 +5488,60 @@ describe('CoolifyClient', () => {
       );
     });
 
+    /** What Coolify's catch-all route actually returns for an unmatched method. */
+    const catchAllNotFound = (): Response =>
+      mockResponse({ message: 'Not found.', docs: 'https://coolify.io/docs' }, false, 404);
+
+    // The bug this suite missed first time round: Coolify ends routes/api.php
+    // with `Route::any('/{any}', ...)` returning 404, which swallows an
+    // unmatched method+path before Laravel can raise a 405. A real 4.1.2
+    // instance therefore answers POST with 404, and a 405-only fallback never
+    // fired — breaking enable/disable/validate on exactly the versions the
+    // fallback existed to support. Confirmed live, not from the spec.
+    it('falls back to GET on the 404 a pre-v4.2 catch-all actually returns', async () => {
+      mockFetch
+        .mockResolvedValueOnce(catchAllNotFound())
+        .mockResolvedValueOnce(mockResponse({ message: 'API enabled.' }));
+
+      await expect(client.enableApi()).resolves.toEqual({ message: 'API enabled.' });
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'http://localhost:3000/api/v1/enable',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'http://localhost:3000/api/v1/enable',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('surfaces the GET 404 when a resource genuinely does not exist', async () => {
+      // A real "not found" costs one extra request and then reports correctly,
+      // which is the price of treating 404 as a method rejection.
+      mockFetch.mockResolvedValueOnce(catchAllNotFound()).mockResolvedValueOnce(catchAllNotFound());
+
+      await expect(client.validateServer('missing')).rejects.toThrow('Not found.');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('caches the fallback after a 404 probe, like the 405 path', async () => {
+      mockFetch
+        .mockResolvedValueOnce(catchAllNotFound())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'a' }))
+        .mockResolvedValueOnce(mockResponse({ uuid: 'b' }));
+
+      await client.validateServer('a');
+      await client.validateServer('b');
+
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'http://localhost:3000/api/v1/servers/b/validate',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
     it('falls back to GET when a pre-v4.2 instance rejects POST with 405', async () => {
       mockFetch
         .mockResolvedValueOnce(laravelMethodNotAllowed())
@@ -5553,10 +5607,10 @@ describe('CoolifyClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('does NOT retry on non-405 failures, so a real error is never re-fired', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+    it('does NOT retry on failures other than 404/405, so a real error is never re-fired', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Validation failed.' }, false, 422));
 
-      await expect(client.validateServer('missing')).rejects.toThrow('Server not found.');
+      await expect(client.validateServer('bad')).rejects.toThrow('Validation failed.');
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
@@ -5612,14 +5666,16 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('propagates a non-405 failure from a remembered GET without re-probing POST', async () => {
+    it('propagates a genuine failure from a remembered GET without re-probing POST', async () => {
       mockFetch
         .mockResolvedValueOnce(laravelMethodNotAllowed())
         .mockResolvedValueOnce(mockResponse({ uuid: 'a' }));
       await client.validateServer('a');
 
-      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
-      await expect(client.validateServer('missing')).rejects.toThrow('Server not found.');
+      // 422 rather than 404: a 404 is now treated as a method rejection, since
+      // Coolify's catch-all returns 404 for an unmatched method.
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Validation failed.' }, false, 422));
+      await expect(client.validateServer('bad')).rejects.toThrow('Validation failed.');
 
       // 2 for the initial probe + 1 GET. No POST re-probe on a genuine error.
       expect(mockFetch).toHaveBeenCalledTimes(3);

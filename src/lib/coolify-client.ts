@@ -688,10 +688,12 @@ export class CoolifyClient {
    * `Route::match(['get','post'])` in v4.1 and older, so those just send POST
    * unconditionally.)
    *
-   * Strategy: try POST, and on a 405 retry once with GET. The retry is safe
+   * Strategy: try POST, and on a 405 or 404 retry once with GET. The retry is safe
    * because a 405 comes from the router before the controller runs, so nothing
-   * has executed and there is no risk of double-firing a state change. Only 405
-   * triggers the fallback — any other failure propagates untouched.
+   * has executed and there is no risk of double-firing a state change. The same
+   * holds for the 404 that Coolify's catch-all route returns for an unmatched
+   * method. Nothing else triggers the fallback — a 500 in particular propagates
+   * untouched, since it may mean the action partially ran.
    *
    * The resolved method is cached per `key`, so the extra round trip is paid at
    * most once per endpoint rather than per call. `key` is a stable endpoint
@@ -710,14 +712,24 @@ export class CoolifyClient {
     path: string,
     options: RequestInit = {},
   ): Promise<T> {
-    const isMethodNotAllowed = (error: unknown): boolean =>
-      error instanceof CoolifyApiError && error.status === 405;
+    // 405 *or* 404. Coolify ends routes/api.php with a catch-all —
+    // `Route::any('/{any}', ...)` returning 404 "Not found." — which swallows
+    // an unmatched method+path before Laravel can raise a 405. So a pre-4.2
+    // instance answers POST on these GET-only routes with 404, never 405.
+    // Verified against a live Coolify 4.1.2; handling only 405 meant the
+    // fallback never fired there, which broke enable/disable/validate outright.
+    //
+    // Retrying on 404 is safe for the same reason as 405: the catch-all runs no
+    // controller, and a genuine "resource not found" 404 makes the GET retry
+    // return the same 404, so the correct error still surfaces.
+    const isMethodRejected = (error: unknown): boolean =>
+      error instanceof CoolifyApiError && (error.status === 405 || error.status === 404);
 
     if (this.legacyGetEndpoints.has(key)) {
       try {
         return await this.request<T>(path, { ...options, method: 'GET' });
       } catch (error) {
-        if (!isMethodNotAllowed(error)) {
+        if (!isMethodRejected(error)) {
           throw error;
         }
         // Upgraded to v4.2 under us — forget the stale preference and re-probe.
@@ -728,7 +740,7 @@ export class CoolifyClient {
     try {
       return await this.request<T>(path, { ...options, method: 'POST' });
     } catch (error) {
-      if (!isMethodNotAllowed(error)) {
+      if (!isMethodRejected(error)) {
         throw error;
       }
       const result = await this.request<T>(path, { ...options, method: 'GET' });
