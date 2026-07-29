@@ -1815,6 +1815,28 @@ describe('CoolifyClient', () => {
       await expect(client.getApplicationLogs('app-uuid')).resolves.toBe('raw log text');
     });
 
+    it('stringifies a non-string logs value rather than leaking a number', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: 12345 }));
+
+      // The declared return type is string; anything else would make it a lie
+      // again, which is the bug this whole normaliser exists to fix.
+      await expect(client.getApplicationLogs('app-uuid')).resolves.toBe('12345');
+    });
+
+    it('treats a null logs value as empty rather than the string "null"', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: null }));
+
+      await expect(client.getApplicationLogs('app-uuid')).resolves.toBe('');
+    });
+
+    it('defaults database logs to 100 lines when not specified', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ logs: '' }));
+
+      await client.getDatabaseLogs('db-uuid');
+
+      expect(mockFetch.mock.calls[0][0]).toContain('lines=100');
+    });
+
     it('returns an empty string rather than undefined for an unrecognised body', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ unexpected: true }));
 
