@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Re-vendored `docs/coolify-openapi.yaml` from upstream, now covering Coolify v4.2** (#302) — the bundled spec is ground truth for "does Coolify support X" and predated v4.2, so it was missing **42 paths** (nothing was removed). The additions line up with the open v4.2 issues: tags on applications/databases/services (#298), `/move` between environments (#299), database, service and per-container logs (#300), service application and database management (#301), and destinations (#302). Also new and not previously tracked: volume backup schedules on storages, and DigitalOcean/Vultr server provisioning alongside Hetzner firewalls and networks. Five new schemas: `VolumeBackupScheduleRequest`, `VolumeBackupScheduleResponse`, `ApplicationSetting`, `Destination`, `Tag`.
+
+- **`docs/openapi-chunks/` is now generated, not hand-maintained** (#302) — the chunks are a developer reference that CLAUDE.md and the contributing guide both point at, but they were curated by hand and silently went stale the moment the spec was re-vendored, which made the reference a trap. `npm run build:chunks` regenerates them from the bundled spec by first path segment, and `npm run check:chunk-drift` fails CI if they diverge. New `destinations-api`, `tags-api` and `cloud-providers-api` chunks; every path and schema in the spec is carried exactly once, asserted by tests.
+
+- **The vendored spec is byte-identical to upstream again** — Prettier had reformatted it at some point, so `git diff` against a fresh upstream download showed whitespace churn rather than real API changes. `docs/coolify-openapi.yaml` and the generated chunks are now in `.prettierignore`, which also means re-vendoring is a clean overwrite.
+
+### Fixed
+
+- **Corrected the documented behaviour of `search_docs`** — `site/concepts/how-it-works.md` described it as "a local MiniSearch index over `docs/openapi-chunks/`". It actually fetches Coolify's published `llms-full.txt` at runtime and indexes that; it has never read the chunks.
+
 ## [2.15.0] - 2026-07-29
 
 ### Fixed

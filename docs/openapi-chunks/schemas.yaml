@@ -5,264 +5,403 @@ info:
 paths: {}
 components:
   schemas:
+    VolumeBackupScheduleRequest:
+      required:
+        - frequency
+      properties:
+        frequency:
+          type: string
+          maxLength: 255
+          example: '0 2 * * *'
+        enabled:
+          type: boolean
+          default: true
+        save_s3:
+          type: boolean
+          default: false
+        disable_local_backup:
+          type: boolean
+          default: false
+        stop_during_backup:
+          type: boolean
+          default: false
+        s3_storage_uuid:
+          type:
+            - string
+            - 'null'
+        retention_amount_locally:
+          type: integer
+          default: 7
+          maximum: 10000
+          minimum: 0
+        retention_days_locally:
+          type: integer
+          default: 0
+          maximum: 2147483647
+          minimum: 0
+        retention_max_storage_locally:
+          type: number
+          format: float
+          default: 0
+          maximum: 9999999999
+          minimum: 0
+        retention_amount_s3:
+          type: integer
+          default: 7
+          maximum: 10000
+          minimum: 0
+        retention_days_s3:
+          type: integer
+          default: 0
+          maximum: 2147483647
+          minimum: 0
+        retention_max_storage_s3:
+          type: number
+          format: float
+          default: 0
+          maximum: 9999999999
+          minimum: 0
+        timeout:
+          type: integer
+          default: 3600
+          maximum: 36000
+          minimum: 60
+      type: object
+      additionalProperties: false
+    VolumeBackupScheduleResponse:
+      required:
+        - uuid
+        - message
+        - storage_uuid
+        - storage_type
+        - frequency
+        - enabled
+        - save_s3
+        - disable_local_backup
+        - stop_during_backup
+        - retention_amount_locally
+        - retention_days_locally
+        - retention_max_storage_locally
+        - retention_amount_s3
+        - retention_days_s3
+        - retention_max_storage_s3
+        - timeout
+      properties:
+        uuid:
+          type: string
+        message:
+          type: string
+        storage_uuid:
+          type: string
+        storage_type:
+          type: string
+          enum:
+            - persistent
+            - directory
+        frequency:
+          type: string
+        enabled:
+          type: boolean
+        save_s3:
+          type: boolean
+        disable_local_backup:
+          type: boolean
+        stop_during_backup:
+          type: boolean
+        s3_storage_uuid:
+          type:
+            - string
+            - 'null'
+        retention_amount_locally:
+          type: integer
+        retention_days_locally:
+          type: integer
+        retention_max_storage_locally:
+          type: number
+          format: float
+        retention_amount_s3:
+          type: integer
+        retention_days_s3:
+          type: integer
+        retention_max_storage_s3:
+          type: number
+          format: float
+        timeout:
+          type: integer
+      type: object
     Application:
-      description: Application model
+      description: 'Application model'
       properties:
         id:
           type: integer
-          description: The application identifier in the database.
+          description: 'The application identifier in the database.'
         description:
           type: string
           nullable: true
-          description: The application description.
+          description: 'The application description.'
         repository_project_id:
           type: integer
           nullable: true
-          description: The repository project identifier.
+          description: 'The repository project identifier.'
         uuid:
           type: string
-          description: The application UUID.
+          description: 'The application UUID.'
         name:
           type: string
-          description: The application name.
+          description: 'The application name.'
         fqdn:
           type: string
           nullable: true
-          description: The application domains.
+          description: 'The application domains.'
         config_hash:
           type: string
-          description: Configuration hash.
+          description: 'Configuration hash.'
         git_repository:
           type: string
-          description: Git repository URL.
+          description: 'Git repository URL.'
         git_branch:
           type: string
-          description: Git branch.
+          description: 'Git branch.'
         git_commit_sha:
           type: string
-          description: Git commit SHA.
+          description: 'Git commit SHA.'
         git_full_url:
           type: string
           nullable: true
-          description: Git full URL.
+          description: 'Git full URL.'
         docker_registry_image_name:
           type: string
           nullable: true
-          description: Docker registry image name.
+          description: 'Docker registry image name.'
         docker_registry_image_tag:
           type: string
           nullable: true
-          description: Docker registry image tag.
+          description: 'Docker registry image tag.'
         build_pack:
           type: string
-          description: Build pack.
+          description: 'Build pack.'
           enum:
             - nixpacks
+            - railpack
             - static
             - dockerfile
             - dockercompose
         static_image:
           type: string
-          description: Static image used when static site is deployed.
+          description: 'Static image used when static site is deployed.'
         install_command:
           type: string
-          description: Install command.
+          description: 'Install command.'
         build_command:
           type: string
-          description: Build command.
+          description: 'Build command.'
         start_command:
           type: string
-          description: Start command.
+          description: 'Start command.'
         ports_exposes:
           type: string
-          description: Ports exposes.
+          description: 'Ports exposes.'
         ports_mappings:
           type: string
           nullable: true
-          description: Ports mappings.
+          description: 'Ports mappings.'
+        custom_network_aliases:
+          type: string
+          nullable: true
+          description: 'Network aliases for Docker container.'
         base_directory:
           type: string
-          description: Base directory for all commands.
+          description: 'Base directory for all commands.'
         publish_directory:
           type: string
-          description: Publish directory.
+          description: 'Publish directory.'
         health_check_enabled:
           type: boolean
-          description: Health check enabled.
+          description: 'Health check enabled.'
         health_check_path:
           type: string
-          description: Health check path.
+          description: 'Health check path.'
         health_check_port:
           type: string
           nullable: true
-          description: Health check port.
+          description: 'Health check port.'
         health_check_host:
           type: string
           nullable: true
-          description: Health check host.
+          description: 'Health check host.'
         health_check_method:
           type: string
-          description: Health check method.
+          description: 'Health check method.'
         health_check_return_code:
           type: integer
-          description: Health check return code.
+          description: 'Health check return code.'
         health_check_scheme:
           type: string
-          description: Health check scheme.
+          description: 'Health check scheme.'
         health_check_response_text:
           type: string
           nullable: true
-          description: Health check response text.
+          description: 'Health check response text.'
         health_check_interval:
           type: integer
-          description: Health check interval in seconds.
+          description: 'Health check interval in seconds.'
         health_check_timeout:
           type: integer
-          description: Health check timeout in seconds.
+          description: 'Health check timeout in seconds.'
         health_check_retries:
           type: integer
-          description: Health check retries count.
+          description: 'Health check retries count.'
         health_check_start_period:
           type: integer
-          description: Health check start period in seconds.
+          description: 'Health check start period in seconds.'
+        health_check_type:
+          type: string
+          description: 'Health check type: http or cmd.'
+          enum:
+            - http
+            - cmd
+        health_check_command:
+          type: string
+          nullable: true
+          description: 'Health check command for CMD type.'
         limits_memory:
           type: string
-          description: Memory limit.
+          description: 'Memory limit.'
         limits_memory_swap:
           type: string
-          description: Memory swap limit.
+          description: 'Memory swap limit.'
         limits_memory_swappiness:
           type: integer
-          description: Memory swappiness.
+          description: 'Memory swappiness.'
         limits_memory_reservation:
           type: string
-          description: Memory reservation.
+          description: 'Memory reservation.'
         limits_cpus:
           type: string
-          description: CPU limit.
+          description: 'CPU limit.'
         limits_cpuset:
           type: string
           nullable: true
-          description: CPU set.
+          description: 'CPU set.'
         limits_cpu_shares:
           type: integer
-          description: CPU shares.
+          description: 'CPU shares.'
         status:
           type: string
-          description: Application status.
+          description: 'Application status.'
         preview_url_template:
           type: string
-          description: Preview URL template.
+          description: 'Preview URL template.'
         destination_type:
           type: string
-          description: Destination type.
+          description: 'Destination type.'
         destination_id:
           type: integer
-          description: Destination identifier.
+          description: 'Destination identifier.'
         source_id:
           type: integer
           nullable: true
-          description: Source identifier.
+          description: 'Source identifier.'
         private_key_id:
           type: integer
           nullable: true
-          description: Private key identifier.
+          description: 'Private key identifier.'
         environment_id:
           type: integer
-          description: Environment identifier.
+          description: 'Environment identifier.'
         dockerfile:
           type: string
           nullable: true
-          description: Dockerfile content. Used for dockerfile build pack.
+          description: 'Dockerfile content. Used for dockerfile build pack.'
         dockerfile_location:
           type: string
-          description: Dockerfile location.
+          description: 'Dockerfile location.'
         custom_labels:
           type: string
           nullable: true
-          description: Custom labels.
+          description: 'Custom labels.'
         dockerfile_target_build:
           type: string
           nullable: true
-          description: Dockerfile target build.
+          description: 'Dockerfile target build.'
         manual_webhook_secret_github:
           type: string
           nullable: true
-          description: Manual webhook secret for GitHub.
+          description: 'Manual webhook secret for GitHub.'
         manual_webhook_secret_gitlab:
           type: string
           nullable: true
-          description: Manual webhook secret for GitLab.
+          description: 'Manual webhook secret for GitLab.'
         manual_webhook_secret_bitbucket:
           type: string
           nullable: true
-          description: Manual webhook secret for Bitbucket.
+          description: 'Manual webhook secret for Bitbucket.'
         manual_webhook_secret_gitea:
           type: string
           nullable: true
-          description: Manual webhook secret for Gitea.
+          description: 'Manual webhook secret for Gitea.'
         docker_compose_location:
           type: string
-          description: Docker compose location.
+          description: 'Docker compose location.'
         docker_compose:
           type: string
           nullable: true
-          description: Docker compose content. Used for docker compose build pack.
+          description: 'Docker compose content. Used for docker compose build pack.'
         docker_compose_raw:
           type: string
           nullable: true
-          description: Docker compose raw content.
+          description: 'Docker compose raw content.'
         docker_compose_domains:
           type: string
           nullable: true
-          description: Docker compose domains.
+          description: 'Docker compose domains.'
         docker_compose_custom_start_command:
           type: string
           nullable: true
-          description: Docker compose custom start command.
+          description: 'Docker compose custom start command.'
         docker_compose_custom_build_command:
           type: string
           nullable: true
-          description: Docker compose custom build command.
+          description: 'Docker compose custom build command.'
         swarm_replicas:
           type: integer
           nullable: true
-          description: Swarm replicas. Only used for swarm deployments.
+          description: 'Swarm replicas. Only used for swarm deployments.'
         swarm_placement_constraints:
           type: string
           nullable: true
-          description: Swarm placement constraints. Only used for swarm deployments.
+          description: 'Swarm placement constraints. Only used for swarm deployments.'
         custom_docker_run_options:
           type: string
           nullable: true
-          description: Custom docker run options.
+          description: 'Custom docker run options.'
         post_deployment_command:
           type: string
           nullable: true
-          description: Post deployment command.
+          description: 'Post deployment command.'
         post_deployment_command_container:
           type: string
           nullable: true
-          description: Post deployment command container.
+          description: 'Post deployment command container.'
         pre_deployment_command:
           type: string
           nullable: true
-          description: Pre deployment command.
+          description: 'Pre deployment command.'
         pre_deployment_command_container:
           type: string
           nullable: true
-          description: Pre deployment command container.
+          description: 'Pre deployment command container.'
         watch_paths:
           type: string
           nullable: true
-          description: Watch paths.
+          description: 'Watch paths.'
         custom_healthcheck_found:
           type: boolean
-          description: Custom healthcheck found.
+          description: 'Custom healthcheck found.'
         redirect:
           type: string
           nullable: true
-          description: How to set redirect with Traefik / Caddy. www<->non-www.
+          description: 'How to set redirect with Traefik / Caddy. www<->non-www.'
           enum:
             - www
             - non-www
@@ -270,26 +409,39 @@ components:
         created_at:
           type: string
           format: date-time
-          description: The date and time when the application was created.
+          description: 'The date and time when the application was created.'
         updated_at:
           type: string
           format: date-time
-          description: The date and time when the application was last updated.
+          description: 'The date and time when the application was last updated.'
         deleted_at:
           type: string
           format: date-time
           nullable: true
-          description: The date and time when the application was deleted.
+          description: 'The date and time when the application was deleted.'
         compose_parsing_version:
           type: string
-          description: How Coolify parse the compose file.
+          description: 'How Coolify parse the compose file.'
         custom_nginx_configuration:
           type: string
           nullable: true
-          description: Custom Nginx configuration base64 encoded.
+          description: 'Custom Nginx configuration base64 encoded.'
+        is_http_basic_auth_enabled:
+          type: boolean
+          description: 'HTTP Basic Authentication enabled.'
+        http_basic_auth_username:
+          type: string
+          nullable: true
+          description: 'Username for HTTP Basic Authentication'
+        http_basic_auth_password:
+          type: string
+          nullable: true
+          description: 'Password for HTTP Basic Authentication'
+        settings:
+          $ref: '#/components/schemas/ApplicationSetting'
       type: object
     ApplicationDeploymentQueue:
-      description: Project model
+      description: 'Project model'
       properties:
         id:
           type: integer
@@ -299,6 +451,18 @@ components:
           type: string
         pull_request_id:
           type: integer
+        docker_registry_image_tag:
+          type: string
+          nullable: true
+        configuration_hash:
+          type: string
+          nullable: true
+        configuration_snapshot:
+          type: object
+          nullable: true
+        configuration_diff:
+          type: object
+          nullable: true
         force_rebuild:
           type: boolean
         commit:
@@ -338,8 +502,88 @@ components:
         commit_message:
           type: string
       type: object
+    ApplicationSetting:
+      description: 'Application settings.'
+      properties:
+        is_static:
+          type: boolean
+        is_git_submodules_enabled:
+          type: boolean
+        is_git_lfs_enabled:
+          type: boolean
+        is_auto_deploy_enabled:
+          type: boolean
+        is_force_https_enabled:
+          type: boolean
+        is_debug_enabled:
+          type: boolean
+        is_preview_deployments_enabled:
+          type: boolean
+        is_log_drain_enabled:
+          type: boolean
+        is_gpu_enabled:
+          type: boolean
+        gpu_driver:
+          type: string
+          nullable: true
+        gpu_count:
+          type: string
+          nullable: true
+        gpu_device_ids:
+          type: string
+          nullable: true
+        gpu_options:
+          type: string
+          nullable: true
+        is_include_timestamps:
+          type: boolean
+        is_swarm_only_worker_nodes:
+          type: boolean
+        is_raw_compose_deployment_enabled:
+          type: boolean
+        is_build_server_enabled:
+          type: boolean
+        is_consistent_container_name_enabled:
+          type: boolean
+        is_gzip_enabled:
+          type: boolean
+        is_stripprefix_enabled:
+          type: boolean
+        connect_to_docker_network:
+          type: boolean
+        custom_internal_name:
+          type: string
+          nullable: true
+        is_container_label_escape_enabled:
+          type: boolean
+        is_env_sorting_enabled:
+          type: boolean
+        is_container_label_readonly_enabled:
+          type: boolean
+        is_preserve_repository_enabled:
+          type: boolean
+        disable_build_cache:
+          type: boolean
+        is_spa:
+          type: boolean
+        is_git_shallow_clone_enabled:
+          type: boolean
+        is_pr_deployments_public_enabled:
+          type: boolean
+        use_build_secrets:
+          type: boolean
+        inject_build_args_to_dockerfile:
+          type: boolean
+        include_source_commit_in_build:
+          type: boolean
+        docker_images_to_keep:
+          type: integer
+        stop_grace_period:
+          type: integer
+          nullable: true
+      type: object
     Environment:
-      description: Environment model
+      description: 'Environment model'
       properties:
         id:
           type: integer
@@ -355,7 +599,7 @@ components:
           type: string
       type: object
     EnvironmentVariable:
-      description: Environment Variable model
+      description: 'Environment Variable model'
       properties:
         id:
           type: integer
@@ -365,13 +609,15 @@ components:
           type: string
         resourceable_id:
           type: integer
-        is_build_time:
-          type: boolean
         is_literal:
           type: boolean
         is_multiline:
           type: boolean
         is_preview:
+          type: boolean
+        is_runtime:
+          type: boolean
+        is_buildtime:
           type: boolean
         is_shared:
           type: boolean
@@ -383,6 +629,9 @@ components:
           type: string
         real_value:
           type: string
+        comment:
+          type: string
+          nullable: true
         version:
           type: string
         created_at:
@@ -391,7 +640,7 @@ components:
           type: string
       type: object
     PrivateKey:
-      description: Private Key model
+      description: 'Private Key model'
       properties:
         id:
           type: integer
@@ -404,6 +653,12 @@ components:
         private_key:
           type: string
           format: private-key
+        public_key:
+          type: string
+          description: 'The public key of the private key.'
+        fingerprint:
+          type: string
+          description: 'The fingerprint of the private key.'
         is_git_related:
           type: boolean
         team_id:
@@ -414,7 +669,7 @@ components:
           type: string
       type: object
     Project:
-      description: Project model
+      description: 'Project model'
       properties:
         id:
           type: integer
@@ -424,73 +679,150 @@ components:
           type: string
         description:
           type: string
-        environments:
-          description: The environments of the project.
-          type: array
-          items:
-            $ref: '#/components/schemas/Environment'
+      type: object
+    ScheduledTask:
+      description: 'Scheduled Task model'
+      properties:
+        id:
+          type: integer
+          description: 'The unique identifier of the scheduled task in the database.'
+        uuid:
+          type: string
+          description: 'The unique identifier of the scheduled task.'
+        enabled:
+          type: boolean
+          description: 'The flag to indicate if the scheduled task is enabled.'
+        name:
+          type: string
+          description: 'The name of the scheduled task.'
+        command:
+          type: string
+          description: 'The command to execute.'
+        frequency:
+          type: string
+          description: 'The frequency of the scheduled task.'
+        container:
+          type: string
+          nullable: true
+          description: 'The container where the command should be executed.'
+        timeout:
+          type: integer
+          description: 'The timeout of the scheduled task in seconds.'
+        created_at:
+          type: string
+          format: date-time
+          description: 'The date and time when the scheduled task was created.'
+        updated_at:
+          type: string
+          format: date-time
+          description: 'The date and time when the scheduled task was last updated.'
+      type: object
+    ScheduledTaskExecution:
+      description: 'Scheduled Task Execution model'
+      properties:
+        uuid:
+          type: string
+          description: 'The unique identifier of the execution.'
+        status:
+          type: string
+          enum:
+            - success
+            - failed
+            - running
+          description: 'The status of the execution.'
+        message:
+          type: string
+          nullable: true
+          description: 'The output message of the execution.'
+        retry_count:
+          type: integer
+          description: 'The number of retries.'
+        duration:
+          type: number
+          nullable: true
+          description: 'Duration in seconds.'
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'When the execution started.'
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'When the execution finished.'
+        created_at:
+          type: string
+          format: date-time
+          description: 'When the record was created.'
+        updated_at:
+          type: string
+          format: date-time
+          description: 'When the record was last updated.'
       type: object
     Server:
-      description: Server model
+      description: 'Server model'
       properties:
         id:
           type: integer
-          description: The server ID.
+          description: 'The server ID.'
         uuid:
           type: string
-          description: The server UUID.
+          description: 'The server UUID.'
         name:
           type: string
-          description: The server name.
+          description: 'The server name.'
         description:
           type: string
-          description: The server description.
+          description: 'The server description.'
         ip:
           type: string
-          description: The IP address.
+          description: 'The IP address.'
         user:
           type: string
-          description: The user.
+          description: 'The user.'
         port:
           type: integer
-          description: The port number.
+          description: 'The port number.'
         proxy:
           type: object
-          description: The proxy configuration.
+          description: 'The proxy configuration.'
         proxy_type:
           type: string
           enum:
             - traefik
             - caddy
             - none
-          description: The proxy type.
+          description: 'The proxy type.'
         high_disk_usage_notification_sent:
           type: boolean
-          description: The flag to indicate if the high disk usage notification has been sent.
+          description: 'The flag to indicate if the high disk usage notification has been sent.'
         unreachable_notification_sent:
           type: boolean
-          description: The flag to indicate if the unreachable notification has been sent.
+          description: 'The flag to indicate if the unreachable notification has been sent.'
         unreachable_count:
           type: integer
-          description: The unreachable count for your server.
+          description: 'The unreachable count for your server.'
         validation_logs:
           type: string
-          description: The validation logs.
+          description: 'The validation logs.'
         log_drain_notification_sent:
           type: boolean
-          description: The flag to indicate if the log drain notification has been sent.
+          description: 'The flag to indicate if the log drain notification has been sent.'
         swarm_cluster:
           type: string
-          description: The swarm cluster configuration.
+          description: 'The swarm cluster configuration.'
         settings:
           $ref: '#/components/schemas/ServerSetting'
       type: object
     ServerSetting:
-      description: Server Settings model
+      description: 'Server Settings model'
       properties:
         id:
           type: integer
         concurrent_builds:
+          type: integer
+        deployment_queue_limit:
           type: integer
         dynamic_timeout:
           type: integer
@@ -521,6 +853,8 @@ components:
         is_swarm_manager:
           type: boolean
         is_swarm_worker:
+          type: boolean
+        is_terminal_enabled:
           type: boolean
         is_usable:
           type: boolean
@@ -558,130 +892,238 @@ components:
           type: string
         delete_unused_volumes:
           type: boolean
-          description: The flag to indicate if the unused volumes should be deleted.
+          description: 'The flag to indicate if the unused volumes should be deleted.'
         delete_unused_networks:
           type: boolean
-          description: The flag to indicate if the unused networks should be deleted.
+          description: 'The flag to indicate if the unused networks should be deleted.'
+        connection_timeout:
+          type: integer
+          description: 'SSH connection timeout in seconds.'
       type: object
     Service:
-      description: Service model
+      description: 'Service model'
       properties:
         id:
           type: integer
-          description: The unique identifier of the service. Only used for database identification.
+          description: 'The unique identifier of the service. Only used for database identification.'
         uuid:
           type: string
-          description: The unique identifier of the service.
+          description: 'The unique identifier of the service.'
         name:
           type: string
-          description: The name of the service.
+          description: 'The name of the service.'
         environment_id:
           type: integer
-          description: The unique identifier of the environment where the service is attached to.
+          description: 'The unique identifier of the environment where the service is attached to.'
         server_id:
           type: integer
-          description: The unique identifier of the server where the service is running.
+          description: 'The unique identifier of the server where the service is running.'
         description:
           type: string
-          description: The description of the service.
+          description: 'The description of the service.'
         docker_compose_raw:
           type: string
-          description: The raw docker-compose.yml file of the service.
+          description: 'The raw docker-compose.yml file of the service.'
         docker_compose:
           type: string
-          description: The docker-compose.yml file that is parsed and modified by Coolify.
+          description: 'The docker-compose.yml file that is parsed and modified by Coolify.'
         destination_type:
           type: string
-          description: Destination type.
+          description: 'Destination type.'
         destination_id:
           type: integer
-          description: The unique identifier of the destination where the service is running.
+          description: 'The unique identifier of the destination where the service is running.'
         connect_to_docker_network:
           type: boolean
-          description: The flag to connect the service to the predefined Docker network.
+          description: 'The flag to connect the service to the predefined Docker network.'
         is_container_label_escape_enabled:
           type: boolean
-          description: The flag to enable the container label escape.
+          description: 'The flag to enable the container label escape.'
         is_container_label_readonly_enabled:
           type: boolean
-          description: The flag to enable the container label readonly.
+          description: 'The flag to enable the container label readonly.'
         config_hash:
           type: string
-          description: The hash of the service configuration.
+          description: 'The hash of the service configuration.'
         service_type:
           type: string
-          description: The type of the service.
+          description: 'The type of the service.'
         created_at:
           type: string
-          description: The date and time when the service was created.
+          description: 'The date and time when the service was created.'
         updated_at:
           type: string
-          description: The date and time when the service was last updated.
+          description: 'The date and time when the service was last updated.'
         deleted_at:
           type: string
-          description: The date and time when the service was deleted.
+          description: 'The date and time when the service was deleted.'
+      type: object
+    Destination:
+      description: 'A Docker network destination attached to a server.'
+      properties:
+        uuid:
+          type: string
+        name:
+          type: string
+        network:
+          type: string
+        type:
+          type: string
+          enum:
+            - standalone
+            - swarm
+        server_uuid:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      type: object
+    Tag:
+      description: 'Tag model'
+      properties:
+        uuid:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
       type: object
     Team:
-      description: Team model
+      description: 'Team model'
       properties:
         id:
           type: integer
-          description: The unique identifier of the team.
+          description: 'The unique identifier of the team.'
         name:
           type: string
-          description: The name of the team.
+          description: 'The name of the team.'
         description:
           type: string
-          description: The description of the team.
+          description: 'The description of the team.'
         personal_team:
           type: boolean
-          description: Whether the team is personal or not.
+          description: 'Whether the team is personal or not.'
         created_at:
           type: string
-          description: The date and time the team was created.
+          description: 'The date and time the team was created.'
         updated_at:
           type: string
-          description: The date and time the team was last updated.
+          description: 'The date and time the team was last updated.'
         show_boarding:
           type: boolean
-          description: Whether to show the boarding screen or not.
+          description: 'Whether to show the boarding screen or not.'
         custom_server_limit:
           type: string
-          description: The custom server limit.
+          description: 'The custom server limit.'
         members:
-          description: The members of the team.
+          description: 'The members of the team.'
           type: array
           items:
             $ref: '#/components/schemas/User'
       type: object
     User:
-      description: User model
+      description: 'User model'
       properties:
         id:
           type: integer
-          description: The user identifier in the database.
+          description: 'The user identifier in the database.'
         name:
           type: string
-          description: The user name.
+          description: 'The user name.'
         email:
           type: string
-          description: The user email.
+          description: 'The user email.'
         email_verified_at:
           type: string
-          description: The date when the user email was verified.
+          description: 'The date when the user email was verified.'
         created_at:
           type: string
-          description: The date when the user was created.
+          description: 'The date when the user was created.'
         updated_at:
           type: string
-          description: The date when the user was updated.
+          description: 'The date when the user was updated.'
         two_factor_confirmed_at:
           type: string
-          description: The date when the user two factor was confirmed.
+          description: 'The date when the user two factor was confirmed.'
         force_password_reset:
           type: boolean
-          description: The flag to force the user to reset the password.
+          description: 'The flag to force the user to reset the password.'
         marketing_emails:
           type: boolean
-          description: The flag to receive marketing emails.
+          description: 'The flag to receive marketing emails.'
       type: object
+  responses:
+    '400':
+      description: 'Invalid token.'
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: 'Invalid token.'
+            type: object
+    '401':
+      description: Unauthenticated.
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: Unauthenticated.
+            type: object
+    '404':
+      description: 'Resource not found.'
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: 'Resource not found.'
+            type: object
+    '422':
+      description: 'Validation error.'
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: 'Validation error.'
+              errors:
+                type: object
+                example:
+                  name: ['The name field is required.']
+                  api_url: ['The api url field is required.', 'The api url format is invalid.']
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+            type: object
+    '429':
+      description: 'Rate limit exceeded.'
+      headers:
+        Retry-After:
+          description: 'Number of seconds to wait before retrying.'
+          schema:
+            type: integer
+            example: 60
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: 'Rate limit exceeded. Please try again later.'
+            type: object
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: 'Go to `Keys & Tokens` / `API tokens` and create a new token. Use the token as the bearer token.'
+      scheme: bearer

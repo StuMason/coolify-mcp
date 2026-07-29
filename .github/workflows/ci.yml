@@ -38,6 +38,9 @@ jobs:
       - name: Check client-vs-spec drift
         run: npm run check:spec-drift
 
+      - name: Check openapi-chunks drift
+        run: npm run check:chunk-drift
+
       - name: Build
         run: npm run build
 

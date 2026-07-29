@@ -1,0 +1,433 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /digitalocean/images:
+    get:
+      tags:
+        - DigitalOcean
+      summary: 'Get DigitalOcean images'
+      operationId: get-digitalocean-images
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of DigitalOcean images.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+      security:
+        -
+          bearerAuth: []
+  /digitalocean/regions:
+    get:
+      tags:
+        - DigitalOcean
+      summary: 'Get DigitalOcean regions'
+      operationId: get-digitalocean-regions
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of DigitalOcean regions.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+      security:
+        -
+          bearerAuth: []
+  /digitalocean/sizes:
+    get:
+      tags:
+        - DigitalOcean
+      summary: 'Get DigitalOcean sizes'
+      operationId: get-digitalocean-sizes
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of DigitalOcean sizes.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+      security:
+        -
+          bearerAuth: []
+  /digitalocean/ssh-keys:
+    get:
+      tags:
+        - DigitalOcean
+      summary: 'Get DigitalOcean SSH keys'
+      operationId: get-digitalocean-ssh-keys
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of DigitalOcean SSH keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed.'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/firewalls:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner Firewalls'
+      description: 'Get all existing Hetzner firewalls for the current project.'
+      operationId: get-hetzner-firewalls
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner firewalls.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/images:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner Images'
+      description: 'Get all available Hetzner system images (operating systems).'
+      operationId: get-hetzner-images
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner images.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, type: { type: string }, os_flavor: { type: string }, os_version: { type: string }, architecture: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/locations:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner Locations'
+      description: 'Get all available Hetzner datacenter locations.'
+      operationId: get-hetzner-locations
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner locations.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, country: { type: string }, city: { type: string }, latitude: { type: number }, longitude: { type: number } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/networks:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner Networks'
+      description: 'Get all existing Hetzner private networks for the current project.'
+      operationId: get-hetzner-networks
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner networks.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string }, ip_range: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/server-types:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner Server Types'
+      description: 'Get all available Hetzner server types (instance sizes).'
+      operationId: get-hetzner-server-types
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner server types.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string }, description: { type: string }, cores: { type: integer }, memory: { type: number }, disk: { type: integer }, prices: { type: array, items: { type: object, properties: { location: { type: string, description: 'Datacenter location name' }, price_hourly: { type: object, properties: { net: { type: string }, gross: { type: string } } }, price_monthly: { type: object, properties: { net: { type: string }, gross: { type: string } } } } } } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /hetzner/ssh-keys:
+    get:
+      tags:
+        - Hetzner
+      summary: 'Get Hetzner SSH Keys'
+      description: 'Get all SSH keys stored in the Hetzner account.'
+      operationId: get-hetzner-ssh-keys
+      parameters:
+        -
+          name: cloud_provider_token_uuid
+          in: query
+          description: 'Cloud provider token UUID. Required if cloud_provider_token_id is not provided.'
+          required: false
+          schema:
+            type: string
+        -
+          name: cloud_provider_token_id
+          in: query
+          description: 'Deprecated: Use cloud_provider_token_uuid instead. Cloud provider token UUID.'
+          required: false
+          deprecated: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List of Hetzner SSH keys.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, name: { type: string }, fingerprint: { type: string }, public_key: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /vultr/os:
+    get:
+      tags:
+        - Vultr
+      summary: 'Get Vultr Operating Systems'
+      description: 'Get all available Vultr operating systems.'
+      operationId: get-vultr-operating-systems
+      responses:
+        '200':
+          description: 'List of Vultr operating systems.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /vultr/plans:
+    get:
+      tags:
+        - Vultr
+      summary: 'Get Vultr Plans'
+      description: 'Get all available Vultr plans.'
+      operationId: get-vultr-plans
+      responses:
+        '200':
+          description: 'List of Vultr plans.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /vultr/regions:
+    get:
+      tags:
+        - Vultr
+      summary: 'Get Vultr Regions'
+      description: 'Get all available Vultr regions.'
+      operationId: get-vultr-regions
+      responses:
+        '200':
+          description: 'List of Vultr regions.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  /vultr/ssh-keys:
+    get:
+      tags:
+        - Vultr
+      summary: 'Get Vultr SSH Keys'
+      description: 'Get all Vultr SSH keys available to the selected token.'
+      operationId: get-vultr-ssh-keys
+      responses:
+        '200':
+          description: 'List of Vultr SSH keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []

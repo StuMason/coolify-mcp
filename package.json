@@ -29,6 +29,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:spec-drift": "node scripts/check-client-spec-drift.mjs",
+    "build:chunks": "node scripts/split-openapi-chunks.mjs",
+    "check:chunk-drift": "node scripts/split-openapi-chunks.mjs --check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",

@@ -4,7 +4,7 @@ Follow this order:
 
 ## Order of operations
 
-1. **Verify the endpoint exists in the Coolify API.** Check `docs/openapi-chunks/` first, then check the [Coolify source on GitHub](https://github.com/coollabsio/coolify). The OpenAPI is an incomplete projection of the real allowlists (see [API gotchas](/concepts/coolify-api-gotchas)).
+1. **Verify the endpoint exists in the Coolify API.** Check `docs/openapi-chunks/` first (generated from the vendored spec by `npm run build:chunks`), then check the [Coolify source on GitHub](https://github.com/coollabsio/coolify). The OpenAPI is an incomplete projection of the real allowlists (see [API gotchas](/concepts/coolify-api-gotchas)).
 2. **Add the request / response types** to `src/types/coolify.ts`. Always with explicit fields, never `unknown` or `Record<string, unknown>` unless you genuinely don't know the shape.
 3. **Add the client method** to `src/lib/coolify-client.ts` with an explicit return type. Pattern:
 

@@ -3,21 +3,22 @@ info:
   title: Coolify
   version: '0.1'
 paths:
-  /resources:
+  /tags:
     get:
       tags:
-        - Resources
+        - Tags
       summary: List
-      description: 'Get all resources.'
-      operationId: list-resources
+      description: 'List all tags for the current team.'
+      operationId: list-tags
       responses:
         '200':
-          description: 'Get all resources'
+          description: 'All tags for the current team.'
           content:
             application/json:
               schema:
-                type: string
-              example: 'Content is very complex. Will be implemented later.'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
         '401':
           $ref: '#/components/responses/401'
         '400':

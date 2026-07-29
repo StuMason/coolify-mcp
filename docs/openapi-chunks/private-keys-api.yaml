@@ -6,30 +6,31 @@ paths:
   /security/keys:
     get:
       tags:
-        - Private Keys
+        - 'Private Keys'
       summary: List
-      description: List all private keys.
+      description: 'List all private keys.'
       operationId: list-private-keys
       responses:
         '200':
-          description: Get all private keys.
+          description: 'Get all private keys.'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/PrivateKey'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     post:
       tags:
-        - Private Keys
+        - 'Private Keys'
       summary: Create
-      description: Create a new private key.
+      description: 'Create a new private key.'
       operationId: create-private-key
       requestBody:
         required: true
@@ -49,25 +50,27 @@ paths:
               additionalProperties: false
       responses:
         '201':
-          description: The created private key's UUID.
+          description: "The created private key's UUID."
           content:
             application/json:
               schema:
                 properties:
-                  uuid:
-                    type: string
+                  uuid: { type: string }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     patch:
       tags:
-        - Private Keys
+        - 'Private Keys'
       summary: Update
-      description: Update a private key.
+      description: 'Update a private key.'
       operationId: update-private-key
       requestBody:
         required: true
@@ -87,78 +90,90 @@ paths:
               additionalProperties: false
       responses:
         '201':
-          description: The updated private key's UUID.
+          description: "The updated private key's UUID."
           content:
             application/json:
               schema:
                 properties:
-                  uuid:
-                    type: string
+                  uuid: { type: string }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '422':
+          $ref: '#/components/responses/422'
       security:
-        - bearerAuth: []
-  /security/keys/{uuid}:
+        -
+          bearerAuth: []
+  '/security/keys/{uuid}':
     get:
       tags:
-        - Private Keys
+        - 'Private Keys'
       summary: Get
-      description: Get key by UUID.
+      description: 'Get key by UUID.'
       operationId: get-private-key-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Private Key UUID
+          description: 'Private Key UUID'
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Get all private keys.
+          description: 'Get all private keys.'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PrivateKey'
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
-          description: Private Key not found.
+          description: 'Private Key not found.'
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []
     delete:
       tags:
-        - Private Keys
+        - 'Private Keys'
       summary: Delete
-      description: Delete a private key.
+      description: 'Delete a private key.'
       operationId: delete-private-key-by-uuid
       parameters:
-        - name: uuid
+        -
+          name: uuid
           in: path
-          description: Private Key UUID
+          description: 'Private Key UUID'
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Private Key deleted.
+          description: 'Private Key deleted.'
           content:
             application/json:
               schema:
                 properties:
-                  message:
-                    type: string
-                    example: Private Key deleted.
+                  message: { type: string, example: 'Private Key deleted.' }
                 type: object
-        '400':
-          $ref: '#/components/responses/400'
         '401':
           $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
         '404':
-          description: Private Key not found.
+          description: 'Private Key not found.'
+        '422':
+          description: 'Private Key is in use and cannot be deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Private Key is in use and cannot be deleted.' }
+                type: object
       security:
-        - bearerAuth: []
+        -
+          bearerAuth: []

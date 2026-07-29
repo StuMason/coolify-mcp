@@ -36,7 +36,8 @@ When adding new Coolify API endpoints, follow this order:
 - **src/lib/coolify-client.ts** - HTTP client wrapping Coolify REST API
 - **src/lib/mcp-server.ts** - MCP tool definitions and handlers
 - **src/types/coolify.ts** - All Coolify API type definitions
-- **docs/openapi-chunks/** - OpenAPI spec chunks for reference
+- **docs/coolify-openapi.yaml** - vendored upstream OpenAPI spec; ground truth for "does Coolify support X"
+- **docs/openapi-chunks/** - the same spec split by resource for reference. **Generated** — run `npm run build:chunks` after re-vendoring the spec, never hand-edit. `npm run check:chunk-drift` fails CI if they diverge.
 
 ### Context-Optimized Responses
 
