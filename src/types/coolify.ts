@@ -441,7 +441,13 @@ export interface EnvironmentVariable {
   id: number;
   uuid: string;
   key: string;
-  value: string;
+  /**
+   * Optional because Coolify v4.2 strips sensitive fields from API responses
+   * unless the token carries sensitive-read scope (coollabsio/coolify#9893).
+   * Masked responses still populate it with the mask sentinel; a genuinely
+   * withheld value arrives as undefined.
+   */
+  value?: string;
   is_buildtime: boolean;
   is_runtime: boolean;
   is_literal: boolean;
@@ -488,7 +494,8 @@ export interface BulkUpdateEnvVarsRequest {
 export interface EnvVarSummary {
   uuid: string;
   key: string;
-  value: string;
+  /** Undefined when Coolify v4.2 withholds the value. See {@link EnvironmentVariable.value}. */
+  value?: string;
   is_buildtime: boolean;
   is_runtime: boolean;
 }
@@ -911,7 +918,13 @@ export interface PrivateKey {
   uuid: string;
   name: string;
   description?: string;
-  private_key: string;
+  /**
+   * Optional because Coolify v4.2 strips sensitive fields from API responses
+   * unless the token carries sensitive-read scope (coollabsio/coolify#9893).
+   * On such instances this is simply absent rather than an error, so callers
+   * must handle the missing case.
+   */
+  private_key?: string;
   public_key?: string;
   fingerprint?: string;
   is_git_related: boolean;

@@ -90,6 +90,15 @@ Secrets are masked at the API boundary — a client granted "list" access never 
 
 Details: [security model](https://coolify-mcp.stumason.dev/concepts/security).
 
+## Coolify version compatibility
+
+Works against Coolify v4.0 through v4.2+. Two v4.2 changes are worth knowing about:
+
+- **Secrets are hidden by default.** From v4.2 Coolify strips sensitive fields from API responses unless the token has sensitive-read scope, so `reveal: true` can return a variable with no value at all. That is the server withholding it, not a bug here — issue a token with sensitive-read scope if you need plaintext back.
+- **Member-role tokens are read-only.** From v4.2 a token belonging to a Member-role user can view resources but cannot deploy, start, stop, create, update or delete. Those calls return 403. Promote the user or use a token from a role with write access.
+
+State-changing endpoints also moved from GET to POST in v4.2. The client handles this for you across both eras, so no action is needed.
+
 ## Example prompts
 
 ```text

@@ -241,6 +241,40 @@ function mapFqdnToDomains<T extends { fqdn?: string; domains?: string }>(
 }
 
 /**
+ * Error thrown for any non-2xx Coolify API response.
+ *
+ * Carries the HTTP status alongside the message so callers can branch on it —
+ * notably the v4.2 GET-to-POST fallback, which must distinguish a 405 (method
+ * rejected by the router, nothing executed) from every other failure. The
+ * message is byte-identical to what a plain `Error` carried before, so this is
+ * a drop-in for anything matching on `error.message`.
+ */
+export class CoolifyApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'CoolifyApiError';
+  }
+}
+
+/**
+ * Endpoints that Coolify v4.2 moved from GET to POST *and* that were GET-only
+ * before it, so no single method works across both eras. Keys are stable
+ * endpoint identifiers rather than request paths — see
+ * {@link CoolifyClient.postWithLegacyGetFallback}. Declared as a closed set so
+ * a new call site cannot silently reuse another endpoint's cache entry.
+ */
+const LEGACY_GET_ENDPOINTS = {
+  serversValidate: 'servers.validate',
+  apiEnable: 'api.enable',
+  apiDisable: 'api.disable',
+} as const;
+
+type LegacyGetEndpointKey = (typeof LEGACY_GET_ENDPOINTS)[keyof typeof LEGACY_GET_ENDPOINTS];
+
+/**
  * Map a failed response's status/path to an actionable hint for known Coolify quirks.
  * Coolify sometimes returns bodyless errors (e.g. bare `HTTP 500: Internal Server Error`)
  * that leave the caller guessing at the cause — this appends a short, testable hint for
@@ -250,8 +284,11 @@ export function errorHint(status: number, path: string): string | undefined {
   if (status === 500 && /\/scheduled-tasks(\/|$)/.test(path)) {
     return 'Known cause: Coolify stores scheduled-task `command` in a varchar(255) column and rejects longer commands with a bodyless 500 — check the command length (limit 255 chars).';
   }
+  if (status === 405) {
+    return 'Coolify v4.2 moved state-changing endpoints from GET to POST; older versions accept GET only. This client retries automatically, so a 405 reaching you means both methods were rejected — check the endpoint path against your Coolify version.';
+  }
   if (status === 401 || status === 403) {
-    return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation.';
+    return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
@@ -518,6 +555,13 @@ export class CoolifyClient {
   private readonly customHeaders: Record<string, string>;
   private cachedVersion: string | null = null;
 
+  /**
+   * Endpoints observed to reject POST with a 405, meaning this instance
+   * predates the v4.2 GET-to-POST move and wants the legacy GET.
+   * See {@link postWithLegacyGetFallback}.
+   */
+  private readonly legacyGetEndpoints = new Set<LegacyGetEndpointKey>();
+
   constructor(config: CoolifyConfig) {
     if (!config.baseUrl) {
       throw new Error('Coolify base URL is required');
@@ -594,7 +638,7 @@ export class CoolifyClient {
         if (hint) {
           errorMessage = `${errorMessage} (${hint})`;
         }
-        throw new Error(errorMessage);
+        throw new CoolifyApiError(errorMessage, response.status);
       }
 
       return data as T;
@@ -606,6 +650,67 @@ export class CoolifyClient {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * Call an endpoint that Coolify v4.2 moved from GET to POST, working against
+   * both eras without any version probing.
+   *
+   * Three endpoints genuinely diverge — `/enable`, `/disable` and
+   * `/servers/{uuid}/validate` are registered `Route::get` only up to v4.1.2
+   * and `Route::post` only from v4.2 — so neither method works everywhere and
+   * a blanket switch to POST would break every pre-4.2 instance. (The other
+   * endpoints in the v4.2 breaking-change list were already
+   * `Route::match(['get','post'])` in v4.1 and older, so those just send POST
+   * unconditionally.)
+   *
+   * Strategy: try POST, and on a 405 retry once with GET. The retry is safe
+   * because a 405 comes from the router before the controller runs, so nothing
+   * has executed and there is no risk of double-firing a state change. Only 405
+   * triggers the fallback — any other failure propagates untouched.
+   *
+   * The resolved method is cached per `key`, so the extra round trip is paid at
+   * most once per endpoint rather than per call. `key` is a stable endpoint
+   * identifier rather than the request path, because version compatibility is a
+   * property of the instance, not of the resource — `/servers/{uuid}/validate`
+   * behaves the same for every uuid, so keying on the path would re-probe for
+   * every server.
+   *
+   * The cache self-heals in both directions: if a remembered GET later returns a
+   * 405 (the instance was upgraded to v4.2 while this client was running) the
+   * stale preference is dropped and POST is re-probed, rather than 405ing
+   * forever until restart.
+   */
+  private async postWithLegacyGetFallback<T>(
+    key: LegacyGetEndpointKey,
+    path: string,
+    options: RequestInit = {},
+  ): Promise<T> {
+    const isMethodNotAllowed = (error: unknown): boolean =>
+      error instanceof CoolifyApiError && error.status === 405;
+
+    if (this.legacyGetEndpoints.has(key)) {
+      try {
+        return await this.request<T>(path, { ...options, method: 'GET' });
+      } catch (error) {
+        if (!isMethodNotAllowed(error)) {
+          throw error;
+        }
+        // Upgraded to v4.2 under us — forget the stale preference and re-probe.
+        this.legacyGetEndpoints.delete(key);
+      }
+    }
+
+    try {
+      return await this.request<T>(path, { ...options, method: 'POST' });
+    } catch (error) {
+      if (!isMethodNotAllowed(error)) {
+        throw error;
+      }
+      const result = await this.request<T>(path, { ...options, method: 'GET' });
+      this.legacyGetEndpoints.add(key);
+      return result;
     }
   }
 
@@ -707,7 +812,11 @@ export class CoolifyClient {
   }
 
   async validateServer(uuid: string): Promise<ServerValidation> {
-    return this.request<ServerValidation>(`/servers/${uuid}/validate`);
+    // POST from v4.2, GET only before it. See postWithLegacyGetFallback.
+    return this.postWithLegacyGetFallback<ServerValidation>(
+      LEGACY_GET_ENDPOINTS.serversValidate,
+      `/servers/${uuid}/validate`,
+    );
   }
 
   // ===========================================================================
@@ -1172,22 +1281,27 @@ export class CoolifyClient {
     });
   }
 
+  // Service start/stop/restart require POST from Coolify v4.2 and have accepted
+  // POST since well before it (`Route::match(['get','post'])` in v4.1 and older),
+  // so POST is safe unconditionally — no fallback needed.
   async startService(uuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/services/${uuid}/start`, {
-      method: 'GET',
+      method: 'POST',
     });
   }
 
   async stopService(uuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(`/services/${uuid}/stop`, {
-      method: 'GET',
+      method: 'POST',
     });
   }
 
   async restartService(uuid: string, pullLatest = false): Promise<MessageResponse> {
+    // `latest` stays a query param: upstream reads it via `$request->boolean('latest')`,
+    // which draws from the unified input bag, so it works on POST unchanged.
     const qs = pullLatest ? '?latest=true' : '';
     return this.request<MessageResponse>(`/services/${uuid}/restart${qs}`, {
-      method: 'GET',
+      method: 'POST',
     });
   }
 
@@ -1265,9 +1379,10 @@ export class CoolifyClient {
   ): Promise<DeployTriggerResponse> {
     // Detect if the value looks like a UUID or a tag name
     const param = this.isLikelyUuid(tagOrUuid) ? 'uuid' : 'tag';
+    // POST required from v4.2 and accepted long before it (`match(['get','post'])`).
     return this.request<DeployTriggerResponse>(
       `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}`,
-      { method: 'GET' },
+      { method: 'POST' },
     );
   }
 
@@ -1851,12 +1966,19 @@ export class CoolifyClient {
   // API Enable/Disable endpoints
   // ===========================================================================
 
+  // POST from v4.2, GET only before it. See postWithLegacyGetFallback.
   async enableApi(): Promise<MessageResponse> {
-    return this.request<MessageResponse>('/enable', { method: 'GET' });
+    return this.postWithLegacyGetFallback<MessageResponse>(
+      LEGACY_GET_ENDPOINTS.apiEnable,
+      '/enable',
+    );
   }
 
   async disableApi(): Promise<MessageResponse> {
-    return this.request<MessageResponse>('/disable', { method: 'GET' });
+    return this.postWithLegacyGetFallback<MessageResponse>(
+      LEGACY_GET_ENDPOINTS.apiDisable,
+      '/disable',
+    );
   }
 
   // ===========================================================================
