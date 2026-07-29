@@ -254,10 +254,32 @@ export class CoolifyApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Parsed response body, when there was one. Lets callers tell Coolify's routing catch-all apart from a controller's own 404. */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = 'CoolifyApiError';
   }
+}
+
+/**
+ * Was this 404 produced by Coolify's routing catch-all rather than a controller?
+ *
+ * `routes/api.php` ends with `Route::any('/{any}', ...)` returning
+ * `{ message: 'Not found.', docs: 'https://coolify.io/docs' }`. That `docs` key
+ * is the signature — no controller 404 carries it — so it distinguishes "this
+ * method/path is not routed" from "the resource does not exist", which matters
+ * because only the former is safe and useful to retry with a different method.
+ */
+function isRoutingCatchAll(error: CoolifyApiError): boolean {
+  if (error.status !== 404) return false;
+  const body = error.body;
+  if (typeof body !== 'object' || body === null) return false;
+  // `docs` is the strongest signal, but a proxy or a future Coolify could drop
+  // it. The catch-all's exact wording is a cheap second discriminator — a
+  // controller says "<Resource> not found.", never a bare "Not found.".
+  if ('docs' in body) return true;
+  return (body as { message?: unknown }).message === 'Not found.';
 }
 
 /**
@@ -661,7 +683,7 @@ export class CoolifyClient {
         if (hint) {
           errorMessage = `${errorMessage} (${hint})`;
         }
-        throw new CoolifyApiError(errorMessage, response.status);
+        throw new CoolifyApiError(errorMessage, response.status, data);
       }
 
       return data as T;
@@ -688,10 +710,13 @@ export class CoolifyClient {
    * `Route::match(['get','post'])` in v4.1 and older, so those just send POST
    * unconditionally.)
    *
-   * Strategy: try POST, and on a 405 retry once with GET. The retry is safe
+   * Strategy: try POST, and on a 405 or 404 retry once with GET. The retry is safe
    * because a 405 comes from the router before the controller runs, so nothing
-   * has executed and there is no risk of double-firing a state change. Only 405
-   * triggers the fallback — any other failure propagates untouched.
+   * has executed and there is no risk of double-firing a state change. The same
+   * holds for the catch-all 404, which is identified by its body shape rather
+   * than by status alone so a controller's genuine "not found" stays out of the
+   * retry path. Nothing else triggers the fallback — a 500 in particular
+   * propagates untouched, since it may mean the action partially ran.
    *
    * The resolved method is cached per `key`, so the extra round trip is paid at
    * most once per endpoint rather than per call. `key` is a stable endpoint
@@ -710,14 +735,23 @@ export class CoolifyClient {
     path: string,
     options: RequestInit = {},
   ): Promise<T> {
-    const isMethodNotAllowed = (error: unknown): boolean =>
-      error instanceof CoolifyApiError && error.status === 405;
+    // A 405, or the 404 Coolify's routing catch-all returns for an unmatched
+    // method. Verified against a live 4.1.2: POST on these GET-only routes comes
+    // back 404, never 405, so handling only 405 meant the fallback never fired
+    // and enable/disable/validate broke outright.
+    //
+    // Matching on the catch-all's body shape rather than on 404 alone keeps a
+    // controller's genuine "resource not found" out of the retry path — that is
+    // a real answer, not a routing miss, and retrying it would both waste a
+    // request and discard the specific message.
+    const isMethodRejected = (error: unknown): boolean =>
+      error instanceof CoolifyApiError && (error.status === 405 || isRoutingCatchAll(error));
 
     if (this.legacyGetEndpoints.has(key)) {
       try {
         return await this.request<T>(path, { ...options, method: 'GET' });
       } catch (error) {
-        if (!isMethodNotAllowed(error)) {
+        if (!isMethodRejected(error)) {
           throw error;
         }
         // Upgraded to v4.2 under us — forget the stale preference and re-probe.
@@ -728,12 +762,22 @@ export class CoolifyClient {
     try {
       return await this.request<T>(path, { ...options, method: 'POST' });
     } catch (error) {
-      if (!isMethodNotAllowed(error)) {
+      if (!isMethodRejected(error)) {
         throw error;
       }
-      const result = await this.request<T>(path, { ...options, method: 'GET' });
-      this.legacyGetEndpoints.add(key);
-      return result;
+      try {
+        const result = await this.request<T>(path, { ...options, method: 'GET' });
+        this.legacyGetEndpoints.add(key);
+        return result;
+      } catch (getError) {
+        // The POST is a routing miss by construction — isMethodRejected already
+        // established nothing ran — so it carries no information about the
+        // request itself. If the GET reached a controller, its error is the real
+        // answer ("Server not found."), and reporting the POST's bare
+        // "Not found." instead would even pick up the misleading uuid hint.
+        // Only when neither method routed is the POST error the one to report.
+        throw isMethodRejected(getError) ? error : getError;
+      }
     }
   }
 

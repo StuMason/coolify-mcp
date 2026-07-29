@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Integration suite for v4.2 method compatibility** — `v42-compat.integration.test.ts` asserts the pre-4.2 behaviour on an older instance and the v4.2 behaviour on a newer one, so the suite is meaningful either way. Every assertion is side-effect free: a rejected method executes nothing, and `/deploy` with a tag matching no resource proves the method was accepted without deploying anything. `/disable` is never called, since it would cut off the API the client depends on.
+
+- **Version gating for the log integration tests** — database and service log endpoints are v4.2-only, so on an older instance they now report as genuinely **skipped** rather than failed, with the version printed. Resolved at module scope so jest can skip the suites outright: an early `return` inside a test still shows a green tick, which is the false confidence these tests exist to prevent. `dotenv` also runs with `override: true`, because an empty `COOLIFY_URL` in the ambient environment otherwise wins over `.env` and silently skips everything.
+
 - **Tool annotations on all 43 tools, and migration off the deprecated `tool()` API** (#260) — every tool now declares `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`. These are spec-stable since 2025-03-26 and already change client behaviour: Claude Code parallel-dispatches tools marked read-only, and VS Code Copilot stops raising confirmation dialogs for reads. 21 tools are read-only, 20 destructive, 2 neither (`hetzner` provisions but only ever adds; `validate_server` is idempotent).
 
   Registration moved from the SDK's deprecated `tool()` overloads to `registerTool()`, which is also the shape SDK v2 keeps, so this is prep for #259. All 43 call sites go through one `defineTool` wrapper that looks annotations up from a single table — a tool missing from it **throws at construction** rather than silently shipping unannotated. The classification lives in one auditable place rather than scattered across 43 call sites, and tests assert the table and the registered tools stay exactly in step.
@@ -22,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A service is a multi-container stack, so Coolify requires `sub_service_name` on `/services/{uuid}/logs` and "the service logs" has no single answer. The `service` tool gains a `list_containers` action returning the applications and databases inside a service, and `logs` refuses a service request without a `container`, pointing at that action rather than silently picking one.
 
 ### Fixed
+
+- **The v4.2 GET-to-POST fallback never fired on pre-4.2 instances** (#296 follow-up) — a regression shipped in 2.15.0 that broke `system enable_api` / `disable_api` and `validate_server` on exactly the Coolify versions the fallback existed to support.
+
+  `postWithLegacyGetFallback` retried with GET only on a `405`. Coolify ends `routes/api.php` with a catch-all — `Route::any('/{any}', ...)` returning `404 "Not found."` — which swallows an unmatched method+path **before** Laravel can raise a `405`. So a pre-4.2 instance answers `POST /enable` with `404`, the fallback never triggered, and the call failed outright where it had worked before #296.
+
+  Found by running the new compatibility suite against a real Coolify 4.1.2, not by re-reading the spec: the route archaeology behind #296 was correct about which methods each version _registers_, and wrong about what a rejected method actually _returns_.
+
+  The fallback now treats a `405`, **or a 404 carrying the catch-all's signature**, as a method rejection. Matching on the body shape rather than on status alone matters: the catch-all returns `{message: "Not found.", docs: ...}` and no controller 404 carries a `docs` key, so a controller's genuine "resource not found" is recognised as a real answer and never enters the retry path at all. Both cases mean no controller ran, so nothing executed. A `500` still propagates untouched, since it may mean the action partially ran.
+
+  When the GET retry also fails, the error reported is the one from whichever request actually reached a controller — the POST is a routing miss by construction and says nothing about the request, so surfacing its bare "Not found." (complete with an irrelevant uuid hint) would bury the real `"Server not found."`.
 
 - **Log endpoints returned an object behind a `string` type** (#300) — `getApplicationLogs` was declared `Promise<string>` but handed back Coolify's `{ logs: "..." }` envelope unchanged, so any caller doing string work on it would have failed at runtime. Confirmed against a live Coolify instance; the unit tests had mocked a bare string, which is why it went unnoticed. Responses are now unwrapped to a plain string, with bare strings still accepted for older instances.
 

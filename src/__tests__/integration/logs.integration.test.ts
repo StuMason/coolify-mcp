@@ -18,27 +18,49 @@
  *   resources on that instance. Each block skips if its uuid is absent.
  */
 
-import { config } from 'dotenv';
-import { describe, it, expect } from '@jest/globals';
-import { CoolifyClient } from '../../lib/coolify-client.js';
+import { it, expect } from '@jest/globals';
+import {
+  hasCredentials,
+  warnIfSkipped,
+  describeIf,
+  makeClient,
+  resolveVersion,
+  atLeast,
+  V4_2,
+} from './helpers.js';
 
-config();
+warnIfSkipped('logs.integration');
 
-const COOLIFY_URL = process.env.COOLIFY_URL;
-const COOLIFY_TOKEN = process.env.COOLIFY_TOKEN;
 const APPLICATION_UUID = process.env.TEST_APPLICATION_UUID;
 const DATABASE_UUID = process.env.TEST_DATABASE_UUID;
 const SERVICE_UUID = process.env.TEST_SERVICE_UUID;
 
-const shouldRun = Boolean(COOLIFY_URL && COOLIFY_TOKEN);
+const client = makeClient();
 
-const client = shouldRun
-  ? new CoolifyClient({ baseUrl: COOLIFY_URL as string, accessToken: COOLIFY_TOKEN as string })
-  : (null as unknown as CoolifyClient);
+// Resolved at module scope, before jest collects the suites, so version-gated
+// blocks are genuinely SKIPPED rather than passing via an early return. A test
+// that returns early still reports a green tick, which is precisely the false
+// confidence these tests exist to prevent.
+let version: [number, number] = [0, 0];
+if (hasCredentials) {
+  const resolvedVersion = await resolveVersion(client);
+  version = resolvedVersion.version;
+  const rawVersion = resolvedVersion.raw;
+  if (!atLeast(version, V4_2)) {
+    console.warn(
+      `\n[logs.integration] Coolify ${rawVersion} predates v4.2 — the database and ` +
+        'service log endpoints do not exist on it yet, so those suites are SKIPPED, ' +
+        'not verified. Re-run after upgrading.\n',
+    );
+  }
+}
+const resolved = version[0] > 0;
+const supportsV42 = resolved && atLeast(version, V4_2);
 
-const describeIf = (condition: boolean) => (condition ? describe : describe.skip);
-
-describeIf(shouldRun)('logs integration', () => {
+describeIf(hasCredentials)('logs integration', () => {
+  it('resolved the instance version, so a skip below is a real skip', () => {
+    expect(resolved).toBe(true);
+  });
   describeIf(Boolean(APPLICATION_UUID))('application logs', () => {
     it('returns a plain string, not the raw { logs } envelope', async () => {
       const logs = await client.getApplicationLogs(APPLICATION_UUID as string, 5);
@@ -55,14 +77,14 @@ describeIf(shouldRun)('logs integration', () => {
     }, 30_000);
   });
 
-  describeIf(Boolean(DATABASE_UUID))('database logs', () => {
+  describeIf(Boolean(DATABASE_UUID) && supportsV42)('database logs (Coolify v4.2+)', () => {
     it('returns a plain string', async () => {
       const logs = await client.getDatabaseLogs(DATABASE_UUID as string, 5);
       expect(typeof logs).toBe('string');
     }, 30_000);
   });
 
-  describeIf(Boolean(SERVICE_UUID))('service containers', () => {
+  describeIf(Boolean(SERVICE_UUID) && supportsV42)('service containers (Coolify v4.2+)', () => {
     it('lists the containers inside a service with usable names', async () => {
       const [applications, databases] = await Promise.all([
         client.listServiceApplications(SERVICE_UUID as string),
