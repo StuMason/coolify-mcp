@@ -12,6 +12,7 @@ import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-com
 import { z } from 'zod';
 import {
   CoolifyClient,
+  isRunningStatus,
   type ServerSummary,
   type ProjectSummary,
   type ApplicationSummary,
@@ -20,6 +21,7 @@ import {
   type GitHubAppSummary,
 } from './coolify-client.js';
 import type {
+  Application,
   CoolifyConfig,
   GitHubApp,
   BuildPack,
@@ -31,6 +33,7 @@ import type {
   DeployTriggerResponse,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
+import { confirmDestructive, describeBlastRadius } from './elicit.js';
 
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
@@ -54,6 +57,43 @@ function wrap<T>(
 }
 
 const TRUNCATION_PREFIX = '...[truncated]...\n';
+
+/**
+ * Apps a single `bulk_env_update` may touch before it needs a human (#261).
+ *
+ * Prompting on every bulk update would be prompt fatigue with extra steps, and
+ * a prompt people have learned to dismiss protects nothing. Three is the
+ * boundary named in the issue: enough for the ordinary "same key on the api,
+ * the worker and the scheduler" edit to stay frictionless.
+ */
+const BULK_ENV_CONFIRM_THRESHOLD = 3;
+
+/**
+ * Confirmation text for deleting an application, database or service (#261).
+ *
+ * The volume sentence is the reason this function exists. `delete_volumes` is
+ * documented `default: true` on all three DELETE endpoints (see
+ * `docs/coolify-openapi.yaml`), so **omitting the flag destroys the data** —
+ * the opposite of what "optional boolean, left unset" reads like at a call
+ * site. Only an explicit `false` is treated as "volumes kept", which is both
+ * what the spec says and the safe way to be wrong if the spec is lying again.
+ */
+function deleteResourcePrompt(
+  kind: 'application' | 'database' | 'service',
+  name: string,
+  uuid: string,
+  deleteVolumes: boolean | undefined,
+): string {
+  const volumes =
+    deleteVolumes === false
+      ? 'Persistent volumes are kept.'
+      : `Persistent volumes will be DESTROYED and their data is not recoverable${
+          deleteVolumes === undefined
+            ? ' (delete_volumes was not set, and it defaults to true)'
+            : ''
+        }.`;
+  return `Delete ${kind} "${name}" (${uuid})?\n\n${volumes} This cannot be undone.`;
+}
 
 interface LogEntry {
   output?: string;
@@ -415,6 +455,30 @@ export class CoolifyMcpServer extends McpServer {
     this.registerTool(name, { description, inputSchema, annotations }, cb);
   }
 
+  /**
+   * Run `operation`, but ask the human first (#261).
+   *
+   * On clients that support elicitation this renders `summarize()` as a
+   * confirmation prompt and aborts unless it is accepted; on clients that do
+   * not, it is a straight pass-through to {@link wrap} and the tool behaves
+   * exactly as it did before. See `elicit.ts` for why that asymmetry is the
+   * right default.
+   *
+   * `summarize` is lazy so that call sites which need an API round trip to
+   * count their blast radius do not make it on clients that will never show
+   * the question.
+   */
+  private async guardDestructive<T>(
+    summarize: () => string | Promise<string>,
+    operation: () => Promise<T>,
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    const outcome = await confirmDestructive(this.server, summarize);
+    if (!outcome.approved) {
+      return { content: [{ type: 'text' as const, text: outcome.message }] };
+    }
+    return wrap(operation);
+  }
+
   constructor(config: CoolifyConfig) {
     super({ name: 'coolify', version: VERSION });
     this.client = new CoolifyClient(config);
@@ -667,7 +731,13 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deleteProject(uuid));
+            return this.guardDestructive(
+              async () => {
+                const project = await this.client.getProject(uuid);
+                return `Delete project "${project.name || uuid}" (${uuid})? This cannot be undone.`;
+              },
+              () => this.client.deleteProject(uuid),
+            );
         }
       },
     );
@@ -702,7 +772,11 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
-            return wrap(() => this.client.deleteProjectEnvironment(project_uuid, name));
+            return this.guardDestructive(
+              () =>
+                `Delete environment "${name}" from project ${project_uuid}? This cannot be undone.`,
+              () => this.client.deleteProjectEnvironment(project_uuid, name),
+            );
         }
       },
     );
@@ -1071,8 +1145,12 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() =>
-              this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
+            return this.guardDestructive(
+              async () => {
+                const app = await this.client.getApplication(uuid);
+                return deleteResourcePrompt('application', app.name || uuid, uuid, delete_volumes);
+              },
+              () => this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
             );
           case 'delete_preview':
             if (!uuid || !args.pull_request_id)
@@ -1202,7 +1280,13 @@ export class CoolifyMcpServer extends McpServer {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-          return wrap(() => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }));
+          return this.guardDestructive(
+            async () => {
+              const db = await this.client.getDatabase(uuid);
+              return deleteResourcePrompt('database', db.name || uuid, uuid, delete_volumes);
+            },
+            () => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }),
+          );
         }
         // create
         if (!type || !args.server_uuid || !args.project_uuid) {
@@ -1304,7 +1388,13 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }));
+            return this.guardDestructive(
+              async () => {
+                const svc = await this.client.getService(uuid);
+                return deleteResourcePrompt('service', svc.name || uuid, uuid, delete_volumes);
+              },
+              () => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }),
+            );
         }
       },
     );
@@ -2445,8 +2535,23 @@ export class CoolifyMcpServer extends McpServer {
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
       },
-      async ({ app_uuids, key, value, is_buildtime, is_runtime }) =>
-        wrap(() => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime)),
+      async ({ app_uuids, key, value, is_buildtime, is_runtime }) => {
+        // Under the threshold this is an ordinary edit and prompting for it
+        // would only train people to click through prompts. Over it, one call
+        // rewrites the same key across the estate.
+        if (app_uuids.length <= BULK_ENV_CONFIRM_THRESHOLD) {
+          return wrap(() =>
+            this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
+          );
+        }
+        return this.guardDestructive(
+          // No pre-flight needed: the caller already told us the blast radius.
+          () =>
+            `Set env var "${key}" on ${app_uuids.length} applications?\n\n` +
+            `Existing values for "${key}" on those applications will be overwritten.`,
+          () => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
+        );
+      },
     );
 
     this.defineTool(
@@ -2456,7 +2561,37 @@ export class CoolifyMcpServer extends McpServer {
       async ({ confirm }) => {
         if (!confirm)
           return { content: [{ type: 'text' as const, text: 'Error: confirm=true required' }] };
-        return wrap(() => this.client.stopAllApps());
+        // `confirm` above is filled in by the model, which is why #261 exists.
+        // On an elicitation-capable client the real gate is below, in front of
+        // a human, and it names what is about to go down.
+        return this.guardDestructive(
+          async () => {
+            const apps = (await this.client.listApplications()) as Application[];
+            const running = apps.filter((app) => isRunningStatus(app.status));
+            // `destination.server_id`, not `server_uuid`: the list endpoint
+            // does not populate the flat field, so keying off it made this
+            // clause dead code that never once fired. Caught by running it
+            // against a real instance, not by reading the type.
+            // Not `.filter(Boolean)`: Coolify's built-in localhost server has
+            // `server_id: 0`, which is falsy, so a truthiness filter drops the
+            // single most common server on any estate and undercounts. Verified
+            // live — every app on the test instance reports server_id 0.
+            const servers = new Set(
+              running
+                .map((app) => app.destination?.server_id ?? app.server_uuid)
+                .filter((id) => id !== undefined && id !== null),
+            );
+            const across = servers.size > 1 ? ` across ${servers.size} servers` : '';
+            return (
+              `EMERGENCY STOP: take down ${describeBlastRadius(
+                'running application',
+                running.map((app) => app.name || app.uuid),
+              )}${across}?\n\n` +
+              `Every one stays down until it is started again. This is estate-wide, not scoped to a project.`
+            );
+          },
+          () => this.client.stopAllApps(),
+        );
       },
     );
 
@@ -2465,7 +2600,20 @@ export class CoolifyMcpServer extends McpServer {
       'Redeploy all apps in project',
       { project_uuid: z.string(), force: z.boolean().optional() },
       async ({ project_uuid, force }) =>
-        wrap(() => this.client.redeployProjectApps(project_uuid, force ?? true)),
+        this.guardDestructive(
+          async () => {
+            const apps = (await this.client.listApplications()) as Application[];
+            const inProject = apps.filter((app) => app.project_uuid === project_uuid);
+            return (
+              `Redeploy ${describeBlastRadius(
+                'application',
+                inProject.map((app) => app.name || app.uuid),
+              )} in this project?\n\n` +
+              `Each one's running containers are replaced, so expect downtime per app while it rebuilds.`
+            );
+          },
+          () => this.client.redeployProjectApps(project_uuid, force ?? true),
+        ),
     );
   }
 

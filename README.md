@@ -82,6 +82,19 @@ Full reference with parameters and examples: [tools docs](https://coolify-mcp.st
 - **Actionable responses** — results carry `_actions` hints (view logs, restart, next page) so the assistant knows the logical next step without extra tokens.
 - **Verified deploys** — `deploy` with `wait: true` polls to a terminal status and returns a log tail on failure, instead of "the site returns 200 so it probably worked".
 
+## Ask before it hurts
+
+Destructive operations pause and ask **you**, not the model, on clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) — Claude Code and VS Code Copilot today. The prompt states the blast radius before you answer:
+
+```text
+EMERGENCY STOP: take down 12 running applications
+(api, worker, cockpit, umami and 8 more) across 3 servers?
+```
+
+Confirmation is asked for on `stop_all_apps`, `redeploy_project`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
+
+This is progressive enhancement, not a new requirement: clients without elicitation support (Claude Desktop, claude.ai) behave exactly as before. Once a client does advertise support, a decline, a cancel or a timeout all abort the call.
+
 ## Secure by default
 
 Secrets are masked at the API boundary — a client granted "list" access never sees plaintext credentials unless you explicitly opt in with `reveal: true`:

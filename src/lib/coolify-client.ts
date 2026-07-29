@@ -347,6 +347,31 @@ export function errorHint(status: number, path: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether an application's status string counts as "up", for the purposes of
+ * deciding what `stopAllApps` targets.
+ *
+ * Coolify reports composite statuses like `running:healthy` and
+ * `exited:unhealthy`, hence substring tests rather than equality.
+ *
+ * Exported because `stopAllApps` uses it to decide what to stop and the #261
+ * elicitation prompt uses it to tell the human what is about to be stopped. Two
+ * copies of this predicate would eventually disagree, and the failure mode of
+ * that is a confirmation dialog understating its own blast radius.
+ *
+ * **Known over-match, deliberately preserved:** `'unhealthy'` contains
+ * `'healthy'`, so `exited:unhealthy` is classified as running. This is the
+ * behaviour `stopAllApps` has always had; extracting the predicate did not
+ * introduce it and this change does not alter it. The practical cost is a stop
+ * issued against an already-stopped app (a no-op) and a slightly inflated count
+ * in the prompt — which errs toward over-stating the blast radius, the safe
+ * direction for a confirmation. Tracked separately rather than fixed here.
+ */
+export function isRunningStatus(status?: string): boolean {
+  const value = status || '';
+  return value.includes('running') || value.includes('healthy');
+}
+
 // =============================================================================
 // Summary Transformers - reduce full objects to essential fields
 // =============================================================================
@@ -2731,10 +2756,7 @@ export class CoolifyClient {
     const allApps = (await this.listApplications()) as Application[];
 
     // Only stop running apps
-    const runningApps = allApps.filter((app) => {
-      const status = app.status || '';
-      return status.includes('running') || status.includes('healthy');
-    });
+    const runningApps = allApps.filter((app) => isRunningStatus(app.status));
 
     if (runningApps.length === 0) {
       return {

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Destructive operations now ask the human, not the model** (#261) — `stop_all_apps` was gated on a `confirm: true` parameter that the _model_ fills in, which is the model confirming with itself before taking every application on the estate down. On clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) the confirmation now happens in client UI, outside the model's control.
+
+  Wired into `stop_all_apps`, `redeploy_project`, the application / database / service / project / environment deletes, and `bulk_env_update` when it touches more than three apps. Below that threshold it stays silent on purpose: a prompt people have learned to click through protects nothing.
+
+  Prompts state their blast radius rather than asking in the abstract — "take down 12 running applications (api, worker, cockpit and 9 more) across 3 servers?" — and the lookup that produces those counts is lazy, so clients that will never show the question do not pay for the extra API call. Names are truncated after eight, because the point of the list is spotting the one production app that should not be in the set, and sixty names defeats that as thoroughly as none.
+
+  **Strictly progressive enhancement.** Client support is uneven — Claude Code and VS Code Copilot have it, Claude Desktop and claude.ai do not yet — so the server checks the client's advertised `elicitation` capability at runtime and, when it is absent, proceeds exactly as before with the existing parameter guards. A client that cannot be asked is not a client that gets blocked. Once a client _does_ advertise support it fails closed instead: a decline, a cancel, a timeout or a transport error all abort the operation. The one failure that does not abort is the blast-radius lookup itself, because a summary we could not compute is a reason to ask a vaguer question, not to skip asking.
+
+  The timeout is five minutes rather than the SDK's 60-second default, which is a reasonable ceiling for a machine answering and a bad one for a person reading "stop ALL 12 applications?" and deciding.
+
+  Delete prompts spell out what happens to persistent volumes, and this is the sharp edge worth naming: `delete_volumes` is documented `default: true` on all three DELETE endpoints, so **omitting the optional flag destroys the data** — the opposite of what "optional boolean, left unset" reads like at a call site. Only an explicit `false` is reported as "volumes kept".
+
+  Env var _values_ never appear in a prompt. `bulk_env_update` names the key and the app count, because the prompt surfaces in client UI and in logs, and echoing the value would leak whatever secret is being rotated.
+
+  Tool count unchanged at 44. Tests drive a real client over an in-memory transport rather than stubbing the capability check, since the thing most likely to be wrong is the negotiation itself — a server that elicits against a client which never advertised support fails precisely in the environment where nobody is watching a test suite.
+
+### Changed
+
+- **`Application.destination` added to the types** — `GET /applications` nests an expanded `destination` object (`id`, `uuid`, `name`, `server_id`) and does **not** populate the flat `server_uuid`, which the type has always declared. Verified against a live 4.1.2 instance while building the stop-all confirmation: the first version of that prompt counted servers by `server_uuid` and was dead code that could never have fired. The second version used `.filter(Boolean)` on `server_id`, which silently discards Coolify's built-in localhost server — it is id `0`, and every application on the test estate reports it. Both were found by running the code against a real instance rather than by re-reading the spec, which is the same lesson as the 2.15.0 regression.
+
+- **`isRunningStatus` extracted from `stopAllApps`** — the "which apps count as running" predicate was inline in `stopAllApps` and is now shared with the confirmation prompt. Two copies would eventually disagree, and the failure mode of that is a confirmation dialog understating its own blast radius. Behaviour is unchanged, including a known over-match: `'unhealthy'` contains `'healthy'`, so `exited:unhealthy` is classified as running. That has always been true, costs only a no-op stop against an already-stopped app, and errs toward over-stating the blast radius — the safe direction for a confirmation. Tracked separately rather than quietly changed here.
+
 ## [2.16.0] - 2026-07-29
 
 > **Upgrade from 2.15.0 if you run Coolify 4.1 or older.** 2.15.0 broke `system enable_api` / `disable_api` and `validate_server` on every pre-4.2 instance; see the first entry under Fixed.
