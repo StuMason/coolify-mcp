@@ -1923,6 +1923,27 @@ describe('tags tool (#298)', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('requires a uuid when a resource is given', async () => {
+    const spy = jest.spyOn(server['client'], 'listApplicationTags');
+    const result = (await callTags({ action: 'list', resource: 'application' })) as {
+      content: Array<{ text: string }>;
+    };
+    expect(result.content[0].text).toContain('resource and uuid are required');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('does not silently fall through to the team list when resource is missing', async () => {
+    // The dangerous branch: without the guard the caller asks for one
+    // resource's tags, gets the whole team's back, and may read it as the
+    // resource's own.
+    const teamWide = jest.spyOn(server['client'], 'listTags').mockResolvedValue([]);
+    const result = (await callTags({ action: 'list', uuid: 'app-uuid' })) as {
+      content: Array<{ text: string }>;
+    };
+    expect(result.content[0].text).toContain('resource and uuid are required');
+    expect(teamWide).not.toHaveBeenCalled();
+  });
+
   it('refuses attach with no tag names', async () => {
     const spy = jest.spyOn(server['client'], 'attachApplicationTags');
     const result = (await callTags({

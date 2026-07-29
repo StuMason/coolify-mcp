@@ -5877,6 +5877,9 @@ describe('errorHint', () => {
     expect(errorHint(404, '/applications/app-uuid/tags')).toMatch(/v4\.2/);
     expect(errorHint(404, '/tags')).toMatch(/v4\.2/);
     expect(errorHint(404, '/services/svc-uuid/tags/tag-uuid')).toMatch(/v4\.2/);
+    // Both causes produce an identical 404, so the hint must name both rather
+    // than confidently pointing at the wrong one.
+    expect(errorHint(404, '/applications/app-uuid/tags')).toMatch(/different resource type/);
   });
 
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {

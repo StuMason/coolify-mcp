@@ -55,10 +55,12 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 | **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`                                               |
 | **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                     |
 | **Environments**     | `environments` (list, get, create, delete via action param)                                                                         |
-| **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview), `application_logs`                                   |
+| **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                       |
 | **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` (CRUD schedules, executions incl. delete) |
-| **Services**         | `list_services`, `get_service`, `service` (create, update, delete)                                                                  |
+| **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers)                                                 |
 | **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                        |
+| **Logs**             | `logs` (container logs for app, database, service — services need `container`), `application_logs` (superseded by `logs`)           |
+| **Tags**             | `tags` (list, attach, detach for apps, databases, services; tag resources then `deploy` them together — Coolify v4.2+)              |
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                    |
 | **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                   |

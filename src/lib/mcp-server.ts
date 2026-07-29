@@ -282,7 +282,7 @@ interface DeployWaitResult {
  * out. Measured, not assumed — see the byte-budget test in mcp-server.test.ts
  * before re-adding any default hint.
  *
- * Kept as one table rather than scattered across 43 call sites so the safety
+ * Kept as one table rather than scattered across every call site so the safety
  * classification of the whole surface can be audited in one place — which is
  * the point of it. Tests assert this map and the registered tools stay 1:1.
  *
@@ -2341,7 +2341,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'tags',
-      "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the CURRENT TEAM (tokens are team-scoped, so a tag on another team will not appear); with resource+uuid it returns that resource's tags. attach is ADDITIVE — it adds the named tags and leaves existing ones in place, creating any that do not exist yet — and returns the resource's full tag set afterwards. Requires Coolify v4.2+.",
+      "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the CURRENT TEAM (tokens are team-scoped, so a tag on another team will not appear); with resource+uuid it returns that resource's tags. attach is ADDITIVE — it adds the named tags and leaves existing ones in place, creating any that do not exist yet — and returns the resource's full tag set afterwards. detach unlinks one tag, and Coolify deletes the tag itself once no resources carry it, so misspelled names do not accumulate. Requires Coolify v4.2+.",
       {
         action: z.enum(['list', 'attach', 'detach']),
         resource: z.enum(['application', 'database', 'service']).optional(),
@@ -2368,7 +2368,7 @@ export class CoolifyMcpServer extends McpServer {
         }
         if (!resource || !uuid) {
           return err(
-            'resource and uuid are required, except for action=list with neither (which lists every tag on the instance)',
+            "resource and uuid are required, except for action=list with neither (which lists the current team's tags)",
           );
         }
 

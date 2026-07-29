@@ -337,7 +337,9 @@ export function errorHint(status: number, path: string): string | undefined {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
   }
   if (status === 404 && /\/tags(\/|$)/.test(path)) {
-    return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275). Check your instance version with get_version.';
+    // Both causes look identical from the status, so name both rather than
+    // pointing confidently at the wrong one.
+    return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
