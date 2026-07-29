@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`logs` tool: container logs for databases and services, not just applications** (#300) — `diagnose_app` could explain an unhealthy application by reading its logs, but the same question about a database or a service had no answer and sent you to the Coolify UI, which is exactly the moment you want logs.
+
+  Added as **one consolidated `logs` tool** with a `resource` parameter (`application` / `database` / `service`), matching the `env_vars` and `control` pattern, rather than three or four sibling tools — the token budget is the point of the v2.0.0 design. `application_logs` still works and is marked superseded in its description; it will be removed in v3. Also adds `show_timestamps`, which upstream has always supported and this client never sent.
+
+  A service is a multi-container stack, so Coolify requires `sub_service_name` on `/services/{uuid}/logs` and "the service logs" has no single answer. The `service` tool gains a `list_containers` action returning the applications and databases inside a service, and `logs` refuses a service request without a `container`, pointing at that action rather than silently picking one.
+
+### Fixed
+
+- **Log endpoints returned an object behind a `string` type** (#300) — `getApplicationLogs` was declared `Promise<string>` but handed back Coolify's `{ logs: "..." }` envelope unchanged, so any caller doing string work on it would have failed at runtime. Confirmed against a live Coolify instance; the unit tests had mocked a bare string, which is why it went unnoticed. Responses are now unwrapped to a plain string, with bare strings still accepted for older instances.
+
 ### Changed
 
 - **Re-vendored `docs/coolify-openapi.yaml` from upstream, now covering Coolify v4.2** (#302) — the bundled spec is ground truth for "does Coolify support X" and predated v4.2, so it was missing **42 paths** (nothing was removed). The additions line up with the open v4.2 issues: tags on applications/databases/services (#298), `/move` between environments (#299), database, service and per-container logs (#300), service application and database management (#301), and destinations (#302). Also new and not previously tracked: volume backup schedules on storages, and DigitalOcean/Vultr server provisioning alongside Hetzner firewalls and networks. Five new schemas: `VolumeBackupScheduleRequest`, `VolumeBackupScheduleResponse`, `ApplicationSetting`, `Destination`, `Tag`.

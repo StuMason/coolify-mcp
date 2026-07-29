@@ -842,6 +842,30 @@ export interface ServiceCreateResponse {
   domains: string[];
 }
 
+/**
+ * A container inside a Coolify service. Services are multi-container stacks, and
+ * `name` is the `sub_service_name` that `GET /services/{uuid}/logs` requires.
+ *
+ * Deliberately permissive: upstream's OpenAPI types the list responses as a bare
+ * `array of object`, so only the fields we actually rely on are declared and the
+ * rest pass through untyped rather than being asserted from an unverified spec.
+ */
+export interface ServiceSubResource {
+  uuid: string;
+  name: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Log endpoints return `{ logs: "..." }` — verified against a live Coolify
+ * instance, and matching upstream's OpenAPI. Older instances have been observed
+ * returning a bare string, so {@link CoolifyClient} normalises both.
+ */
+export interface LogsResponse {
+  logs: string;
+}
+
 // =============================================================================
 // Deployment Types
 // =============================================================================

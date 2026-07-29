@@ -51,5 +51,5 @@ The v2.x tools don't yet declare `destructiveHint` / `readOnlyHint` annotations 
 
 ## What next?
 
-- [Tools reference](/tools/) — every one of the 42 tools, grouped by concern, marked read or destructive.
+- [Tools reference](/tools/) — every one of the 43 tools, grouped by concern, marked read or destructive.
 - [How coolify-mcp works](/concepts/how-it-works) — the architecture, the file structure, the security model.

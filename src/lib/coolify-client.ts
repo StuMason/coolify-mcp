@@ -113,6 +113,7 @@ import type {
   // Resource list types
   ResourceListItem,
   ResourceListItemFull,
+  ServiceSubResource,
 } from '../types/coolify.js';
 
 // =============================================================================
@@ -257,6 +258,27 @@ export class CoolifyApiError extends Error {
     super(message);
     this.name = 'CoolifyApiError';
   }
+}
+
+/**
+ * Normalise a log endpoint response to a plain string.
+ *
+ * Coolify returns `{ logs: "..." }` — confirmed against a live instance and
+ * matching upstream's OpenAPI. `getApplicationLogs` previously declared
+ * `Promise<string>` while handing back that object unchanged, so the type was a
+ * lie and any caller doing string work on it would have failed at runtime. Its
+ * unit tests mocked a bare string, which is why it went unnoticed.
+ *
+ * Bare strings are still accepted, since older instances have been observed
+ * returning one and the cost of tolerating both is a single check.
+ */
+function unwrapLogs(response: unknown): string {
+  if (typeof response === 'string') return response;
+  if (response && typeof response === 'object' && 'logs' in response) {
+    const { logs } = response as { logs: unknown };
+    return typeof logs === 'string' ? logs : String(logs ?? '');
+  }
+  return '';
 }
 
 /**
@@ -1037,8 +1059,50 @@ export class CoolifyClient {
     });
   }
 
-  async getApplicationLogs(uuid: string, lines: number = 100): Promise<string> {
-    return this.request<string>(`/applications/${uuid}/logs?lines=${lines}`);
+  async getApplicationLogs(
+    uuid: string,
+    lines: number = 100,
+    showTimestamps?: boolean,
+  ): Promise<string> {
+    const query = this.buildQueryString({ lines, show_timestamps: showTimestamps });
+    return unwrapLogs(await this.request<unknown>(`/applications/${uuid}/logs${query}`));
+  }
+
+  async getDatabaseLogs(
+    uuid: string,
+    lines: number = 100,
+    showTimestamps?: boolean,
+  ): Promise<string> {
+    const query = this.buildQueryString({ lines, show_timestamps: showTimestamps });
+    return unwrapLogs(await this.request<unknown>(`/databases/${uuid}/logs${query}`));
+  }
+
+  /**
+   * Logs for one container inside a service. `subServiceName` is required by
+   * Coolify — a service is a multi-container stack, so "the service logs" is
+   * ambiguous without it. Discover valid names via {@link listServiceApplications}
+   * and {@link listServiceDatabases}.
+   */
+  async getServiceLogs(
+    uuid: string,
+    subServiceName: string,
+    lines: number = 100,
+    showTimestamps?: boolean,
+  ): Promise<string> {
+    const query = this.buildQueryString({
+      sub_service_name: subServiceName,
+      lines,
+      show_timestamps: showTimestamps,
+    });
+    return unwrapLogs(await this.request<unknown>(`/services/${uuid}/logs${query}`));
+  }
+
+  async listServiceApplications(uuid: string): Promise<ServiceSubResource[]> {
+    return this.request<ServiceSubResource[]>(`/services/${uuid}/applications`);
+  }
+
+  async listServiceDatabases(uuid: string): Promise<ServiceSubResource[]> {
+    return this.request<ServiceSubResource[]>(`/services/${uuid}/databases`);
   }
 
   async startApplication(
