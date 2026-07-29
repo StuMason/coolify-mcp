@@ -5545,6 +5545,48 @@ describe('CoolifyClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    it('does not treat a non-JSON 404 as a routing rejection', async () => {
+      // A proxy returning an HTML 404 parses to a string, not an object. Better
+      // to surface it than to silently retry and mask whatever is in front of
+      // Coolify.
+      mockFetch.mockResolvedValueOnce(
+        mockResponse('<html>404</html>', false, 404, 'text/html; charset=utf-8'),
+      );
+
+      await expect(client.validateServer('x')).rejects.toThrow();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('detects the catch-all by message when the docs key is absent', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockResponse({ message: 'Not found.' }, false, 404))
+        .mockResolvedValueOnce(mockResponse({ message: 'API enabled.' }));
+
+      await expect(client.enableApi()).resolves.toEqual({ message: 'API enabled.' });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('self-heals through a catch-all 404, which is the path a live box takes', async () => {
+      // The other self-heal tests use a 405, but a real pre-4.2 instance never
+      // returns one — so this is the branch that actually runs in production.
+      mockFetch
+        .mockResolvedValueOnce(catchAllNotFound())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'a' }));
+      await client.validateServer('a');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Instance upgraded: the remembered GET now hits the v4.2 post_required 405.
+      mockFetch
+        .mockResolvedValueOnce(methodNotAllowed())
+        .mockResolvedValueOnce(mockResponse({ uuid: 'b' }));
+      await expect(client.validateServer('b')).resolves.toEqual({ uuid: 'b' });
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'http://localhost:3000/api/v1/servers/b/validate',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
     it('caches the fallback after a 404 probe, like the 405 path', async () => {
       mockFetch
         .mockResolvedValueOnce(catchAllNotFound())
@@ -5641,13 +5683,22 @@ describe('CoolifyClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('reports the original POST failure when the GET retry also fails', async () => {
+    it('reports the GET error when the GET reached a controller', async () => {
+      mockFetch
+        .mockResolvedValueOnce(catchAllNotFound())
+        .mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+
+      // The POST was a routing miss and says nothing about the request. The GET
+      // is the only one that reached a controller, so its message is the answer.
+      await expect(client.validateServer('bad-uuid')).rejects.toThrow('Server not found.');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('reports the POST error only when neither method routed', async () => {
       mockFetch
         .mockResolvedValueOnce(laravelMethodNotAllowed())
-        .mockResolvedValueOnce(mockResponse({ message: 'Nope.' }, false, 404));
+        .mockResolvedValueOnce(catchAllNotFound());
 
-      // The GET is only a probe. Surfacing its error would describe a method
-      // problem for what may be, say, a bad uuid — so the POST error wins.
       await expect(client.validateServer('server-uuid')).rejects.toThrow(
         'The POST method is not supported',
       );
@@ -5711,9 +5762,9 @@ describe('CoolifyClient', () => {
         .mockResolvedValueOnce(mockResponse({}, false, 500))
         .mockResolvedValueOnce(mockResponse({ uuid: 'server-uuid' }));
 
-      await expect(client.validateServer('server-uuid')).rejects.toThrow(
-        'The POST method is not supported',
-      );
+      // The GET reached a controller (a 500 is not a routing rejection), so its
+      // error is the one reported.
+      await expect(client.validateServer('server-uuid')).rejects.toThrow('HTTP 500');
       await client.validateServer('server-uuid');
 
       // Third call probes POST again rather than trusting an unproven fallback.

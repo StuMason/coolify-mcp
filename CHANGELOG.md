@@ -33,7 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Found by running the new compatibility suite against a real Coolify 4.1.2, not by re-reading the spec: the route archaeology behind #296 was correct about which methods each version _registers_, and wrong about what a rejected method actually _returns_.
 
-  The fallback now treats `404` as a method rejection alongside `405`. That is safe for the same reason: the catch-all runs no controller, and a genuine "resource not found" 404 makes the GET retry return the same 404, so the correct error still surfaces at the cost of one extra request. A `500` still propagates untouched, since it may mean the action partially ran.
+  The fallback now treats a `405`, **or a 404 carrying the catch-all's signature**, as a method rejection. Matching on the body shape rather than on status alone matters: the catch-all returns `{message: "Not found.", docs: ...}` and no controller 404 carries a `docs` key, so a controller's genuine "resource not found" is recognised as a real answer and never enters the retry path at all. Both cases mean no controller ran, so nothing executed. A `500` still propagates untouched, since it may mean the action partially ran.
+
+  When the GET retry also fails, the error reported is the one from whichever request actually reached a controller — the POST is a routing miss by construction and says nothing about the request, so surfacing its bare "Not found." (complete with an irrelevant uuid hint) would bury the real `"Server not found."`.
 
 - **Log endpoints returned an object behind a `string` type** (#300) — `getApplicationLogs` was declared `Promise<string>` but handed back Coolify's `{ logs: "..." }` envelope unchanged, so any caller doing string work on it would have failed at runtime. Confirmed against a live Coolify instance; the unit tests had mocked a bare string, which is why it went unnoticed. Responses are now unwrapped to a plain string, with bare strings still accepted for older instances.
 

@@ -60,16 +60,6 @@ const resolved = version[0] > 0;
 const isPre42 = resolved && !atLeast(version, V4_2);
 const is42Plus = resolved && atLeast(version, V4_2);
 
-/**
- * Statuses that mean "the router refused this method, nothing ran".
- *
- * 404 as well as 405, because Coolify ends `routes/api.php` with
- * `Route::any('/{any}', ...)` returning 404 "Not found.", which swallows an
- * unmatched method+path before Laravel can raise a 405. That catch-all is still
- * the last route on v4.2, so it applies in both directions.
- */
-const METHOD_REJECTED = [404, 405];
-
 /** Issue a raw request, bypassing the client's fallback entirely. */
 async function rawProbe(
   path: string,
@@ -107,9 +97,13 @@ describeIf(hasCredentials)('v4.2 method compatibility', () => {
     // The premise of the whole fallback: these are GET-only before v4.2, so a
     // blanket switch to POST would have broken every instance like this one.
     it('rejects POST on /enable without executing anything', async () => {
-      const status = await rawStatus('/enable', 'POST');
+      // `routed` rather than a bare status check: any 404 satisfies the latter,
+      // including one from a wrong base URL or a proxy, so the suite could pass
+      // without proving anything. This also exercises the catch-all's `docs`
+      // signature live — the discriminator the client's fallback keys off.
+      const { routed } = await rawProbe('/enable', 'POST');
 
-      expect(METHOD_REJECTED).toContain(status);
+      expect(routed).toBe(false);
     }, 30_000);
 
     it('rejects POST on /servers/{uuid}/validate without running a validation', async () => {
@@ -117,9 +111,9 @@ describeIf(hasCredentials)('v4.2 method compatibility', () => {
       expect(servers.length).toBeGreaterThan(0);
 
       // Rejected at routing, so no validation job ran against a real server.
-      const status = await rawStatus(`/servers/${servers[0].uuid}/validate`, 'POST');
+      const { routed } = await rawProbe(`/servers/${servers[0].uuid}/validate`, 'POST');
 
-      expect(METHOD_REJECTED).toContain(status);
+      expect(routed).toBe(false);
     }, 30_000);
 
     // The other half of #296: these were `Route::match(['get','post'])` well
@@ -165,9 +159,9 @@ describeIf(hasCredentials)('v4.2 method compatibility', () => {
       // v4.2 registers a `post_required` handler returning 405, but the
       // catch-all is still the last route in the file, so 404 is possible too.
       // The point is that GET no longer works, not which rejection it is.
-      const status = await rawStatus('/enable', 'GET');
+      const { routed } = await rawProbe('/enable', 'GET');
 
-      expect(METHOD_REJECTED).toContain(status);
+      expect(routed).toBe(false);
     }, 30_000);
 
     it('drives the real client, which should succeed on the first POST', async () => {

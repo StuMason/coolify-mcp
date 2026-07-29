@@ -11,14 +11,10 @@
  * Run with: npm run test:integration
  */
 
-import { config } from 'dotenv';
 import { CoolifyClient } from '../../lib/coolify-client.js';
+import { COOLIFY_URL, COOLIFY_TOKEN, warnIfSkipped } from './helpers.js';
 
-// Load environment variables from .env file
-config();
-
-const COOLIFY_URL = process.env.COOLIFY_URL;
-const COOLIFY_TOKEN = process.env.COOLIFY_TOKEN;
+warnIfSkipped('diagnostics.integration');
 
 // Skip all tests if environment variables are not set
 const shouldRun = COOLIFY_URL && COOLIFY_TOKEN;

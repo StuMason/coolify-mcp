@@ -1,7 +1,7 @@
 /**
  * Shared setup for the integration suites.
  *
- * Not a `*.test.ts` file, so `--testPathPatterns=integration` does not try to
+ * Not a `*.test.ts` file, so `--testPathPattern`/`--testPathPatterns=integration` does not try to
  * collect it as a suite.
  */
 

@@ -274,7 +274,12 @@ export class CoolifyApiError extends Error {
 function isRoutingCatchAll(error: CoolifyApiError): boolean {
   if (error.status !== 404) return false;
   const body = error.body;
-  return typeof body === 'object' && body !== null && 'docs' in body;
+  if (typeof body !== 'object' || body === null) return false;
+  // `docs` is the strongest signal, but a proxy or a future Coolify could drop
+  // it. The catch-all's exact wording is a cheap second discriminator — a
+  // controller says "<Resource> not found.", never a bare "Not found.".
+  if ('docs' in body) return true;
+  return (body as { message?: unknown }).message === 'Not found.';
 }
 
 /**
@@ -764,11 +769,14 @@ export class CoolifyClient {
         const result = await this.request<T>(path, { ...options, method: 'GET' });
         this.legacyGetEndpoints.add(key);
         return result;
-      } catch {
-        // The GET was a probe. If it fails too, the POST error is the one that
-        // describes what the caller actually asked for — surfacing the probe's
-        // error instead would report a method problem for, say, a bad uuid.
-        throw error;
+      } catch (getError) {
+        // The POST is a routing miss by construction — isMethodRejected already
+        // established nothing ran — so it carries no information about the
+        // request itself. If the GET reached a controller, its error is the real
+        // answer ("Server not found."), and reporting the POST's bare
+        // "Not found." instead would even pick up the misleading uuid hint.
+        // Only when neither method routed is the POST error the one to report.
+        throw isMethodRejected(getError) ? error : getError;
       }
     }
   }

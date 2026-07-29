@@ -12,13 +12,11 @@
  * its validation behaviour, these tests may need updating.
  */
 
-import { config } from 'dotenv';
 import { CoolifyClient } from '../../lib/coolify-client.js';
+import { COOLIFY_URL, COOLIFY_TOKEN, warnIfSkipped } from './helpers.js';
 
-config();
+warnIfSkipped('smoke.integration');
 
-const COOLIFY_URL = process.env.COOLIFY_URL;
-const COOLIFY_TOKEN = process.env.COOLIFY_TOKEN;
 const shouldRun = COOLIFY_URL && COOLIFY_TOKEN;
 const describeFn = shouldRun ? describe : describe.skip;
 
