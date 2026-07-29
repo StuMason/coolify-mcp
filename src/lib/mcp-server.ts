@@ -33,7 +33,7 @@ import type {
   DeployTriggerResponse,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
-import { confirmDestructive, describeBlastRadius } from './elicit.js';
+import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
@@ -92,7 +92,7 @@ function deleteResourcePrompt(
             ? ' (delete_volumes was not set, and it defaults to true)'
             : ''
         }.`;
-  return `Delete ${kind} "${name}" (${uuid})?\n\n${volumes} This cannot be undone.`;
+  return `Delete ${kind} "${sanitizeForPrompt(name)}" (${uuid})?\n\n${volumes} This cannot be undone.`;
 }
 
 interface LogEntry {
@@ -466,13 +466,20 @@ export class CoolifyMcpServer extends McpServer {
    *
    * `summarize` is lazy so that call sites which need an API round trip to
    * count their blast radius do not make it on clients that will never show
-   * the question.
+   * the question, and may return `null` to mean "nothing to confirm" — an
+   * emergency stop on an idle estate should not raise a dialog.
+   *
+   * `signal` is the tool call's own abort signal and must be threaded through:
+   * without it, a client that times the `tools/call` out at 60s leaves the
+   * prompt live, and a later accept executes the operation with nobody
+   * listening.
    */
   private async guardDestructive<T>(
-    summarize: () => string | Promise<string>,
+    signal: AbortSignal | undefined,
+    summarize: () => string | null | Promise<string | null>,
     operation: () => Promise<T>,
   ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
-    const outcome = await confirmDestructive(this.server, summarize);
+    const outcome = await confirmDestructive(this.server, summarize, signal);
     if (!outcome.approved) {
       return { content: [{ type: 'text' as const, text: outcome.message }] };
     }
@@ -712,7 +719,7 @@ export class CoolifyMcpServer extends McpServer {
         page: z.number().optional(),
         per_page: z.number().optional(),
       },
-      async ({ action, uuid, name, description, page, per_page }) => {
+      async ({ action, uuid, name, description, page, per_page }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listProjects({ page, per_page, summary: true }));
@@ -732,9 +739,10 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
+              extra.signal,
               async () => {
                 const project = await this.client.getProject(uuid);
-                return `Delete project "${project.name || uuid}" (${uuid})? This cannot be undone.`;
+                return `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${uuid})? This cannot be undone.`;
               },
               () => this.client.deleteProject(uuid),
             );
@@ -754,7 +762,7 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
       },
-      async ({ action, project_uuid, name, description }) => {
+      async ({ action, project_uuid, name, description }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listProjectEnvironments(project_uuid));
@@ -773,8 +781,9 @@ export class CoolifyMcpServer extends McpServer {
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
             return this.guardDestructive(
+              extra.signal,
               () =>
-                `Delete environment "${name}" from project ${project_uuid}? This cannot be undone.`,
+                `Delete environment "${sanitizeForPrompt(name)}" from project ${project_uuid}? This cannot be undone.`,
               () => this.client.deleteProjectEnvironment(project_uuid, name),
             );
         }
@@ -880,7 +889,7 @@ export class CoolifyMcpServer extends McpServer {
         // Preview fields
         pull_request_id: z.number().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'create_public':
@@ -1146,6 +1155,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
+              extra.signal,
               async () => {
                 const app = await this.client.getApplication(uuid);
                 return deleteResourcePrompt('application', app.name || uuid, uuid, delete_volumes);
@@ -1276,11 +1286,12 @@ export class CoolifyMcpServer extends McpServer {
         clickhouse_admin_password: z.string().optional(),
         dragonfly_password: z.string().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
           return this.guardDestructive(
+            extra.signal,
             async () => {
               const db = await this.client.getDatabase(uuid);
               return deleteResourcePrompt('database', db.name || uuid, uuid, delete_volumes);
@@ -1344,7 +1355,7 @@ export class CoolifyMcpServer extends McpServer {
           .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
         delete_volumes: z.boolean().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'list_containers': {
@@ -1389,6 +1400,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
+              extra.signal,
               async () => {
                 const svc = await this.client.getService(uuid);
                 return deleteResourcePrompt('service', svc.name || uuid, uuid, delete_volumes);
@@ -2412,7 +2424,7 @@ export class CoolifyMcpServer extends McpServer {
         include_full: z.boolean().optional(),
         reveal: z.boolean().optional(),
       },
-      async ({ action, include_full, reveal }) => {
+      async ({ action, include_full, reveal }, extra) => {
         switch (action) {
           case 'health':
             return wrap(() => this.client.getHealth());
@@ -2421,7 +2433,18 @@ export class CoolifyMcpServer extends McpServer {
           case 'enable_api':
             return wrap(() => this.client.enableApi());
           case 'disable_api':
-            return wrap(() => this.client.disableApi());
+            // The most self-locking operation in the server: it turns off the
+            // API that every other tool depends on, including the one that
+            // turns it back on. Recovery is a trip to the Coolify UI, so this
+            // is precisely a decision a human should be making.
+            return this.guardDestructive(
+              extra.signal,
+              () =>
+                `Disable the Coolify API?\n\n` +
+                `Every tool in this MCP server stops working immediately, including ` +
+                `\`enable_api\`. Re-enabling it means logging into the Coolify UI by hand.`,
+              () => this.client.disableApi(),
+            );
         }
       },
     );
@@ -2522,7 +2545,24 @@ export class CoolifyMcpServer extends McpServer {
       'restart_project_apps',
       'Restart all apps in project',
       { project_uuid: z.string() },
-      async ({ project_uuid }) => wrap(() => this.client.restartProjectApps(project_uuid)),
+      async ({ project_uuid }, extra) => {
+        let approved: Application[] | undefined;
+        return this.guardDestructive(
+          extra.signal,
+          async () => {
+            approved = await this.client.applicationsInProject(project_uuid);
+            if (approved.length === 0) return null;
+            return (
+              `Restart ${describeBlastRadius(
+                'application',
+                approved.map((app) => app.name || app.uuid),
+              )} in this project?\n\n` +
+              `Each one drops its connections briefly while the container comes back.`
+            );
+          },
+          () => this.client.restartProjectApps(project_uuid, approved),
+        );
+      },
     );
 
     this.defineTool(
@@ -2535,7 +2575,7 @@ export class CoolifyMcpServer extends McpServer {
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
       },
-      async ({ app_uuids, key, value, is_buildtime, is_runtime }) => {
+      async ({ app_uuids, key, value, is_buildtime, is_runtime }, extra) => {
         // Under the threshold this is an ordinary edit and prompting for it
         // would only train people to click through prompts. Over it, one call
         // rewrites the same key across the estate.
@@ -2545,10 +2585,11 @@ export class CoolifyMcpServer extends McpServer {
           );
         }
         return this.guardDestructive(
+          extra.signal,
           // No pre-flight needed: the caller already told us the blast radius.
           () =>
-            `Set env var "${key}" on ${app_uuids.length} applications?\n\n` +
-            `Existing values for "${key}" on those applications will be overwritten.`,
+            `Set env var "${sanitizeForPrompt(key)}" on ${app_uuids.length} applications?\n\n` +
+            `Existing values for "${sanitizeForPrompt(key)}" on those applications will be overwritten.`,
           () => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
         );
       },
@@ -2558,16 +2599,27 @@ export class CoolifyMcpServer extends McpServer {
       'stop_all_apps',
       'EMERGENCY: Stop all running apps',
       { confirm: z.literal(true) },
-      async ({ confirm }) => {
+      async ({ confirm }, extra) => {
         if (!confirm)
           return { content: [{ type: 'text' as const, text: 'Error: confirm=true required' }] };
         // `confirm` above is filled in by the model, which is why #261 exists.
         // On an elicitation-capable client the real gate is below, in front of
         // a human, and it names what is about to go down.
+        //
+        // `approved` is shared by both callbacks on purpose: the operation must
+        // act on the exact set the human was shown, not on a freshly listed
+        // one. An app that starts between the prompt and the accept never
+        // appeared in the dialog, so the answer does not cover it. It stays
+        // undefined when no prompt was shown, and `stopAllApps` resolves the
+        // set itself.
+        let approved: Application[] | undefined;
         return this.guardDestructive(
+          extra.signal,
           async () => {
             const apps = (await this.client.listApplications()) as Application[];
             const running = apps.filter((app) => isRunningStatus(app.status));
+            approved = running;
+            if (running.length === 0) return null;
             // `destination.server_id`, not `server_uuid`: the list endpoint
             // does not populate the flat field, so keying off it made this
             // clause dead code that never once fired. Caught by running it
@@ -2590,7 +2642,7 @@ export class CoolifyMcpServer extends McpServer {
               `Every one stays down until it is started again. This is estate-wide, not scoped to a project.`
             );
           },
-          () => this.client.stopAllApps(),
+          () => this.client.stopAllApps(approved),
         );
       },
     );
@@ -2599,21 +2651,24 @@ export class CoolifyMcpServer extends McpServer {
       'redeploy_project',
       'Redeploy all apps in project',
       { project_uuid: z.string(), force: z.boolean().optional() },
-      async ({ project_uuid, force }) =>
-        this.guardDestructive(
+      async ({ project_uuid, force }, extra) => {
+        let approved: Application[] | undefined;
+        return this.guardDestructive(
+          extra.signal,
           async () => {
-            const apps = (await this.client.listApplications()) as Application[];
-            const inProject = apps.filter((app) => app.project_uuid === project_uuid);
+            approved = await this.client.applicationsInProject(project_uuid);
+            if (approved.length === 0) return null;
             return (
               `Redeploy ${describeBlastRadius(
                 'application',
-                inProject.map((app) => app.name || app.uuid),
+                approved.map((app) => app.name || app.uuid),
               )} in this project?\n\n` +
               `Each one's running containers are replaced, so expect downtime per app while it rebuilds.`
             );
           },
-          () => this.client.redeployProjectApps(project_uuid, force ?? true),
-        ),
+          () => this.client.redeployProjectApps(project_uuid, force ?? true, approved),
+        );
+      },
     );
   }
 

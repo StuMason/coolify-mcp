@@ -4071,40 +4071,56 @@ describe('CoolifyClient', () => {
   // Batch Operations Tests
   // ===========================================================================
   describe('Batch Operations', () => {
-    describe('restartProjectApps', () => {
-      const mockApps = [
-        {
-          id: 1,
-          uuid: 'app-1',
-          name: 'app-one',
-          project_uuid: 'proj-1',
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-        {
-          id: 2,
-          uuid: 'app-2',
-          name: 'app-two',
-          project_uuid: 'proj-1',
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-        {
-          id: 3,
-          uuid: 'app-3',
-          name: 'app-three',
-          project_uuid: 'proj-2', // Different project
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-      ];
+    // Applications are matched to a project by `environment_id`, not by a
+    // `project_uuid` field — `GET /applications` does not return one. These
+    // fixtures previously set `project_uuid`, which made the tests pass against
+    // a response shape Coolify has never sent while the real filter matched
+    // nothing. Verified live against 4.1.2. See `applicationsInProject`.
+    const mockProject = {
+      id: 1,
+      uuid: 'proj-1',
+      name: 'project-one',
+      environments: [
+        { id: 10, uuid: 'env-10', name: 'production', created_at: 'x', updated_at: 'x' },
+        { id: 11, uuid: 'env-11', name: 'staging', created_at: 'x', updated_at: 'x' },
+      ],
+    };
 
+    const mockProjectApps = [
+      {
+        id: 1,
+        uuid: 'app-1',
+        name: 'app-one',
+        environment_id: 10,
+        status: 'running',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+      {
+        id: 2,
+        uuid: 'app-2',
+        name: 'app-two',
+        environment_id: 11,
+        status: 'running',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+      {
+        id: 3,
+        uuid: 'app-3',
+        name: 'app-three',
+        environment_id: 99, // Environment belonging to a different project
+        status: 'running',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+      },
+    ];
+
+    describe('restartProjectApps', () => {
       it('should restart all apps in a project', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Restarted' })) // app-1
           .mockResolvedValueOnce(mockResponse({ message: 'Restarted' })); // app-2
 
@@ -4122,7 +4138,8 @@ describe('CoolifyClient', () => {
 
       it('should handle partial failures gracefully', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Restarted' }))
           .mockRejectedValueOnce(new Error('App not running'));
 
@@ -4136,7 +4153,9 @@ describe('CoolifyClient', () => {
       });
 
       it('should return empty result for empty project', async () => {
-        mockFetch.mockResolvedValueOnce(mockResponse([]));
+        mockFetch
+          .mockResolvedValueOnce(mockResponse({ ...mockProject, environments: [] }))
+          .mockResolvedValueOnce(mockResponse([]));
 
         const result = await client.restartProjectApps('empty-project');
 
@@ -4145,12 +4164,26 @@ describe('CoolifyClient', () => {
         expect(result.summary.failed).toBe(0);
       });
 
-      it('should return empty result for project with no apps', async () => {
-        mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
+      it('should return empty result for a project whose environments hold no apps', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse({ ...mockProject, environments: [{ id: 77 }] }))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps));
 
         const result = await client.restartProjectApps('nonexistent-project');
 
         expect(result.summary.total).toBe(0);
+      });
+
+      it('should skip the lookup entirely when apps are supplied', async () => {
+        // The #261 path: the confirmation prompt already listed and filtered, so
+        // the operation acts on exactly the set the human approved rather than
+        // re-resolving it.
+        mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Restarted' }));
+
+        const result = await client.restartProjectApps('proj-1', [mockProjectApps[0]] as never);
+
+        expect(result.summary.total).toBe(1);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -4360,39 +4393,10 @@ describe('CoolifyClient', () => {
     });
 
     describe('redeployProjectApps', () => {
-      const mockApps = [
-        {
-          id: 1,
-          uuid: 'app-1',
-          name: 'app-one',
-          project_uuid: 'proj-1',
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-        {
-          id: 2,
-          uuid: 'app-2',
-          name: 'app-two',
-          project_uuid: 'proj-1',
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-        {
-          id: 3,
-          uuid: 'app-3',
-          name: 'app-three',
-          project_uuid: 'proj-2', // Different project
-          status: 'running',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-        },
-      ];
-
       it('should redeploy all apps in a project', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' })) // app-1
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' })); // app-2
 
@@ -4405,7 +4409,8 @@ describe('CoolifyClient', () => {
 
       it('should use force=true by default', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
 
@@ -4420,7 +4425,8 @@ describe('CoolifyClient', () => {
 
       it('should support force=false', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
 
@@ -4434,7 +4440,8 @@ describe('CoolifyClient', () => {
 
       it('should handle partial failures', async () => {
         mockFetch
-          .mockResolvedValueOnce(mockResponse(mockApps))
+          .mockResolvedValueOnce(mockResponse(mockProject))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Deployed' }))
           .mockRejectedValueOnce(new Error('Build failed'));
 
@@ -4446,11 +4453,24 @@ describe('CoolifyClient', () => {
       });
 
       it('should return empty result for empty project', async () => {
-        mockFetch.mockResolvedValueOnce(mockResponse([]));
+        mockFetch
+          .mockResolvedValueOnce(mockResponse({ ...mockProject, environments: [] }))
+          .mockResolvedValueOnce(mockResponse([]));
 
         const result = await client.redeployProjectApps('empty-project');
 
         expect(result.summary.total).toBe(0);
+      });
+
+      it('should skip the lookup entirely when apps are supplied', async () => {
+        mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Deployed' }));
+
+        const result = await client.redeployProjectApps('proj-1', true, [
+          mockProjectApps[0],
+        ] as never);
+
+        expect(result.summary.total).toBe(1);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
       });
     });
   });

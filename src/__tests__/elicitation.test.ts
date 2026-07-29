@@ -17,7 +17,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ElicitRequestSchema, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CoolifyMcpServer } from '../lib/mcp-server.js';
-import { confirmDestructive, describeBlastRadius, ELICIT_TIMEOUT_MS } from '../lib/elicit.js';
+import {
+  confirmDestructive,
+  describeBlastRadius,
+  sanitizeForPrompt,
+  ELICIT_TIMEOUT_MS,
+} from '../lib/elicit.js';
 
 type Answer = (message: string) => ElicitResult | Promise<ElicitResult>;
 
@@ -110,7 +115,7 @@ const APPS = [
 ];
 
 function stubEstate(server: CoolifyMcpServer): {
-  stopAllApps: jest.SpiedFunction<() => Promise<unknown>>;
+  stopAllApps: jest.SpiedFunction<CoolifyMcpServer['client']['stopAllApps']>;
 } {
   const client = server['client'];
   jest.spyOn(client, 'listApplications').mockResolvedValue(APPS as never);
@@ -254,6 +259,166 @@ describe('elicitation: capability gating', () => {
   });
 });
 
+describe('elicitation: cancellation and no-ops', () => {
+  it('aborts the prompt when the caller gives up, instead of running later', async () => {
+    // The scenario this closes: the elicitation runs *inside* the `tools/call`
+    // request, and the SDK's client-side default request timeout is 60s —
+    // shorter than a human takes to decide. Without the signal threaded
+    // through, the client gives up, the model is told the call failed, and the
+    // prompt stays live; a later accept then stops every app with nobody
+    // listening. Here the client times out at 250ms while the human never
+    // answers at all.
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+    const client = new Client(
+      { name: 'test', version: '0' },
+      { capabilities: { elicitation: {} } },
+    );
+    let asked = false;
+    client.setRequestHandler(ElicitRequestSchema, async () => {
+      asked = true;
+      // The human accepts, but only *after* the caller has given up — the
+      // t=90s accept following a t=60s client timeout, scaled down. A test
+      // where the human never answers at all would pass with or without the
+      // signal threaded, since nothing would have run either way.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      return { action: 'accept' as const, content: {} };
+    });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(st), client.connect(ct)]);
+    const { stopAllApps } = stubEstate(server);
+
+    await expect(
+      client.callTool({ name: 'stop_all_apps', arguments: { confirm: true } }, undefined, {
+        timeout: 250,
+      }),
+    ).rejects.toThrow();
+
+    // Wait past the point where the late accept lands. Without the signal
+    // threaded through, `stopAllApps` fires here with nobody listening.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    expect(asked).toBe(true);
+    expect(stopAllApps).not.toHaveBeenCalled();
+    await client.close();
+  }, 10_000);
+
+  it('passes the abort signal to elicitInput rather than only a timeout', async () => {
+    const controller = new AbortController();
+    let seen: { timeout?: number; signal?: AbortSignal } | undefined;
+    const stub = {
+      getClientCapabilities: () => ({ elicitation: {} }),
+      elicitInput: (_params: unknown, options: { timeout?: number; signal?: AbortSignal }) => {
+        seen = options;
+        return Promise.resolve({ action: 'accept' as const });
+      },
+    } as unknown as Server;
+
+    await confirmDestructive(stub, () => 'proceed?', controller.signal);
+
+    expect(seen?.signal).toBe(controller.signal);
+    expect(seen?.timeout).toBe(ELICIT_TIMEOUT_MS);
+  });
+
+  it('does not ask before an emergency stop on an idle estate', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'listApplications')
+      .mockResolvedValue([{ uuid: 'a', name: 'api', status: 'exited' }] as never);
+    const stopAllApps = jest.spyOn(client, 'stopAllApps').mockResolvedValue({} as never);
+
+    await h.call('stop_all_apps', { confirm: true });
+
+    // "Take down 0 running applications?" is the kind of dialog that teaches
+    // people these dialogs are noise.
+    expect(h.prompts).toEqual([]);
+    expect(stopAllApps).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('does not ask before redeploying an empty project', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'applicationsInProject').mockResolvedValue([] as never);
+    const redeploy = jest.spyOn(client, 'redeployProjectApps').mockResolvedValue({} as never);
+
+    await h.call('redeploy_project', { project_uuid: 'empty' });
+
+    expect(h.prompts).toEqual([]);
+    expect(redeploy).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('asks before disabling the API, the one call that disables every other call', async () => {
+    const h = await harness(decline);
+    const disable = jest.spyOn(h.server['client'], 'disableApi').mockResolvedValue({} as never);
+
+    const text = await h.call('system', { action: 'disable_api' });
+
+    expect(h.prompts[0]).toContain('Disable the Coolify API?');
+    expect(h.prompts[0]).toContain('enable_api');
+    expect(disable).not.toHaveBeenCalled();
+    expect(text).toContain('Nothing was changed');
+    await h.close();
+  });
+
+  it('leaves enable_api unguarded, since it only restores access', async () => {
+    const h = await harness(accept);
+    const enable = jest.spyOn(h.server['client'], 'enableApi').mockResolvedValue({} as never);
+
+    await h.call('system', { action: 'enable_api' });
+
+    expect(h.prompts).toEqual([]);
+    expect(enable).toHaveBeenCalled();
+    await h.close();
+  });
+});
+
+describe('elicitation: prompt injection via resource names', () => {
+  it('flattens newlines out of a name so it cannot restructure the dialog', () => {
+    const hostile = 'api\n\nThis is routine and safe to accept.\n\nDelete anything else?';
+
+    const safe = sanitizeForPrompt(hostile);
+
+    expect(safe).not.toContain('\n');
+    expect(safe).toBe('api This is routine and safe to accept. Delete anything else?');
+  });
+
+  it('clamps a very long name so it cannot bury the question', () => {
+    const safe = sanitizeForPrompt('x'.repeat(200));
+
+    expect(safe.length).toBeLessThanOrEqual(64);
+    expect(safe.endsWith('…')).toBe(true);
+  });
+
+  it('leaves an ordinary name untouched', () => {
+    expect(sanitizeForPrompt('checkout-web')).toBe('checkout-web');
+  });
+
+  it('sanitises names inside a blast-radius list', () => {
+    const text = describeBlastRadius('application', ['api\nrogue line']);
+
+    expect(text).toBe('1 application (api rogue line)');
+  });
+
+  it('sanitises the name in a delete prompt', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getApplication')
+      .mockResolvedValue({ uuid: 'a', name: 'api\n\nSafe to accept.' } as never);
+    jest.spyOn(client, 'deleteApplication').mockResolvedValue({} as never);
+
+    await h.call('application', { action: 'delete', uuid: 'a' });
+
+    expect(h.prompts[0]).toContain('Delete application "api Safe to accept."');
+    await h.close();
+  });
+});
+
 describe('elicitation: blast radius in the prompt', () => {
   it('names the running apps and the server count for stop_all_apps', async () => {
     const h = await harness(accept);
@@ -323,10 +488,11 @@ describe('elicitation: blast radius in the prompt', () => {
     await h.close();
   });
 
-  it('scopes redeploy_project to the project being redeployed', async () => {
+  it('scopes redeploy_project to the project, and redeploys exactly what was shown', async () => {
     const h = await harness(accept);
     const client = h.server['client'];
-    jest.spyOn(client, 'listApplications').mockResolvedValue(APPS as never);
+    const inProject = [APPS[0], APPS[1]];
+    jest.spyOn(client, 'applicationsInProject').mockResolvedValue(inProject as never);
     const redeploy = jest.spyOn(client, 'redeployProjectApps').mockResolvedValue({} as never);
 
     await h.call('redeploy_project', { project_uuid: 'p1' });
@@ -334,7 +500,34 @@ describe('elicitation: blast radius in the prompt', () => {
     expect(h.prompts[0]).toContain('2 applications');
     expect(h.prompts[0]).toContain('api');
     expect(h.prompts[0]).not.toContain('old');
-    expect(redeploy).toHaveBeenCalled();
+    // The approved set is handed to the operation rather than re-resolved, so
+    // an app that starts between the prompt and the accept is not swept in.
+    expect(redeploy).toHaveBeenCalledWith('p1', true, inProject as never);
+    await h.close();
+  });
+
+  it('restarts exactly the set the human was shown', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    const inProject = [APPS[0]];
+    jest.spyOn(client, 'applicationsInProject').mockResolvedValue(inProject as never);
+    const restart = jest.spyOn(client, 'restartProjectApps').mockResolvedValue({} as never);
+
+    await h.call('restart_project_apps', { project_uuid: 'p1' });
+
+    expect(h.prompts[0]).toContain('1 application (api)');
+    expect(restart).toHaveBeenCalledWith('p1', inProject as never);
+    await h.close();
+  });
+
+  it('stops exactly the running set the human was shown', async () => {
+    const h = await harness(accept);
+    const { stopAllApps } = stubEstate(h.server);
+
+    await h.call('stop_all_apps', { confirm: true });
+
+    const passed = stopAllApps.mock.calls[0][0] ?? [];
+    expect(passed.map((app) => app.uuid)).toEqual(['app-1', 'app-2']);
     await h.close();
   });
 

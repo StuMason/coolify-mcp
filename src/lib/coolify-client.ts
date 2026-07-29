@@ -2681,9 +2681,45 @@ export class CoolifyClient {
    * Restart all applications in a project.
    * @param projectUuid - Project UUID
    */
-  async restartProjectApps(projectUuid: string): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+  /**
+   * Applications belonging to a project.
+   *
+   * **`GET /applications` does not return `project_uuid`.** Verified live
+   * against 4.1.2: none of the 26 applications on the test estate carried the
+   * field, and it is absent from the response entirely. `restartProjectApps`
+   * and `redeployProjectApps` both filtered on it, so both matched zero
+   * applications and silently reported "0 succeeded" instead of doing anything.
+   *
+   * The only link an application carries is the numeric `environment_id`, and
+   * `GET /projects/{uuid}` is what expands a project into its environments. So
+   * the resolution is project → environment ids → applications in those
+   * environments. Verified live: this maps all 26 applications to a project.
+   *
+   * @param apps Pre-fetched applications, when a caller has already listed them
+   *   (the #261 confirmation prompt does). Avoids a second unpaginated fetch
+   *   and, more importantly, makes the operation act on the same set the human
+   *   was shown rather than a freshly-computed one.
+   */
+  async applicationsInProject(projectUuid: string, apps?: Application[]): Promise<Application[]> {
+    const [project, allApps] = await Promise.all([
+      this.getProject(projectUuid),
+      apps ? Promise.resolve(apps) : (this.listApplications() as Promise<Application[]>),
+    ]);
+    const environmentIds = new Set((project.environments ?? []).map((env) => env.id));
+    return allApps.filter(
+      (app) => app.environment_id !== undefined && environmentIds.has(app.environment_id),
+    );
+  }
+
+  /**
+   * @param projectApps The applications to restart. Pass the set a human already
+   *   approved; omit to resolve it from the project.
+   */
+  async restartProjectApps(
+    projectUuid: string,
+    projectApps?: Application[],
+  ): Promise<BatchOperationResult> {
+    projectApps ??= await this.applicationsInProject(projectUuid);
 
     if (projectApps.length === 0) {
       return {
@@ -2752,11 +2788,15 @@ export class CoolifyClient {
   /**
    * Emergency stop all running applications across entire infrastructure.
    */
-  async stopAllApps(): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-
+  /**
+   * @param runningApps The applications to stop, already filtered to running.
+   *   Pass the set a human approved; omit to resolve it from the estate.
+   */
+  async stopAllApps(runningApps?: Application[]): Promise<BatchOperationResult> {
     // Only stop running apps
-    const runningApps = allApps.filter((app) => isRunningStatus(app.status));
+    runningApps ??= ((await this.listApplications()) as Application[]).filter((app) =>
+      isRunningStatus(app.status),
+    );
 
     if (runningApps.length === 0) {
       return {
@@ -2781,9 +2821,9 @@ export class CoolifyClient {
   async redeployProjectApps(
     projectUuid: string,
     force: boolean = true,
+    projectApps?: Application[],
   ): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+    projectApps ??= await this.applicationsInProject(projectUuid);
 
     if (projectApps.length === 0) {
       return {

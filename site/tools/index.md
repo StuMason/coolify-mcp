@@ -4,7 +4,7 @@ All 44 tools in coolify-mcp v2.11, grouped by concern. The full canonical list i
 
 > Tools marked **read-only** are safe to let your MCP client run without per-call confirmation. Tools marked **destructive** change state and should be confirmed. Every tool declares this to your client via `readOnlyHint` / `destructiveHint` annotations, so clients that support them can parallel-dispatch reads and prompt only where it matters.
 >
-> The highest-blast-radius operations go further and ask you directly via **elicitation**, stating what is about to happen before you answer: `stop_all_apps`, `redeploy_project`, the application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Supported in Claude Code and VS Code Copilot; clients without it fall back to the previous behaviour unchanged.
+> The highest-blast-radius operations go further and ask you directly via **elicitation**, stating what is about to happen before you answer: `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, the application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Supported in Claude Code and VS Code Copilot; clients without it fall back to the previous behaviour unchanged. If these time out before you can answer, raise your client's MCP tool timeout — the prompt runs inside the tool call.
 
 ## Infrastructure
 

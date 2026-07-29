@@ -91,9 +91,13 @@ EMERGENCY STOP: take down 12 running applications
 (api, worker, cockpit, umami and 8 more) across 3 servers?
 ```
 
-Confirmation is asked for on `stop_all_apps`, `redeploy_project`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
+Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
+
+Prompts are skipped where there is nothing to confirm: an emergency stop on an idle estate, or a redeploy of an empty project, just runs.
 
 This is progressive enhancement, not a new requirement: clients without elicitation support (Claude Desktop, claude.ai) behave exactly as before. Once a client does advertise support, a decline, a cancel or a timeout all abort the call.
+
+> **If confirmations time out before you can answer them**, raise your client's MCP tool timeout. The prompt runs inside the tool call, and the MCP SDK's default request timeout is 60 seconds. The server aborts cleanly when the client gives up — nothing runs behind your back — but you will see the call fail rather than the dialog you were reading.
 
 ## Secure by default
 

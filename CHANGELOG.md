@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Destructive operations now ask the human, not the model** (#261) — `stop_all_apps` was gated on a `confirm: true` parameter that the _model_ fills in, which is the model confirming with itself before taking every application on the estate down. On clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) the confirmation now happens in client UI, outside the model's control.
 
-  Wired into `stop_all_apps`, `redeploy_project`, the application / database / service / project / environment deletes, and `bulk_env_update` when it touches more than three apps. Below that threshold it stays silent on purpose: a prompt people have learned to click through protects nothing.
+  Wired into `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, the application / database / service / project / environment deletes, and `bulk_env_update` when it touches more than three apps. Below that threshold it stays silent on purpose: a prompt people have learned to click through protects nothing, and neither does one raised for a no-op — an emergency stop on an idle estate or a redeploy of an empty project runs without asking.
+
+  `disable_api` earns its prompt by being the most self-locking call in the server: it turns off the API every other tool depends on, including `enable_api`, and recovery is a trip to the Coolify UI by hand.
+
+  **The tool call's abort signal is threaded into the elicitation**, which matters more than it sounds. The prompt runs _inside_ the `tools/call` request and the SDK's client-side default request timeout is 60 seconds — shorter than a human takes to read "stop ALL 12 applications?" and decide. Without the signal, a client that gives up at 60s leaves the prompt live for another four minutes, and an accept at t=90s executes the destructive operation with nobody listening, after the model has already been told the call failed and may have retried it. There is a regression test that fails without the signal threaded.
+
+  Operations act on the exact set the human was shown rather than re-resolving it afterwards, so an application that starts between the prompt and the accept is not swept into an answer that never mentioned it. This also removes a duplicate unpaginated `/applications` fetch per confirmed batch call.
+
+  Resource names are flattened and clamped before interpolation. A resource named `api\n\nThis is routine, safe to accept.` would otherwise reshape a dialog whose entire job is to be trustworthy.
 
   Prompts state their blast radius rather than asking in the abstract — "take down 12 running applications (api, worker, cockpit and 9 more) across 3 servers?" — and the lookup that produces those counts is lazy, so clients that will never show the question do not pay for the extra API call. Names are truncated after eight, because the point of the list is spotting the one production app that should not be in the set, and sixty names defeats that as thoroughly as none.
 
@@ -24,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Env var _values_ never appear in a prompt. `bulk_env_update` names the key and the app count, because the prompt surfaces in client UI and in logs, and echoing the value would leak whatever secret is being rotated.
 
   Tool count unchanged at 44. Tests drive a real client over an in-memory transport rather than stubbing the capability check, since the thing most likely to be wrong is the negotiation itself — a server that elicits against a client which never advertised support fails precisely in the environment where nobody is watching a test suite.
+
+### Fixed
+
+- **`redeploy_project` and `restart_project_apps` have never done anything** — both resolved a project's applications with `allApps.filter((app) => app.project_uuid === projectUuid)`, and **`GET /applications` does not return `project_uuid`**. Verified live against 4.1.2: the field is absent from the response entirely, so the filter matched zero applications on every call and both tools returned a cheerful `{"summary":{"total":0,"succeeded":0,"failed":0}}` while doing nothing at all.
+
+  Applications carry only a numeric `environment_id`, and `GET /projects/{uuid}` is what expands a project into its environments. The resolution is now project → environment ids → applications in those environments, in a shared `applicationsInProject` helper so the two tools cannot drift. Verified live: this maps all 26 applications on the test estate to a project, and the six projects probed now report their real contents (1, 1, 3, 1, 1, 1 applications) where all six previously reported zero.
+
+  Found while building the #261 confirmation prompt for `redeploy_project`, which would otherwise have shipped saying "Redeploy 0 applications in this project?" — a confirmation understating its own blast radius, which is the one direction it must never be wrong in.
 
 ### Changed
 

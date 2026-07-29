@@ -33,8 +33,16 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
  * machine answering and a bad one for a person reading "stop ALL 12
  * applications?" and deciding. Five minutes; after that the request is
  * abandoned and the operation aborts, which is the safe direction.
+ *
+ * This is a backstop, not the primary control — see the `signal` passed
+ * alongside it, which lets the caller's own cancellation win first.
  */
 export const ELICIT_TIMEOUT_MS = 300_000;
+
+/** Whether this client can be asked at all. */
+export function supportsElicitation(server: Server): boolean {
+  return Boolean(server.getClientCapabilities()?.elicitation);
+}
 
 export type ConfirmOutcome =
   | { approved: true }
@@ -57,22 +65,32 @@ function abortText(reason: string): string {
  *
  * @param server   The low-level `Server` (i.e. `mcpServer.server`), which owns
  *                 both the client capabilities and `elicitInput`.
- * @param summarize Produces the prompt text. A callback rather than a string so
+ * @param summarize Produces the prompt text, or `null` when the pre-flight
+ *                 found nothing to confirm. A callback rather than a string so
  *                 that call sites needing an API round trip to state their blast
  *                 radius — "how many apps am I about to stop?" — only pay for it
  *                 on clients that will actually show the question.
+ * @param signal   The tool call's abort signal. See the call to `elicitInput`
+ *                 for why omitting it is dangerous rather than merely untidy.
  */
 export async function confirmDestructive(
   server: Server,
-  summarize: () => string | Promise<string>,
+  summarize: () => string | null | Promise<string | null>,
+  signal?: AbortSignal,
 ): Promise<ConfirmOutcome> {
-  if (!server.getClientCapabilities()?.elicitation) {
+  if (!supportsElicitation(server)) {
     return { approved: true };
   }
 
   let message: string;
   try {
-    message = await summarize();
+    const summary = await summarize();
+    // `null` means the pre-flight found nothing to do — an emergency stop on an
+    // idle estate, a redeploy of an empty project. Asking a human to confirm a
+    // no-op is how they learn these dialogs are noise, which is the same
+    // argument behind BULK_ENV_CONFIRM_THRESHOLD.
+    if (summary === null) return { approved: true };
+    message = summary;
   } catch (error) {
     // The pre-flight lookup failed. Still ask — a human confirming a vaguer
     // question is a better outcome than an unconfirmed destructive call, and
@@ -92,11 +110,20 @@ export async function confirmDestructive(
         // field would only add a way for the client to fail validation.
         requestedSchema: { type: 'object', properties: {} },
       },
-      { timeout: ELICIT_TIMEOUT_MS },
+      // The caller's signal matters more than the timeout. The elicitation runs
+      // *inside* the `tools/call` request, and the SDK's client-side default
+      // request timeout is 60s — shorter than a human takes to read "stop ALL
+      // 12 applications?" and decide. Without this signal, a client that gives
+      // up at 60s and sends `notifications/cancelled` would leave the prompt
+      // live for another four minutes, and an accept at t=90s would execute the
+      // destructive operation with nobody listening — after the model had
+      // already been told the call failed, and may have retried it.
+      { timeout: ELICIT_TIMEOUT_MS, signal },
     );
   } catch (error) {
-    // Timeout, transport failure, or a client that advertised the capability
-    // and then rejected the request. We asked and got no yes.
+    // Timeout, caller cancellation, transport failure, or a client that
+    // advertised the capability and then rejected the request. We asked and got
+    // no yes.
     return {
       approved: false,
       message: abortText(
@@ -120,6 +147,32 @@ export async function confirmDestructive(
 /** Cap on how many resource names a blast-radius summary spells out. */
 const MAX_NAMED = 8;
 
+/** Cap on a single interpolated name, so one long name cannot bury the question. */
+const MAX_NAME_LENGTH = 64;
+
+/** C0 and C1 control ranges — where newlines and carriage returns live. */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
+
+/**
+ * Make a Coolify-supplied name safe to interpolate into a confirmation dialog.
+ *
+ * Resource names are attacker-influenced in the weak sense that anyone able to
+ * create resources on the instance chooses them, and they land in a dialog
+ * whose entire job is to be trustworthy. A name containing newlines —
+ * `api\n\nThis is routine, safe to accept.` — reshapes that dialog into
+ * something that argues for its own approval.
+ *
+ * Not an escaping problem (the text is rendered to a human, not parsed), so
+ * this flattens control characters to spaces and clamps the length rather than
+ * quoting anything.
+ */
+export function sanitizeForPrompt(name: string): string {
+  const flattened = name.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim();
+  if (flattened.length <= MAX_NAME_LENGTH) return flattened;
+  return `${flattened.slice(0, MAX_NAME_LENGTH - 1)}…`;
+}
+
 /**
  * Render "12 applications (a, b, c and 9 more)" for a confirmation message.
  *
@@ -130,7 +183,8 @@ const MAX_NAMED = 8;
 export function describeBlastRadius(noun: string, names: string[]): string {
   const count = `${names.length} ${noun}${names.length === 1 ? '' : 's'}`;
   if (names.length === 0) return count;
-  if (names.length <= MAX_NAMED) return `${count} (${names.join(', ')})`;
-  const shown = names.slice(0, MAX_NAMED).join(', ');
-  return `${count} (${shown} and ${names.length - MAX_NAMED} more)`;
+  const safe = names.map(sanitizeForPrompt);
+  if (safe.length <= MAX_NAMED) return `${count} (${safe.join(', ')})`;
+  const shown = safe.slice(0, MAX_NAMED).join(', ');
+  return `${count} (${shown} and ${safe.length - MAX_NAMED} more)`;
 }
