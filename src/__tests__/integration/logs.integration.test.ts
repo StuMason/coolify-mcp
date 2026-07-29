@@ -18,78 +18,48 @@
  *   resources on that instance. Each block skips if its uuid is absent.
  */
 
-import { config } from 'dotenv';
-import { describe, it, expect } from '@jest/globals';
-import { CoolifyClient } from '../../lib/coolify-client.js';
+import { it, expect } from '@jest/globals';
+import {
+  hasCredentials,
+  warnIfSkipped,
+  describeIf,
+  makeClient,
+  resolveVersion,
+  atLeast,
+  V4_2,
+} from './helpers.js';
 
-// override: true because an empty COOLIFY_URL in the ambient environment
-// otherwise wins over .env and silently skips every test — a skipped suite
-// reads like a passing one, which is the failure mode these tests exist to
-// avoid.
-config({ override: true });
+warnIfSkipped('logs.integration');
 
-const COOLIFY_URL = process.env.COOLIFY_URL;
-const COOLIFY_TOKEN = process.env.COOLIFY_TOKEN;
 const APPLICATION_UUID = process.env.TEST_APPLICATION_UUID;
 const DATABASE_UUID = process.env.TEST_DATABASE_UUID;
 const SERVICE_UUID = process.env.TEST_SERVICE_UUID;
 
-const shouldRun = Boolean(COOLIFY_URL && COOLIFY_TOKEN);
-
-if (!shouldRun) {
-  console.warn(
-    '\n[logs.integration] SKIPPED — COOLIFY_URL and COOLIFY_TOKEN are not set. ' +
-      'Nothing was verified against a real Coolify.\n',
-  );
-}
-
-/**
- * Endpoints under test here landed in Coolify v4.2. On an older instance they
- * 404, which is correct behaviour rather than a defect — but an ungated test
- * reports that as a failure and sends you looking for a bug that is not there.
- * Resolved once from the live instance so the suite can say which it is.
- */
-const V4_2 = 4.2;
-
-function parseMajorMinor(version: string): number {
-  const match = /^v?(\d+)\.(\d+)/.exec(version);
-  return match ? Number(`${match[1]}.${match[2]}`) : 0;
-}
-
-const client = shouldRun
-  ? new CoolifyClient({ baseUrl: COOLIFY_URL as string, accessToken: COOLIFY_TOKEN as string })
-  : (null as unknown as CoolifyClient);
+const client = makeClient();
 
 // Resolved at module scope, before jest collects the suites, so version-gated
-// blocks can be genuinely SKIPPED rather than passing via an early return.
-// A test that returns early still reports a green tick, which is precisely the
-// false-confidence these tests exist to prevent.
-let instanceVersion = 0;
-if (shouldRun) {
-  try {
-    const { version } = await client.getVersion();
-    instanceVersion = parseMajorMinor(version);
-    if (instanceVersion < V4_2) {
-      console.warn(
-        `\n[logs.integration] Coolify ${version} predates v4.2 — the database and ` +
-          'service log endpoints do not exist on it yet, so those suites are SKIPPED, ' +
-          'not verified. Re-run after upgrading.\n',
-      );
-    }
-  } catch (error) {
+// blocks are genuinely SKIPPED rather than passing via an early return. A test
+// that returns early still reports a green tick, which is precisely the false
+// confidence these tests exist to prevent.
+let version: [number, number] = [0, 0];
+if (hasCredentials) {
+  const resolvedVersion = await resolveVersion(client);
+  version = resolvedVersion.version;
+  const rawVersion = resolvedVersion.raw;
+  if (!atLeast(version, V4_2)) {
     console.warn(
-      `\n[logs.integration] Could not read the Coolify version (${(error as Error).message}). ` +
-        'Version-gated suites will be skipped.\n',
+      `\n[logs.integration] Coolify ${rawVersion} predates v4.2 — the database and ` +
+        'service log endpoints do not exist on it yet, so those suites are SKIPPED, ' +
+        'not verified. Re-run after upgrading.\n',
     );
   }
 }
-const supportsV42 = instanceVersion >= V4_2;
+const resolved = version[0] > 0;
+const supportsV42 = resolved && atLeast(version, V4_2);
 
-const describeIf = (condition: boolean) => (condition ? describe : describe.skip);
-
-describeIf(shouldRun)('logs integration', () => {
+describeIf(hasCredentials)('logs integration', () => {
   it('resolved the instance version, so a skip below is a real skip', () => {
-    expect(instanceVersion).toBeGreaterThan(0);
+    expect(resolved).toBe(true);
   });
   describeIf(Boolean(APPLICATION_UUID))('application logs', () => {
     it('returns a plain string, not the raw { logs } envelope', async () => {

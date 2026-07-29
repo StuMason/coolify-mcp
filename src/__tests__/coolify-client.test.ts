@@ -5498,6 +5498,28 @@ describe('CoolifyClient', () => {
     // instance therefore answers POST with 404, and a 405-only fallback never
     // fired — breaking enable/disable/validate on exactly the versions the
     // fallback existed to support. Confirmed live, not from the spec.
+    it('does NOT fall back on a controller 404, which is a real answer', async () => {
+      // A controller's "not found" has no `docs` key — that is the catch-all's
+      // signature. Retrying it would waste a request and replace a specific
+      // message with a routing one.
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+
+      await expect(client.validateServer('missing')).rejects.toThrow('Server not found.');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('exposes the parsed body on CoolifyApiError so callers can tell the two apart', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Server not found.' }, false, 404));
+
+      const error = (await client.validateServer('missing').catch((e: unknown) => e)) as {
+        status: number;
+        body: unknown;
+      };
+
+      expect(error.status).toBe(404);
+      expect(error.body).toEqual({ message: 'Server not found.' });
+    });
+
     it('falls back to GET on the 404 a pre-v4.2 catch-all actually returns', async () => {
       mockFetch
         .mockResolvedValueOnce(catchAllNotFound())
@@ -5516,9 +5538,7 @@ describe('CoolifyClient', () => {
       );
     });
 
-    it('surfaces the GET 404 when a resource genuinely does not exist', async () => {
-      // A real "not found" costs one extra request and then reports correctly,
-      // which is the price of treating 404 as a method rejection.
+    it('reports the catch-all 404 when the GET retry is rejected too', async () => {
       mockFetch.mockResolvedValueOnce(catchAllNotFound()).mockResolvedValueOnce(catchAllNotFound());
 
       await expect(client.validateServer('missing')).rejects.toThrow('Not found.');
@@ -5621,12 +5641,16 @@ describe('CoolifyClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('propagates the GET failure when both methods are rejected', async () => {
+    it('reports the original POST failure when the GET retry also fails', async () => {
       mockFetch
         .mockResolvedValueOnce(laravelMethodNotAllowed())
         .mockResolvedValueOnce(mockResponse({ message: 'Nope.' }, false, 404));
 
-      await expect(client.validateServer('server-uuid')).rejects.toThrow('Nope.');
+      // The GET is only a probe. Surfacing its error would describe a method
+      // problem for what may be, say, a bad uuid — so the POST error wins.
+      await expect(client.validateServer('server-uuid')).rejects.toThrow(
+        'The POST method is not supported',
+      );
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
@@ -5687,7 +5711,9 @@ describe('CoolifyClient', () => {
         .mockResolvedValueOnce(mockResponse({}, false, 500))
         .mockResolvedValueOnce(mockResponse({ uuid: 'server-uuid' }));
 
-      await expect(client.validateServer('server-uuid')).rejects.toThrow('HTTP 500');
+      await expect(client.validateServer('server-uuid')).rejects.toThrow(
+        'The POST method is not supported',
+      );
       await client.validateServer('server-uuid');
 
       // Third call probes POST again rather than trusting an unproven fallback.
