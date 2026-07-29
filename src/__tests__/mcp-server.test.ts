@@ -329,6 +329,131 @@ describe('CoolifyMcpServer v2', () => {
       });
     });
 
+    // #291: preview and production are separate scopes. Without is_preview on
+    // the single create/update paths, a preview variable could only be set via
+    // bulk_update, so callers dropped to the raw API to do it.
+    it('forwards is_preview to createApplicationEnvVar', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationEnvVar')
+        .mockResolvedValue({ uuid: 'env-1' });
+
+      await callEnvVars(server, {
+        resource: 'application',
+        action: 'create',
+        uuid: 'app-uuid',
+        key: 'API_URL',
+        value: 'https://preview.example.com',
+        is_preview: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'app-uuid',
+        expect.objectContaining({ key: 'API_URL', is_preview: true }),
+      );
+    });
+
+    it('forwards is_preview to updateApplicationEnvVar', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateApplicationEnvVar')
+        .mockResolvedValue({ message: 'Updated' });
+
+      await callEnvVars(server, {
+        resource: 'application',
+        action: 'update',
+        uuid: 'app-uuid',
+        key: 'API_URL',
+        value: 'https://preview.example.com',
+        is_preview: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'app-uuid',
+        expect.objectContaining({ key: 'API_URL', is_preview: true }),
+      );
+    });
+
+    it('forwards is_preview to service and database env var writes', async () => {
+      const svc = jest
+        .spyOn(server['client'], 'createServiceEnvVar')
+        .mockResolvedValue({ uuid: 'env-1' });
+      const db = jest
+        .spyOn(server['client'], 'createDatabaseEnvVar')
+        .mockResolvedValue({ uuid: 'env-2' });
+
+      await callEnvVars(server, {
+        resource: 'service',
+        action: 'create',
+        uuid: 'svc-uuid',
+        key: 'K',
+        value: 'v',
+        is_preview: true,
+      });
+      await callEnvVars(server, {
+        resource: 'database',
+        action: 'create',
+        uuid: 'db-uuid',
+        key: 'K',
+        value: 'v',
+        is_preview: true,
+      });
+
+      expect(svc).toHaveBeenCalledWith('svc-uuid', expect.objectContaining({ is_preview: true }));
+      expect(db).toHaveBeenCalledWith('db-uuid', expect.objectContaining({ is_preview: true }));
+    });
+
+    it('omits is_preview when not supplied, so writes default to production scope', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createApplicationEnvVar')
+        .mockResolvedValue({ uuid: 'env-1' });
+
+      await callEnvVars(server, {
+        resource: 'application',
+        action: 'create',
+        uuid: 'app-uuid',
+        key: 'NODE_ENV',
+        value: 'production',
+      });
+
+      expect(spy.mock.calls[0][1].is_preview).toBeUndefined();
+    });
+
+    it('surfaces is_preview on list so preview and production vars are distinguishable', async () => {
+      jest.spyOn(server['client'], 'listApplicationEnvVars').mockResolvedValue([
+        {
+          uuid: 'env-1',
+          key: 'API_URL',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
+        {
+          uuid: 'env-2',
+          key: 'API_URL',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: true,
+        },
+      ]);
+
+      const result = (await callEnvVars(server, {
+        resource: 'application',
+        action: 'list',
+        uuid: 'app-uuid',
+      })) as { content: Array<{ text: string }> };
+
+      // The same key in both scopes is valid config, not a misconfiguration —
+      // the caller can only tell them apart if is_preview survives the projection.
+      const parsed = JSON.parse(result.content[0].text) as Array<{
+        uuid: string;
+        is_preview: boolean;
+      }>;
+      expect(parsed).toHaveLength(2);
+      expect(parsed.find((v) => v.uuid === 'env-1')?.is_preview).toBe(false);
+      expect(parsed.find((v) => v.uuid === 'env-2')?.is_preview).toBe(true);
+    });
+
     it('forwards is_buildtime/is_runtime to createServiceEnvVar', async () => {
       const spy = jest
         .spyOn(server['client'], 'createServiceEnvVar')
@@ -372,8 +497,22 @@ describe('CoolifyMcpServer v2', () => {
 
     it('list with key returns only the matching variable', async () => {
       jest.spyOn(server['client'], 'listApplicationEnvVars').mockResolvedValue([
-        { uuid: 'env-1', key: 'NODE_ENV', value: '***', is_buildtime: false, is_runtime: true },
-        { uuid: 'env-2', key: 'SECRET_TOKEN', value: '***', is_buildtime: false, is_runtime: true },
+        {
+          uuid: 'env-1',
+          key: 'NODE_ENV',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
+        {
+          uuid: 'env-2',
+          key: 'SECRET_TOKEN',
+          value: '***',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
       ]);
 
       const result = (await callEnvVars(server, {

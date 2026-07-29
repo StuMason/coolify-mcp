@@ -1183,7 +1183,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.tool(
       'env_vars',
-      "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). On list, pass key to return only that variable — always combine reveal with key so only the requested value (not every secret on the resource) is exposed. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys.",
+      "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). On list, pass key to return only that variable — always combine reveal with key so only the requested value (not every secret on the resource) is exposed. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys. Preview vs production: is_preview marks a variable as applying to preview (pull-request) deployments rather than production. These are SEPARATE scopes — the same key can legitimately exist in both with different values, and that is normal configuration, not a mistake to reconcile. Check is_preview on each entry before concluding a variable is set wrong, and pass is_preview on create/update to target the preview scope (omit it to target production).",
       {
         resource: z.enum(['application', 'service', 'database']),
         action: z.enum(['list', 'create', 'update', 'delete', 'bulk_update']),
@@ -1193,6 +1193,7 @@ export class CoolifyMcpServer extends McpServer {
         env_uuid: z.string().optional(),
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
+        is_preview: z.boolean().optional(),
         reveal: z.boolean().optional(),
         data: z
           .array(
@@ -1218,6 +1219,7 @@ export class CoolifyMcpServer extends McpServer {
         env_uuid,
         is_buildtime,
         is_runtime,
+        is_preview,
         reveal,
         data,
       }) => {
@@ -1244,6 +1246,7 @@ export class CoolifyMcpServer extends McpServer {
                   value,
                   is_buildtime,
                   is_runtime,
+                  is_preview,
                 }),
               );
             case 'update':
@@ -1255,6 +1258,7 @@ export class CoolifyMcpServer extends McpServer {
                   value,
                   is_buildtime,
                   is_runtime,
+                  is_preview,
                 }),
               );
             case 'delete':
@@ -1276,13 +1280,25 @@ export class CoolifyMcpServer extends McpServer {
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
               return wrap(() =>
-                this.client.createServiceEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+                this.client.createServiceEnvVar(uuid, {
+                  key,
+                  value,
+                  is_buildtime,
+                  is_runtime,
+                  is_preview,
+                }),
               );
             case 'update':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
               return wrap(() =>
-                this.client.updateServiceEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+                this.client.updateServiceEnvVar(uuid, {
+                  key,
+                  value,
+                  is_buildtime,
+                  is_runtime,
+                  is_preview,
+                }),
               );
             case 'delete':
               if (!env_uuid)
@@ -1303,13 +1319,25 @@ export class CoolifyMcpServer extends McpServer {
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
               return wrap(() =>
-                this.client.createDatabaseEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+                this.client.createDatabaseEnvVar(uuid, {
+                  key,
+                  value,
+                  is_buildtime,
+                  is_runtime,
+                  is_preview,
+                }),
               );
             case 'update':
               if (!key || !value)
                 return { content: [{ type: 'text' as const, text: 'Error: key, value required' }] };
               return wrap(() =>
-                this.client.updateDatabaseEnvVar(uuid, { key, value, is_buildtime, is_runtime }),
+                this.client.updateDatabaseEnvVar(uuid, {
+                  key,
+                  value,
+                  is_buildtime,
+                  is_runtime,
+                  is_preview,
+                }),
               );
             case 'delete':
               if (!env_uuid)

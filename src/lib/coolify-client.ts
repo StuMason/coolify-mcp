@@ -403,6 +403,7 @@ function toEnvVarSummary(envVar: EnvironmentVariable): EnvVarSummary {
     value: envVar.value,
     is_buildtime: envVar.is_buildtime,
     is_runtime: envVar.is_runtime,
+    is_preview: envVar.is_preview,
   };
 }
 
