@@ -29,6 +29,16 @@ ENV HOST=0.0.0.0
 ENV PORT=4321
 WORKDIR /app
 
+# curl, for Coolify's container healthcheck.
+#
+# Without it the check falls back to busybox wget, which resolves `localhost`
+# to ::1 and stops there. Node binds 0.0.0.0 — IPv4 only — so every probe came
+# back "connection refused" against a server that was running perfectly, the
+# rolling update judged the container unhealthy, and it rolled back. curl tries
+# IPv6 then falls back to IPv4, so it succeeds either way; the healthcheck is
+# also pinned to 127.0.0.1 in the Coolify app config.
+RUN apk add --no-cache curl
+
 # Production dependencies only — the AWS SDK is needed at runtime for the
 # contact form; astro and the adapter are not.
 COPY site/package.json site/package-lock.json ./
