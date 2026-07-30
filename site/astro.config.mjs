@@ -20,7 +20,10 @@ const SITE = 'https://coolify-mcp.stumason.dev';
  * repo root at runtime. Here it runs exactly once, at build, in the site dir.
  */
 function countTools() {
-  const src = readFileSync(fileURLToPath(new URL('../src/lib/mcp-server.ts', import.meta.url)), 'utf8');
+  const src = readFileSync(
+    fileURLToPath(new URL('../src/lib/mcp-server.ts', import.meta.url)),
+    'utf8',
+  );
   const n = (src.match(/this\.defineTool\(/g) ?? []).length;
   if (n < 20) {
     throw new Error(
@@ -60,7 +63,8 @@ export default defineConfig({
     '/concepts/security': '/#safety',
     '/concepts/coolify-api-gotchas': '/#tools',
     '/contributing': 'https://github.com/StuMason/coolify-mcp/blob/main/CONTRIBUTING.md',
-    '/contributing/adding-tools': 'https://github.com/StuMason/coolify-mcp/blob/main/CONTRIBUTING.md',
+    '/contributing/adding-tools':
+      'https://github.com/StuMason/coolify-mcp/blob/main/CONTRIBUTING.md',
     '/contributing/testing': 'https://github.com/StuMason/coolify-mcp/blob/main/CONTRIBUTING.md',
     '/contributing/pr-flow': 'https://github.com/StuMason/coolify-mcp/blob/main/CONTRIBUTING.md',
     '/roadmap': 'https://github.com/StuMason/coolify-mcp/issues',

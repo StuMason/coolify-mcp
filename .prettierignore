@@ -13,3 +13,7 @@ docs/openapi-chunks/
 # Build output and coverage reports
 dist/
 coverage/
+
+# Astro build artefacts — generated, never hand-edited.
+site/.astro/
+site/dist/

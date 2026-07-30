@@ -22,7 +22,10 @@ const MAX = { name: 120, email: 200, company: 160, message: 5000 } as const;
 /** Reject anything that could inject headers, and clamp length. */
 function clean(value: FormDataEntryValue | null, limit: number): string {
   if (typeof value !== 'string') return '';
-  return value.replace(/[\r\n]+/g, ' ').trim().slice(0, limit);
+  return value
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, limit);
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
