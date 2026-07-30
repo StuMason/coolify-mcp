@@ -82,6 +82,28 @@ Full reference with parameters and examples: [tools docs](https://coolify-mcp.st
 - **Actionable responses** — results carry `_actions` hints (view logs, restart, next page) so the assistant knows the logical next step without extra tokens.
 - **Verified deploys** — `deploy` with `wait: true` polls to a terminal status and returns a log tail on failure, instead of "the site returns 200 so it probably worked".
 
+## Ask before it hurts
+
+Destructive operations pause and ask **you**, not the model, on clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) — Claude Code and VS Code Copilot today. The prompt states the blast radius before you answer:
+
+```text
+EMERGENCY STOP: take down 12 running applications
+(api, worker, cockpit, umami, scheduler, mailer, search, billing and 4 more)
+across 3 servers?
+```
+
+Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
+
+Prompts are skipped where there is nothing to confirm: an emergency stop on an idle estate, or a redeploy of an empty project, just runs.
+
+This is progressive enhancement, not a new requirement: clients without elicitation support (Claude Desktop, claude.ai) behave exactly as before. Once a client does advertise support, a decline, a cancel or a timeout all abort the call.
+
+These tools also carry the MCP `destructiveHint` annotation, so on a client that honours annotations **and** supports elicitation you may answer two dialogs in a row — the client's own permission prompt, then this one. That is the client's prompt plus the server's, not a bug. Allowlisting the tool in your client removes the first and leaves this one as the gate.
+
+Set `COOLIFY_MCP_ELICITATION=off` to turn the confirmations off entirely. It exists for the case where a client advertises elicitation support but does not actually implement it — otherwise every guarded tool would return `could not confirm with the user` with no way to recover. It is an escape hatch, not a normal setting.
+
+> **If confirmations time out before you can answer them**, raise your client's MCP tool timeout. The prompt runs inside the tool call, and the MCP SDK's default request timeout is 60 seconds. The server aborts cleanly when the client gives up — nothing runs behind your back — but you will see the call fail rather than the dialog you were reading.
+
 ## Secure by default
 
 Secrets are masked at the API boundary — a client granted "list" access never sees plaintext credentials unless you explicitly opt in with `reveal: true`:

@@ -347,6 +347,37 @@ export function errorHint(status: number, path: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether an application's status string counts as "up", for the purposes of
+ * deciding what `stopAllApps` targets.
+ *
+ * Coolify reports composite statuses like `running:healthy` and
+ * `exited:unhealthy`, hence substring tests rather than equality.
+ *
+ * Exported because `stopAllApps` uses it to decide what to stop and the #261
+ * elicitation prompt uses it to tell the human what is about to be stopped. Two
+ * copies of this predicate would eventually disagree, and the failure mode of
+ * that is a confirmation dialog understating its own blast radius.
+ *
+ * **Fixed here, because extraction changed what the bug costs.** `'unhealthy'`
+ * contains `'healthy'`, so the original `includes('healthy')` classified
+ * `exited:unhealthy` as running. Inside `stopAllApps` that cost only a no-op
+ * stop against an already-stopped app, which nobody ever saw. Shared with the
+ * #261 confirmation prompt it does something worse: it names already-dead
+ * applications in a dialog whose entire job is to be accurate, and someone
+ * scanning that list for the one application that should not be in it is handed
+ * noise. A prompt that pads its own blast radius trains people to stop reading
+ * it.
+ *
+ * `running:unhealthy` still counts, via the `running` branch — an application
+ * that is up but failing health checks is still something an emergency stop
+ * should take down.
+ */
+export function isRunningStatus(status?: string): boolean {
+  const value = status || '';
+  return value.includes('running') || (value.includes('healthy') && !value.includes('unhealthy'));
+}
+
 // =============================================================================
 // Summary Transformers - reduce full objects to essential fields
 // =============================================================================
@@ -2656,9 +2687,122 @@ export class CoolifyClient {
    * Restart all applications in a project.
    * @param projectUuid - Project UUID
    */
-  async restartProjectApps(projectUuid: string): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+  /**
+   * Applications belonging to a project.
+   *
+   * **`GET /applications` does not return `project_uuid`.** Verified live
+   * against 4.1.2: none of the 26 applications on the test estate carried the
+   * field, and it is absent from the response entirely. `restartProjectApps`
+   * and `redeployProjectApps` both filtered on it, so both matched zero
+   * applications and silently reported "0 succeeded" instead of doing anything.
+   *
+   * The only link an application carries is the numeric `environment_id`, and
+   * `GET /projects/{uuid}` is what expands a project into its environments. So
+   * the resolution is project → environment ids → applications in those
+   * environments. Verified live: this maps all 26 applications to a project.
+   *
+   * `getProject` rather than the narrower `listProjectEnvironments`
+   * (`GET /projects/{uuid}/environments`) because one call answers both halves
+   * of the question — it returns the environments *and* confirms the project
+   * exists — and it is verified against a live 4.1.2, which the narrower
+   * endpoint is not. `environments` is optional on the `Project` type, so the
+   * check below is what stops that choice degrading into a silent zero; if a
+   * future instance stops expanding it, the fix is to fall back to
+   * `listProjectEnvironments` here rather than to soften the check.
+   *
+   * Deliberately takes no pre-fetched application list. The #261 confirmation
+   * path shares the set the human approved by passing it to the *operation*
+   * (`restartProjectApps` / `redeployProjectApps` both accept it), not by
+   * re-entering this lookup, so a pre-fetch parameter here would have no caller.
+   */
+  async applicationsInProject(projectUuid: string): Promise<Application[]> {
+    const [project, allApps] = await Promise.all([
+      this.getProject(projectUuid),
+      this.listApplications() as Promise<Application[]>,
+    ]);
+    // Throw rather than treat a missing `environments` as an empty one. An
+    // absent array means the project's environments could not be resolved —
+    // older instance, partial response, insufficient permissions — and
+    // defaulting it to `[]` would match zero applications and report a cheerful
+    // "0 succeeded", which is precisely the silent no-op this method exists to
+    // fix. An empty array is different and is left alone: that is a real answer
+    // about a real project.
+    //
+    // It matters most on the confirmation path: an unresolvable project would
+    // otherwise produce no dialog *and* no work, so the user would see neither
+    // a prompt nor an error.
+    if (!Array.isArray(project.environments)) {
+      throw new Error(
+        `Could not resolve environments for project ${projectUuid}: the API returned no environments array. ` +
+          `Without it there is no way to tell which applications belong to this project.`,
+      );
+    }
+    const environmentIds = new Set(project.environments.map((env) => env.id));
+    return allApps.filter(
+      (app) => app.environment_id !== undefined && environmentIds.has(app.environment_id),
+    );
+  }
+
+  /**
+   * Everything a project delete would take with it.
+   *
+   * `DELETE /projects/{uuid}` documents no "project has resources" refusal —
+   * unlike the environment delete, which has an explicit 400 — so the delete is
+   * assumed to cascade, and a confirmation that counts only applications
+   * understates a project holding three Postgres instances and no apps. That is
+   * the direction a destructive prompt must never be wrong in.
+   *
+   * Databases and services resolve exactly like applications: verified live
+   * against 4.1.2, neither list endpoint returns `project_uuid` and both carry
+   * the numeric `environment_id`.
+   *
+   * Returns the `project` too, so the confirmation path does not fetch it a
+   * second time — the one path where an extra round trip happens with a human
+   * waiting on the dialog.
+   */
+  async projectContents(projectUuid: string): Promise<{
+    project: Project;
+    applications: Application[];
+    databases: Database[];
+    services: Service[];
+  }> {
+    const [project, apps, databases, services] = await Promise.all([
+      this.getProject(projectUuid),
+      this.listApplications() as Promise<Application[]>,
+      this.listDatabases() as Promise<Database[]>,
+      this.listServices() as Promise<Service[]>,
+    ]);
+    // Same reasoning as `applicationsInProject`: a missing array means "could
+    // not find out", and reporting that as an empty project is how a delete
+    // prompt understates itself.
+    if (!Array.isArray(project.environments)) {
+      throw new Error(
+        `Could not resolve environments for project ${projectUuid}: the API returned no environments array. ` +
+          `Without it there is no way to tell what this project contains.`,
+      );
+    }
+    const environmentIds = new Set(project.environments.map((env) => env.id));
+    const inProject = <T extends { environment_id?: number }>(items: T[]): T[] =>
+      items.filter(
+        (item) => item.environment_id !== undefined && environmentIds.has(item.environment_id),
+      );
+    return {
+      project,
+      applications: inProject(apps),
+      databases: inProject(databases),
+      services: inProject(services),
+    };
+  }
+
+  /**
+   * @param projectApps The applications to restart. Pass the set a human already
+   *   approved; omit to resolve it from the project.
+   */
+  async restartProjectApps(
+    projectUuid: string,
+    projectApps?: Application[],
+  ): Promise<BatchOperationResult> {
+    projectApps ??= await this.applicationsInProject(projectUuid);
 
     if (projectApps.length === 0) {
       return {
@@ -2727,14 +2871,15 @@ export class CoolifyClient {
   /**
    * Emergency stop all running applications across entire infrastructure.
    */
-  async stopAllApps(): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-
+  /**
+   * @param runningApps The applications to stop, already filtered to running.
+   *   Pass the set a human approved; omit to resolve it from the estate.
+   */
+  async stopAllApps(runningApps?: Application[]): Promise<BatchOperationResult> {
     // Only stop running apps
-    const runningApps = allApps.filter((app) => {
-      const status = app.status || '';
-      return status.includes('running') || status.includes('healthy');
-    });
+    runningApps ??= ((await this.listApplications()) as Application[]).filter((app) =>
+      isRunningStatus(app.status),
+    );
 
     if (runningApps.length === 0) {
       return {
@@ -2759,9 +2904,9 @@ export class CoolifyClient {
   async redeployProjectApps(
     projectUuid: string,
     force: boolean = true,
+    projectApps?: Application[],
   ): Promise<BatchOperationResult> {
-    const allApps = (await this.listApplications()) as Application[];
-    const projectApps = allApps.filter((app) => app.project_uuid === projectUuid);
+    projectApps ??= await this.applicationsInProject(projectUuid);
 
     if (projectApps.length === 0) {
       return {

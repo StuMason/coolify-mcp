@@ -12,6 +12,7 @@ import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-com
 import { z } from 'zod';
 import {
   CoolifyClient,
+  isRunningStatus,
   type ServerSummary,
   type ProjectSummary,
   type ApplicationSummary,
@@ -20,6 +21,7 @@ import {
   type GitHubAppSummary,
 } from './coolify-client.js';
 import type {
+  Application,
   CoolifyConfig,
   GitHubApp,
   BuildPack,
@@ -31,6 +33,7 @@ import type {
   DeployTriggerResponse,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
+import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
@@ -54,6 +57,54 @@ function wrap<T>(
 }
 
 const TRUNCATION_PREFIX = '...[truncated]...\n';
+
+/**
+ * Apps a single `bulk_env_update` may touch before it needs a human (#261).
+ *
+ * Prompting on every bulk update would be prompt fatigue with extra steps, and
+ * a prompt people have learned to dismiss protects nothing. Three is the
+ * boundary named in the issue: enough for the ordinary "same key on the api,
+ * the worker and the scheduler" edit to stay frictionless.
+ */
+const BULK_ENV_CONFIRM_THRESHOLD = 3;
+
+/** A resource's display name for a prompt, falling back to its uuid. */
+function nameOf(resource: { name?: string; uuid: string }): string {
+  return resource.name || resource.uuid;
+}
+
+/** "a", "a and b", "a, b and c" — for listing resource kinds in a prompt. */
+function joinList(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Confirmation text for deleting an application, database or service (#261).
+ *
+ * The volume sentence is the reason this function exists. `delete_volumes` is
+ * documented `default: true` on all three DELETE endpoints (see
+ * `docs/coolify-openapi.yaml`), so **omitting the flag destroys the data** —
+ * the opposite of what "optional boolean, left unset" reads like at a call
+ * site. Only an explicit `false` is treated as "volumes kept", which is both
+ * what the spec says and the safe way to be wrong if the spec is lying again.
+ */
+function deleteResourcePrompt(
+  kind: 'application' | 'database' | 'service',
+  name: string,
+  uuid: string,
+  deleteVolumes: boolean | undefined,
+): string {
+  const volumes =
+    deleteVolumes === false
+      ? 'Persistent volumes are kept.'
+      : `Persistent volumes will be DESTROYED and their data is not recoverable${
+          deleteVolumes === undefined
+            ? ' (delete_volumes was not set, and it defaults to true)'
+            : ''
+        }.`;
+  return `Delete ${kind} "${sanitizeForPrompt(name)}" (${sanitizeForPrompt(uuid)})?\n\n${volumes} This cannot be undone.`;
+}
 
 interface LogEntry {
   output?: string;
@@ -415,6 +466,43 @@ export class CoolifyMcpServer extends McpServer {
     this.registerTool(name, { description, inputSchema, annotations }, cb);
   }
 
+  /**
+   * Run `operation`, but ask the human first (#261).
+   *
+   * On clients that support elicitation this renders `summarize()` as a
+   * confirmation prompt and aborts unless it is accepted; on clients that do
+   * not, it is a straight pass-through to {@link wrap} and the tool behaves
+   * exactly as it did before. See `elicit.ts` for why that asymmetry is the
+   * right default.
+   *
+   * `summarize` is lazy so that call sites which need an API round trip to
+   * count their blast radius do not make it on clients that will never show
+   * the question, and may return `null` to mean "nothing to confirm" — an
+   * emergency stop on an idle estate should not raise a dialog.
+   *
+   * `label` names the operation without needing any lookup, so that when
+   * `summarize` fails the human is still told what they are approving. The
+   * degraded prompt fires exactly when Coolify is flaky, which is when people
+   * are least inclined to read carefully.
+   *
+   * `signal` is the tool call's own abort signal and must be threaded through:
+   * without it, a client that times the `tools/call` out at 60s leaves the
+   * prompt live, and a later accept executes the operation with nobody
+   * listening.
+   */
+  private async guardDestructive<T>(
+    signal: AbortSignal | undefined,
+    label: string,
+    summarize: () => string | null | Promise<string | null>,
+    operation: () => Promise<T>,
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    const outcome = await confirmDestructive(this.server, label, summarize, signal);
+    if (!outcome.approved) {
+      return { content: [{ type: 'text' as const, text: outcome.message }] };
+    }
+    return wrap(operation);
+  }
+
   constructor(config: CoolifyConfig) {
     super({ name: 'coolify', version: VERSION });
     this.client = new CoolifyClient(config);
@@ -648,7 +736,7 @@ export class CoolifyMcpServer extends McpServer {
         page: z.number().optional(),
         per_page: z.number().optional(),
       },
-      async ({ action, uuid, name, description, page, per_page }) => {
+      async ({ action, uuid, name, description, page, per_page }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listProjects({ page, per_page, summary: true }));
@@ -667,7 +755,47 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deleteProject(uuid));
+            return this.guardDestructive(
+              extra.signal,
+              `Delete a Coolify project and everything in it.`,
+              // The label says "and everything in it" but the message is what
+              // the human actually reads, so it has to carry the same weight.
+              // Unlike the environment delete below, the spec documents only a
+              // generic 400 here — there is no documented "project has
+              // resources" refusal — so this cannot assume Coolify will catch a
+              // non-empty project.
+              //
+              // Counting applications alone is not enough: if the delete
+              // cascades, it cascades over databases and services too, and
+              // "no applications" in front of a project holding three Postgres
+              // instances understates the blast radius — the one direction a
+              // confirmation must never be wrong in.
+              async () => {
+                const { project, applications, databases, services } =
+                  await this.client.projectContents(uuid);
+                const parts = [
+                  ...(applications.length
+                    ? [describeBlastRadius('application', applications.map(nameOf))]
+                    : []),
+                  ...(databases.length
+                    ? [describeBlastRadius('database', databases.map(nameOf))]
+                    : []),
+                  ...(services.length
+                    ? [describeBlastRadius('service', services.map(nameOf))]
+                    : []),
+                ];
+                const contents = parts.length
+                  ? `It contains ${joinList(parts)}, all of which go with it.`
+                  : // Says what was checked rather than asserting an emptiness
+                    // broader than the check behind it.
+                    `It contains no applications, databases or services.`;
+                return (
+                  `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
+                  `${contents} This cannot be undone.`
+                );
+              },
+              () => this.client.deleteProject(uuid),
+            );
         }
       },
     );
@@ -684,7 +812,7 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
       },
-      async ({ action, project_uuid, name, description }) => {
+      async ({ action, project_uuid, name, description }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listProjectEnvironments(project_uuid));
@@ -702,7 +830,22 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
-            return wrap(() => this.client.deleteProjectEnvironment(project_uuid, name));
+            return this.guardDestructive(
+              extra.signal,
+              `Delete an environment from a Coolify project.`,
+              // Says that Coolify refuses a non-empty environment (documented
+              // 400, `Environment has resources, so it cannot be deleted.`)
+              // rather than dropping the prompt entirely. The operation is
+              // still a delete and still worth confirming, but a dialog that
+              // implies more danger than it carries is exactly how people learn
+              // to click through these — the same argument as
+              // BULK_ENV_CONFIRM_THRESHOLD, applied to wording instead of
+              // frequency.
+              () =>
+                `Delete environment "${sanitizeForPrompt(name)}" from project ${sanitizeForPrompt(project_uuid)}?\n\n` +
+                `Coolify refuses this if the environment still has resources in it, so this only succeeds on an empty one.`,
+              () => this.client.deleteProjectEnvironment(project_uuid, name),
+            );
         }
       },
     );
@@ -806,7 +949,7 @@ export class CoolifyMcpServer extends McpServer {
         // Preview fields
         pull_request_id: z.number().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'create_public':
@@ -1071,8 +1214,14 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() =>
-              this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
+            return this.guardDestructive(
+              extra.signal,
+              `Delete an application, and by default its persistent volumes.`,
+              async () => {
+                const app = await this.client.getApplication(uuid);
+                return deleteResourcePrompt('application', app.name || uuid, uuid, delete_volumes);
+              },
+              () => this.client.deleteApplication(uuid, { deleteVolumes: delete_volumes }),
             );
           case 'delete_preview':
             if (!uuid || !args.pull_request_id)
@@ -1198,11 +1347,19 @@ export class CoolifyMcpServer extends McpServer {
         clickhouse_admin_password: z.string().optional(),
         dragonfly_password: z.string().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-          return wrap(() => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }));
+          return this.guardDestructive(
+            extra.signal,
+            `Delete a database, and by default its persistent volumes.`,
+            async () => {
+              const db = await this.client.getDatabase(uuid);
+              return deleteResourcePrompt('database', db.name || uuid, uuid, delete_volumes);
+            },
+            () => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }),
+          );
         }
         // create
         if (!type || !args.server_uuid || !args.project_uuid) {
@@ -1260,7 +1417,7 @@ export class CoolifyMcpServer extends McpServer {
           .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
         delete_volumes: z.boolean().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
         switch (action) {
           case 'list_containers': {
@@ -1304,7 +1461,15 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }));
+            return this.guardDestructive(
+              extra.signal,
+              `Delete a service, and by default its persistent volumes.`,
+              async () => {
+                const svc = await this.client.getService(uuid);
+                return deleteResourcePrompt('service', svc.name || uuid, uuid, delete_volumes);
+              },
+              () => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }),
+            );
         }
       },
     );
@@ -2322,7 +2487,7 @@ export class CoolifyMcpServer extends McpServer {
         include_full: z.boolean().optional(),
         reveal: z.boolean().optional(),
       },
-      async ({ action, include_full, reveal }) => {
+      async ({ action, include_full, reveal }, extra) => {
         switch (action) {
           case 'health':
             return wrap(() => this.client.getHealth());
@@ -2331,7 +2496,19 @@ export class CoolifyMcpServer extends McpServer {
           case 'enable_api':
             return wrap(() => this.client.enableApi());
           case 'disable_api':
-            return wrap(() => this.client.disableApi());
+            // The most self-locking operation in the server: it turns off the
+            // API that every other tool depends on, including the one that
+            // turns it back on. Recovery is a trip to the Coolify UI, so this
+            // is precisely a decision a human should be making.
+            return this.guardDestructive(
+              extra.signal,
+              `Disable the Coolify API, which stops every tool in this server.`,
+              () =>
+                `Disable the Coolify API?\n\n` +
+                `Every tool in this MCP server stops working immediately, including ` +
+                `\`enable_api\`. Re-enabling it means logging into the Coolify UI by hand.`,
+              () => this.client.disableApi(),
+            );
         }
       },
     );
@@ -2432,7 +2609,39 @@ export class CoolifyMcpServer extends McpServer {
       'restart_project_apps',
       'Restart all apps in project',
       { project_uuid: z.string() },
-      async ({ project_uuid }) => wrap(() => this.client.restartProjectApps(project_uuid)),
+      async ({ project_uuid }, extra) => {
+        // On the happy path `approved` carries the resolved set into the
+        // operation, so the restart acts on exactly what the human was shown and
+        // the lookup happens once.
+        //
+        // When the lookup *throws*, `approved` stays undefined, the degraded
+        // prompt is shown, and an accept re-runs the same lookup inside
+        // `restartProjectApps` — which for a deterministic failure (the
+        // "could not resolve environments" throw) fails identically, so the
+        // human is asked a question whose only reachable answer is the error
+        // they would have seen anyway. Left as-is deliberately: the alternative
+        // is inspecting the error to decide whether to ask, which couples this
+        // call site to the client's error strings, and the transient case
+        // (`listApplications` timing out) genuinely can succeed on the retry.
+        // The cost is one extra lookup on an already-failing request.
+        let approved: Application[] | undefined;
+        return this.guardDestructive(
+          extra.signal,
+          `Restart every application in a Coolify project.`,
+          async () => {
+            approved = await this.client.applicationsInProject(project_uuid);
+            if (approved.length === 0) return null;
+            return (
+              `Restart ${describeBlastRadius(
+                'application',
+                approved.map((app) => app.name || app.uuid),
+              )} in this project?\n\n` +
+              `Each one drops its connections briefly while the container comes back.`
+            );
+          },
+          () => this.client.restartProjectApps(project_uuid, approved),
+        );
+      },
     );
 
     this.defineTool(
@@ -2445,18 +2654,103 @@ export class CoolifyMcpServer extends McpServer {
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
       },
-      async ({ app_uuids, key, value, is_buildtime, is_runtime }) =>
-        wrap(() => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime)),
+      async ({ app_uuids, key, value, is_buildtime, is_runtime }, extra) => {
+        // Under the threshold this is an ordinary edit and prompting for it
+        // would only train people to click through prompts. Over it, one call
+        // rewrites the same key across the estate.
+        if (app_uuids.length <= BULK_ENV_CONFIRM_THRESHOLD) {
+          return wrap(() =>
+            this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
+          );
+        }
+        return this.guardDestructive(
+          extra.signal,
+          `Set env var "${sanitizeForPrompt(key)}" across ${app_uuids.length} applications.`,
+          // Every other prompt names what it is about to touch, and this is the
+          // one where that matters most: `app_uuids` is a list the *model*
+          // assembled, not one the human handed over like a project uuid, so a
+          // bare count asks them to approve a set they cannot see. Resolving
+          // names costs one list call, and only on clients that will show the
+          // question. If it fails, `confirmDestructive` catches and degrades to
+          // the label above, which still carries the key and the count.
+          async () => {
+            const apps = (await this.client.listApplications()) as Application[];
+            const names = app_uuids.map(
+              (uuid) => apps.find((app) => app.uuid === uuid)?.name || uuid,
+            );
+            return (
+              `Set env var "${sanitizeForPrompt(key)}" on ${describeBlastRadius('application', names)}?\n\n` +
+              `Existing values for "${sanitizeForPrompt(key)}" on those applications will be overwritten.`
+            );
+          },
+          () => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
+        );
+      },
     );
 
     this.defineTool(
       'stop_all_apps',
       'EMERGENCY: Stop all running apps',
       { confirm: z.literal(true) },
-      async ({ confirm }) => {
+      async ({ confirm }, extra) => {
         if (!confirm)
           return { content: [{ type: 'text' as const, text: 'Error: confirm=true required' }] };
-        return wrap(() => this.client.stopAllApps());
+        // `confirm` above is filled in by the model, which is why #261 exists.
+        // On an elicitation-capable client the real gate is below, in front of
+        // a human, and it names what is about to go down.
+        //
+        // `approved` is shared by both callbacks on purpose: the operation must
+        // act on the exact set the human was shown, not on a freshly listed
+        // one. An app that starts between the prompt and the accept never
+        // appeared in the dialog, so the answer does not cover it. It stays
+        // undefined when no prompt was shown, and `stopAllApps` resolves the
+        // set itself.
+        let approved: Application[] | undefined;
+        return this.guardDestructive(
+          extra.signal,
+          `EMERGENCY STOP: stop every running application on this Coolify instance.`,
+          async () => {
+            const apps = (await this.client.listApplications()) as Application[];
+            const running = apps.filter((app) => isRunningStatus(app.status));
+            approved = running;
+            if (running.length === 0) return null;
+            // `destination.server_id`, not `server_uuid`: the list endpoint
+            // does not populate the flat field, so keying off it made this
+            // clause dead code that never once fired. Caught by running it
+            // against a real instance, not by reading the type.
+            // Not `.filter(Boolean)`: Coolify's built-in localhost server has
+            // `server_id: 0`, which is falsy, so a truthiness filter drops the
+            // single most common server on any estate and undercounts. Verified
+            // live — every app on the test instance reports server_id 0.
+            // Keys are prefixed by source because the two spaces are not
+            // interchangeable: a numeric `server_id` and a string
+            // `server_uuid` naming the same physical server would otherwise
+            // sit in the set as two entries and count it twice. Prefixing does
+            // not merge them either — nothing could, without a second lookup —
+            // but it makes the split deliberate, and the error stays in the
+            // over-stating direction.
+            const servers = new Set(
+              running
+                .map((app) =>
+                  app.destination?.server_id !== undefined
+                    ? `id:${app.destination.server_id}`
+                    : app.server_uuid !== undefined
+                      ? `uuid:${app.server_uuid}`
+                      : undefined,
+                )
+                .filter((key) => key !== undefined),
+            );
+            const across = servers.size > 1 ? ` across ${servers.size} servers` : '';
+            return (
+              `EMERGENCY STOP: take down ${describeBlastRadius(
+                'running application',
+                running.map((app) => app.name || app.uuid),
+              )}${across}?\n\n` +
+              `Every one stays down until it is started again. This is estate-wide, not scoped to a project.`
+            );
+          },
+          () => this.client.stopAllApps(approved),
+        );
       },
     );
 
@@ -2464,8 +2758,25 @@ export class CoolifyMcpServer extends McpServer {
       'redeploy_project',
       'Redeploy all apps in project',
       { project_uuid: z.string(), force: z.boolean().optional() },
-      async ({ project_uuid, force }) =>
-        wrap(() => this.client.redeployProjectApps(project_uuid, force ?? true)),
+      async ({ project_uuid, force }, extra) => {
+        let approved: Application[] | undefined;
+        return this.guardDestructive(
+          extra.signal,
+          `Redeploy every application in a Coolify project.`,
+          async () => {
+            approved = await this.client.applicationsInProject(project_uuid);
+            if (approved.length === 0) return null;
+            return (
+              `Redeploy ${describeBlastRadius(
+                'application',
+                approved.map((app) => app.name || app.uuid),
+              )} in this project?\n\n` +
+              `Each one's running containers are replaced, so expect downtime per app while it rebuilds.`
+            );
+          },
+          () => this.client.redeployProjectApps(project_uuid, force ?? true, approved),
+        );
+      },
     );
   }
 

@@ -12,6 +12,7 @@
  */
 
 import { CoolifyClient } from '../../lib/coolify-client.js';
+import type { Application } from '../../types/coolify.js';
 import { COOLIFY_URL, COOLIFY_TOKEN, warnIfSkipped } from './helpers.js';
 
 warnIfSkipped('diagnostics.integration');
@@ -19,23 +20,34 @@ warnIfSkipped('diagnostics.integration');
 // Skip all tests if environment variables are not set
 const shouldRun = COOLIFY_URL && COOLIFY_TOKEN;
 
-// Test data - UUIDs from actual infrastructure
-// These should be updated to match your test environment
-const TEST_DATA = {
-  // Server: coolify-apps (running, reachable)
-  SERVER_UUID: 'ggkk8w4c08gw48oowsg4g0oc',
-  // Application: test-system (running)
-  APP_UUID_HEALTHY: 'xs0sgs4gog044s4k4c88kgsc',
-  // Application: Bumnail Benerator (exited:unhealthy)
-  APP_UUID_UNHEALTHY: 't444wg40s4kkwcc04s084wgw',
-};
+/**
+ * Fixtures are discovered from the live instance rather than hardcoded.
+ *
+ * They used to be literal UUIDs copied off one particular estate, with a
+ * comment saying "these should be updated to match your test environment".
+ * Nobody ever does. When the estate moved hosts, all three pointed at
+ * resources that no longer existed and the suite failed for a reason that had
+ * nothing to do with the code under test — which is the worst kind of failure,
+ * because the honest reading of a red integration suite is "the client is
+ * broken" and the true cause was rotted fixtures.
+ *
+ * Resolving them at run time means the suite is portable across instances and
+ * can only fail for real reasons.
+ */
+interface Fixtures {
+  serverUuid?: string;
+  healthyAppUuid?: string;
+  /** May legitimately be absent: a healthy estate has no unhealthy app. */
+  unhealthyAppUuid?: string;
+}
 
 const describeFn = shouldRun ? describe : describe.skip;
 
 describeFn('Diagnostic Integration Tests', () => {
   let client: CoolifyClient;
+  const fixtures: Fixtures = {};
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!COOLIFY_URL || !COOLIFY_TOKEN) {
       throw new Error('COOLIFY_URL and COOLIFY_TOKEN must be set for integration tests');
     }
@@ -43,15 +55,46 @@ describeFn('Diagnostic Integration Tests', () => {
       baseUrl: COOLIFY_URL,
       accessToken: COOLIFY_TOKEN,
     });
-  });
+
+    const [servers, apps] = await Promise.all([
+      client.listServers(),
+      client.listApplications() as Promise<Application[]>,
+    ]);
+    fixtures.serverUuid = servers[0]?.uuid;
+    // Deliberately NOT `isRunningStatus`. That predicate answers "what should
+    // `stop_all_apps` target", where over-matching is the safe direction — it
+    // treats `exited:unhealthy` as running because 'unhealthy' contains
+    // 'healthy'. The question here is the stricter "which application is
+    // actually healthy", so that an app in a bad state is not handed to the
+    // test asserting healthy diagnostics. Different question, so a different
+    // test, not a rival copy of the same one.
+    fixtures.healthyAppUuid = apps.find(
+      (app) => app.status?.includes('running') && !app.status.includes('unhealthy'),
+    )?.uuid;
+    fixtures.unhealthyAppUuid = apps.find(
+      (app) => app.status?.includes('exited') || app.status?.includes('unhealthy'),
+    )?.uuid;
+
+    // Fail here, once, rather than letting each test below dereference an
+    // undefined uuid and fail separately against `/applications/undefined`.
+    // One honest error beats three confusing ones, and an instance with no
+    // servers or no running application cannot verify anything in this suite.
+    if (!fixtures.serverUuid || !fixtures.healthyAppUuid) {
+      throw new Error(
+        `Cannot run diagnostics integration tests against ${COOLIFY_URL}: ` +
+          `discovered ${servers.length} servers and ${apps.length} applications, ` +
+          `needing at least one server and one healthy running application.`,
+      );
+    }
+  }, 60000);
 
   describe('diagnoseApplication', () => {
     it('should return diagnostic data for a healthy application', async () => {
-      const result = await client.diagnoseApplication(TEST_DATA.APP_UUID_HEALTHY);
+      const result = await client.diagnoseApplication(fixtures.healthyAppUuid!);
 
       // Should have application info
       expect(result.application).not.toBeNull();
-      expect(result.application?.uuid).toBe(TEST_DATA.APP_UUID_HEALTHY);
+      expect(result.application?.uuid).toBe(fixtures.healthyAppUuid);
       expect(result.application?.name).toBeDefined();
 
       // Should have health assessment
@@ -81,7 +124,17 @@ describeFn('Diagnostic Integration Tests', () => {
     }, 30000);
 
     it('should detect issues in an unhealthy application', async () => {
-      const result = await client.diagnoseApplication(TEST_DATA.APP_UUID_UNHEALTHY);
+      if (!fixtures.unhealthyAppUuid) {
+        // Stated out loud rather than passing quietly: an estate where
+        // everything is up cannot exercise this path, and a silent green here
+        // would read as "unhealthy detection works".
+        console.warn(
+          '\n[diagnostics.integration] No unhealthy application on this instance — ' +
+            'unhealthy detection was NOT verified.\n',
+        );
+        return;
+      }
+      const result = await client.diagnoseApplication(fixtures.unhealthyAppUuid);
 
       expect(result.application).not.toBeNull();
 
@@ -109,11 +162,11 @@ describeFn('Diagnostic Integration Tests', () => {
 
   describe('diagnoseServer', () => {
     it('should return diagnostic data for a server', async () => {
-      const result = await client.diagnoseServer(TEST_DATA.SERVER_UUID);
+      const result = await client.diagnoseServer(fixtures.serverUuid!);
 
       // Should have server info
       expect(result.server).not.toBeNull();
-      expect(result.server?.uuid).toBe(TEST_DATA.SERVER_UUID);
+      expect(result.server?.uuid).toBe(fixtures.serverUuid);
       expect(result.server?.name).toBeDefined();
       expect(result.server?.ip).toBeDefined();
 

@@ -236,12 +236,29 @@ export interface Application {
   preview_url_template?: string;
   destination_type?: string;
   destination_id?: number;
+  /**
+   * Expanded destination, as returned by `GET /applications`. Verified live
+   * against 4.1.2 — the list response nests this object and does **not**
+   * populate the flat `server_uuid` below, so `server_uuid` cannot be used to
+   * answer "which server is this app on" for a listed application.
+   *
+   * Each destination belongs to exactly one server, so `server_id` is the
+   * correct key for counting distinct servers; `destination_id` would overcount
+   * a server that has several docker networks.
+   */
+  destination?: {
+    id?: number;
+    uuid?: string;
+    name?: string;
+    server_id?: number;
+  };
   source_type?: string;
   source_id?: number;
   private_key_id?: number;
   environment_id?: number;
   project_uuid?: string;
   environment_uuid?: string;
+  /** Not returned by `GET /applications`; see {@link Application.destination}. */
   server_uuid?: string;
   created_at: string;
   updated_at: string;
@@ -538,6 +555,13 @@ export interface Database {
   internal_db_url?: string;
   external_db_url?: string;
   project_uuid?: string;
+  /**
+   * Numeric environment link, and the only usable one on a listed database.
+   * Verified live against 4.1.2: `GET /databases` returns this and leaves
+   * `project_uuid` undefined, exactly as `GET /applications` does. It is what
+   * resolves a database to its project — see `projectContents`.
+   */
+  environment_id?: number;
   environment_uuid?: string;
   environment_name?: string;
   server_uuid?: string;
@@ -787,6 +811,13 @@ export interface Service {
   type: ServiceType;
   status: 'running' | 'stopped' | 'error' | 'restarting';
   project_uuid?: string;
+  /**
+   * Numeric environment link, and the only usable one on a listed service.
+   * Verified live against 4.1.2: `GET /services` returns this and leaves
+   * `project_uuid` undefined, exactly as `GET /applications` does. It is what
+   * resolves a service to its project — see `projectContents`.
+   */
+  environment_id?: number;
   environment_name?: string;
   environment_uuid?: string;
   server_uuid?: string;

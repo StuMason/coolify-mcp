@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+> **Heads up:** `redeploy_project` and `restart_project_apps` were silent no-ops and now actually run. If you called either and read the `0 succeeded` as "nothing needed doing", the same call now restarts or redeploys every application in the project.
+
+### Added
+
+- **Human confirmation for destructive operations** (#261). `stop_all_apps` was gated on a `confirm: true` parameter the _model_ fills in — the model confirming with itself. On clients supporting [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) the confirmation now happens in client UI, outside the model's control. Covers `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, the application / database / service / project / environment deletes, and `bulk_env_update` above three apps.
+- Prompts state their blast radius: "take down 12 running applications (api, worker, cockpit and 4 more) across 3 servers?". Delete prompts spell out volume destruction — `delete_volumes` defaults to `true` upstream, so omitting it destroys the data. Project deletes count applications, databases and services. Env var values are never shown.
+- Progressive enhancement: clients without elicitation (Claude Desktop, claude.ai) behave exactly as before. Once a client advertises support it fails closed — decline, cancel, timeout and transport errors all abort. The tool call's abort signal is threaded through, so a client giving up at 60s cannot leave a prompt live that executes at t=90s.
+- `COOLIFY_MCP_ELICITATION=off` escape hatch, for a client that advertises elicitation but does not implement it.
+- Tool count unchanged at 44.
+
+### Fixed
+
+- **`redeploy_project` and `restart_project_apps` never did anything.** Both filtered applications by `project_uuid`, which `GET /applications` does not return, so they matched zero every time and reported `{"succeeded":0}`. Now resolved project → environment ids → applications. Both now **error** when a project's environments cannot be resolved, where they previously reported zero — "nothing to do" and "could not find out" are different answers.
+- **`isRunningStatus` counted `exited:unhealthy` as running**, because `'unhealthy'` contains `'healthy'`. Harmless inside `stop_all_apps` (a no-op stop), but it listed already-dead applications in the confirmation prompt. `running:unhealthy` still counts.
+- **`npm run test:integration` could not run at all.** Jest 30 renamed `--testPathPattern` to `--testPathPatterns`, so every invocation exited on an unrecognised option — the smoke-test path documented in `CLAUDE.md` has been dead since the Jest 30 bump. Also sets `--coverage=false`, which the 80% global threshold otherwise failed. Its diagnostics fixtures were hardcoded UUIDs from a decommissioned instance and are now discovered at run time.
+
+### Changed
+
+- `Application.destination`, `Database.environment_id` and `Service.environment_id` added to the types. Verified live against 4.1.2: these list endpoints return the nested destination / numeric environment link and do **not** populate `project_uuid` or `server_uuid`.
+
 ## [2.16.0] - 2026-07-29
 
 > **Upgrade from 2.15.0 if you run Coolify 4.1 or older.** 2.15.0 broke `system enable_api` / `disable_api` and `validate_server` on every pre-4.2 instance; see the first entry under Fixed.
