@@ -8,6 +8,14 @@ updates:
       time: '06:00'
       timezone: 'Europe/London'
     open-pull-requests-limit: 10
+    # Patch and minor updates auto-merge once CI passes, and `npm audit` cannot
+    # flag a release compromised an hour ago because no advisory exists yet.
+    # Waiting a few days before opening the PR closes the window in which a
+    # hijacked publish would be merged automatically. Majors are reviewed by a
+    # human anyway, so the wait matters least for them.
+    cooldown:
+      default-days: 3
+      semver-major-days: 0
     # Group minor/patch updates together to reduce PR noise
     groups:
       minor-and-patch:
