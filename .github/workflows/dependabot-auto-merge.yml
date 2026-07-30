@@ -41,6 +41,10 @@ jobs:
       # exactly what this workflow did — greenly — for 24 runs.
       - name: Approve patch and minor updates
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        # A re-run on `synchronize` re-approves an already-approved PR. If the
+        # API ever rejects that, failing here would skip the merge step and
+        # leave auto-merge unarmed — reintroducing the exact bug this fixes.
+        continue-on-error: true
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

@@ -7,8 +7,9 @@
  * decisions. It drifts in two directions:
  *
  *   1. Upstream adds/changes paths we haven't pulled in yet.
- *      -> covered by .github/workflows/openapi-drift.yml (weekly diff
- *         against a baseline copy of the upstream spec).
+ *      -> covered by .github/workflows/openapi-drift.yml (weekly diff of
+ *         upstream against this vendored copy — there is no separate
+ *         baseline file; the vendored spec is the baseline).
  *   2. `src/lib/coolify-client.ts` calls a path that the bundled spec
  *      doesn't document at all (upstream may itself be lagging, or the
  *      spec here is stale).
