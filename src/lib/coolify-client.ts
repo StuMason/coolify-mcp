@@ -359,17 +359,23 @@ export function errorHint(status: number, path: string): string | undefined {
  * copies of this predicate would eventually disagree, and the failure mode of
  * that is a confirmation dialog understating its own blast radius.
  *
- * **Known over-match, deliberately preserved:** `'unhealthy'` contains
- * `'healthy'`, so `exited:unhealthy` is classified as running. This is the
- * behaviour `stopAllApps` has always had; extracting the predicate did not
- * introduce it and this change does not alter it. The practical cost is a stop
- * issued against an already-stopped app (a no-op) and a slightly inflated count
- * in the prompt — which errs toward over-stating the blast radius, the safe
- * direction for a confirmation. Tracked separately rather than fixed here.
+ * **Fixed here, because extraction changed what the bug costs.** `'unhealthy'`
+ * contains `'healthy'`, so the original `includes('healthy')` classified
+ * `exited:unhealthy` as running. Inside `stopAllApps` that cost only a no-op
+ * stop against an already-stopped app, which nobody ever saw. Shared with the
+ * #261 confirmation prompt it does something worse: it names already-dead
+ * applications in a dialog whose entire job is to be accurate, and someone
+ * scanning that list for the one application that should not be in it is handed
+ * noise. A prompt that pads its own blast radius trains people to stop reading
+ * it.
+ *
+ * `running:unhealthy` still counts, via the `running` branch — an application
+ * that is up but failing health checks is still something an emergency stop
+ * should take down.
  */
 export function isRunningStatus(status?: string): boolean {
   const value = status || '';
-  return value.includes('running') || value.includes('healthy');
+  return value.includes('running') || (value.includes('healthy') && !value.includes('unhealthy'));
 }
 
 // =============================================================================
@@ -2735,6 +2741,57 @@ export class CoolifyClient {
     return allApps.filter(
       (app) => app.environment_id !== undefined && environmentIds.has(app.environment_id),
     );
+  }
+
+  /**
+   * Everything a project delete would take with it.
+   *
+   * `DELETE /projects/{uuid}` documents no "project has resources" refusal —
+   * unlike the environment delete, which has an explicit 400 — so the delete is
+   * assumed to cascade, and a confirmation that counts only applications
+   * understates a project holding three Postgres instances and no apps. That is
+   * the direction a destructive prompt must never be wrong in.
+   *
+   * Databases and services resolve exactly like applications: verified live
+   * against 4.1.2, neither list endpoint returns `project_uuid` and both carry
+   * the numeric `environment_id`.
+   *
+   * Returns the `project` too, so the confirmation path does not fetch it a
+   * second time — the one path where an extra round trip happens with a human
+   * waiting on the dialog.
+   */
+  async projectContents(projectUuid: string): Promise<{
+    project: Project;
+    applications: Application[];
+    databases: Database[];
+    services: Service[];
+  }> {
+    const [project, apps, databases, services] = await Promise.all([
+      this.getProject(projectUuid),
+      this.listApplications() as Promise<Application[]>,
+      this.listDatabases() as Promise<Database[]>,
+      this.listServices() as Promise<Service[]>,
+    ]);
+    // Same reasoning as `applicationsInProject`: a missing array means "could
+    // not find out", and reporting that as an empty project is how a delete
+    // prompt understates itself.
+    if (!Array.isArray(project.environments)) {
+      throw new Error(
+        `Could not resolve environments for project ${projectUuid}: the API returned no environments array. ` +
+          `Without it there is no way to tell what this project contains.`,
+      );
+    }
+    const environmentIds = new Set(project.environments.map((env) => env.id));
+    const inProject = <T extends { environment_id?: number }>(items: T[]): T[] =>
+      items.filter(
+        (item) => item.environment_id !== undefined && environmentIds.has(item.environment_id),
+      );
+    return {
+      project,
+      applications: inProject(apps),
+      databases: inProject(databases),
+      services: inProject(services),
+    };
   }
 
   /**

@@ -529,7 +529,14 @@ export interface EnvVarSummary {
 // =============================================================================
 
 export type DatabaseType =
-  'postgresql' | 'mysql' | 'mariadb' | 'mongodb' | 'redis' | 'keydb' | 'clickhouse' | 'dragonfly';
+  | 'postgresql'
+  | 'mysql'
+  | 'mariadb'
+  | 'mongodb'
+  | 'redis'
+  | 'keydb'
+  | 'clickhouse'
+  | 'dragonfly';
 
 export interface DatabaseLimits {
   memory?: string;
@@ -555,6 +562,13 @@ export interface Database {
   internal_db_url?: string;
   external_db_url?: string;
   project_uuid?: string;
+  /**
+   * Numeric environment link, and the only usable one on a listed database.
+   * Verified live against 4.1.2: `GET /databases` returns this and leaves
+   * `project_uuid` undefined, exactly as `GET /applications` does. It is what
+   * resolves a database to its project — see `projectContents`.
+   */
+  environment_id?: number;
   environment_uuid?: string;
   environment_name?: string;
   server_uuid?: string;
@@ -804,6 +818,13 @@ export interface Service {
   type: ServiceType;
   status: 'running' | 'stopped' | 'error' | 'restarting';
   project_uuid?: string;
+  /**
+   * Numeric environment link, and the only usable one on a listed service.
+   * Verified live against 4.1.2: `GET /services` returns this and leaves
+   * `project_uuid` undefined, exactly as `GET /applications` does. It is what
+   * resolves a service to its project — see `projectContents`.
+   */
+  environment_id?: number;
   environment_name?: string;
   environment_uuid?: string;
   server_uuid?: string;

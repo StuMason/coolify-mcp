@@ -68,6 +68,17 @@ const TRUNCATION_PREFIX = '...[truncated]...\n';
  */
 const BULK_ENV_CONFIRM_THRESHOLD = 3;
 
+/** A resource's display name for a prompt, falling back to its uuid. */
+function nameOf(resource: { name?: string; uuid: string }): string {
+  return resource.name || resource.uuid;
+}
+
+/** "a", "a and b", "a, b and c" — for listing resource kinds in a prompt. */
+function joinList(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
 /**
  * Confirmation text for deleting an application, database or service (#261).
  *
@@ -752,19 +763,32 @@ export class CoolifyMcpServer extends McpServer {
               // Unlike the environment delete below, the spec documents only a
               // generic 400 here — there is no documented "project has
               // resources" refusal — so this cannot assume Coolify will catch a
-              // non-empty project. Naming what is inside is correct whether or
-              // not upstream refuses: if it refuses, the count explains why; if
-              // it does not, the count is the whole point.
+              // non-empty project.
+              //
+              // Counting applications alone is not enough: if the delete
+              // cascades, it cascades over databases and services too, and
+              // "no applications" in front of a project holding three Postgres
+              // instances understates the blast radius — the one direction a
+              // confirmation must never be wrong in.
               async () => {
-                const project = await this.client.getProject(uuid);
-                const apps = await this.client.applicationsInProject(uuid);
-                const contents =
-                  apps.length > 0
-                    ? `It contains ${describeBlastRadius(
-                        'application',
-                        apps.map((app) => app.name || app.uuid),
-                      )}, which go with it.`
-                    : `It has no applications in it.`;
+                const { project, applications, databases, services } =
+                  await this.client.projectContents(uuid);
+                const parts = [
+                  ...(applications.length
+                    ? [describeBlastRadius('application', applications.map(nameOf))]
+                    : []),
+                  ...(databases.length
+                    ? [describeBlastRadius('database', databases.map(nameOf))]
+                    : []),
+                  ...(services.length
+                    ? [describeBlastRadius('service', services.map(nameOf))]
+                    : []),
+                ];
+                const contents = parts.length
+                  ? `It contains ${joinList(parts)}, all of which go with it.`
+                  : // Says what was checked rather than asserting an emptiness
+                    // broader than the check behind it.
+                    `It contains no applications, databases or services.`;
                 return (
                   `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
                   `${contents} This cannot be undone.`

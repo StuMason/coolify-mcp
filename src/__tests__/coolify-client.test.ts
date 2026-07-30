@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { CoolifyClient, errorHint } from '../lib/coolify-client.js';
+import { CoolifyClient, errorHint, isRunningStatus } from '../lib/coolify-client.js';
 import type { ServiceType, CreateServiceRequest, EnvironmentVariable } from '../types/coolify.js';
 
 // Helper to create mock response
@@ -4116,6 +4116,69 @@ describe('CoolifyClient', () => {
       },
     ];
 
+    describe('projectContents', () => {
+      // Databases and services resolve by `environment_id` exactly as
+      // applications do — verified live against 4.1.2, neither list endpoint
+      // returns `project_uuid`.
+      const mockProjectDbs = [
+        { id: 1, uuid: 'db-1', name: 'orders-pg', environment_id: 10 },
+        { id: 2, uuid: 'db-2', name: 'elsewhere-pg', environment_id: 99 },
+      ];
+      const mockProjectSvcs = [
+        { id: 1, uuid: 'svc-1', name: 'umami', environment_id: 11 },
+        { id: 2, uuid: 'svc-2', name: 'elsewhere-svc', environment_id: 99 },
+      ];
+
+      const stubAll = (project: unknown = mockProject): void => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(project))
+          .mockResolvedValueOnce(mockResponse(mockProjectApps))
+          .mockResolvedValueOnce(mockResponse(mockProjectDbs))
+          .mockResolvedValueOnce(mockResponse(mockProjectSvcs));
+      };
+
+      it('resolves applications, databases and services by environment', async () => {
+        stubAll();
+
+        const result = await client.projectContents('proj-1');
+
+        expect(result.project.uuid).toBe('proj-1');
+        expect(result.applications.map((a) => a.uuid)).toEqual(['app-1', 'app-2']);
+        expect(result.databases.map((d) => d.uuid)).toEqual(['db-1']);
+        expect(result.services.map((s) => s.uuid)).toEqual(['svc-1']);
+      });
+
+      it('excludes resources in another project’s environments', async () => {
+        stubAll();
+
+        const result = await client.projectContents('proj-1');
+
+        // env 99 belongs elsewhere; a delete prompt naming it would overstate.
+        expect(result.databases.map((d) => d.uuid)).not.toContain('db-2');
+        expect(result.services.map((s) => s.uuid)).not.toContain('svc-2');
+      });
+
+      it('returns empty lists for a genuinely empty project', async () => {
+        stubAll({ ...mockProject, environments: [] });
+
+        const result = await client.projectContents('proj-1');
+
+        expect(result.applications).toEqual([]);
+        expect(result.databases).toEqual([]);
+        expect(result.services).toEqual([]);
+      });
+
+      it('throws rather than reporting an unresolvable project as empty', async () => {
+        // "Could not find out" is not "nothing to delete". Reporting the second
+        // for the first is how a delete confirmation understates itself.
+        stubAll({ ...mockProject, environments: undefined });
+
+        await expect(client.projectContents('proj-1')).rejects.toThrow(
+          /Could not resolve environments/,
+        );
+      });
+    });
+
     describe('restartProjectApps', () => {
       it('should restart all apps in a project', async () => {
         mockFetch
@@ -5886,6 +5949,34 @@ describe('tags (#298)', () => {
       `http://localhost:3000/api/v1/${segment}/res-uuid/tags/tag-uuid`,
       expect.objectContaining({ method: 'DELETE' }),
     );
+  });
+});
+
+describe('isRunningStatus', () => {
+  it('counts the running and healthy composite statuses', () => {
+    expect(isRunningStatus('running')).toBe(true);
+    expect(isRunningStatus('running:healthy')).toBe(true);
+    expect(isRunningStatus('degraded:healthy')).toBe(true);
+  });
+
+  it('counts running:unhealthy — up but failing checks is still up', () => {
+    // An emergency stop should still take down an application that is running
+    // and failing its health checks.
+    expect(isRunningStatus('running:unhealthy')).toBe(true);
+  });
+
+  it('does not count exited:unhealthy, despite it containing "healthy"', () => {
+    // The substring trap: 'unhealthy' contains 'healthy'. Inside stopAllApps
+    // this only cost a no-op stop, but shared with the #261 prompt it named
+    // already-dead applications in a dialog whose job is to be accurate.
+    expect(isRunningStatus('exited:unhealthy')).toBe(false);
+    expect(isRunningStatus('exited')).toBe(false);
+    expect(isRunningStatus('stopped')).toBe(false);
+  });
+
+  it('treats a missing status as not running', () => {
+    expect(isRunningStatus(undefined)).toBe(false);
+    expect(isRunningStatus('')).toBe(false);
   });
 });
 
