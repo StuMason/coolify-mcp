@@ -25,7 +25,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns=integration",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch --testPathIgnorePatterns=integration",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --testPathIgnorePatterns=integration",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=integration --testTimeout=60000",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPatterns=integration --testTimeout=60000 --coverage=false",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:spec-drift": "node scripts/check-client-spec-drift.mjs",
