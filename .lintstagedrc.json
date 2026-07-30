@@ -1,6 +1,5 @@
 {
   "src/**/*.ts": ["eslint --fix", "prettier --write"],
-  "site/**/*.{ts,astro,mjs}": ["prettier --write"],
   "*.json": ["prettier --write"],
   "*.md": ["prettier --write", "markdownlint-cli2"]
 }

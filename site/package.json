@@ -7,12 +7,17 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "start": "node ./dist/server/entry.mjs"
+    "start": "node ./dist/server/entry.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@astrojs/node": "^9.4.4",
     "@astrojs/sitemap": "^3.6.0",
     "@aws-sdk/client-sesv2": "^3.906.0",
     "astro": "^5.16.2"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
   }
 }
