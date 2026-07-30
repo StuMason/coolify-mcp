@@ -9,7 +9,9 @@
 
 Manage [Coolify](https://coolify.io/) through natural language — 44 token-optimized MCP tools for deploying, debugging, and operating your self-hosted PaaS from Claude, Cursor, or any MCP client.
 
-📖 **Full docs: [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** — install guide, tools reference, architecture, security model, v3 roadmap.
+📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** — what it does, how to install it, and why it is safe to point at production.
+
+This README is the full reference: every tool, every gotcha, every parameter.
 
 ## Install
 
@@ -43,7 +45,7 @@ claude mcp add coolify \
 }
 ```
 
-Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (repeatable). Cursor, multiple Coolify instances, and proxy setups are covered in the [install guide](https://coolify-mcp.stumason.dev/guide/installation).
+Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (repeatable). The same config works in Cursor, Claude Code and any other MCP client, and can be repeated for multiple Coolify instances.
 
 ## Tools
 
@@ -72,7 +74,7 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 | **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                            |
 | **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                |
 
-Full reference with parameters and examples: [tools docs](https://coolify-mcp.stumason.dev/tools/).
+Every tool takes an `action` parameter — run one with no arguments and it lists what it accepts.
 
 ## Design
 
@@ -112,7 +114,7 @@ Secrets are masked at the API boundary — a client granted "list" access never 
 - **`system list_resources` (full mode)** — webhook HMAC secrets, basic-auth and database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env vars
 - **`deployment get`** — the raw upstream payload (server settings, log-drain tokens, webhook secrets) never leaves the client; responses are projected
 
-Details: [security model](https://coolify-mcp.stumason.dev/concepts/security).
+Destructive operations also ask a human first — see [Ask before it hurts](#ask-before-it-hurts) above.
 
 ## Coolify version compatibility
 
@@ -146,7 +148,19 @@ npm run build && npm test
 COOLIFY_BASE_URL="https://your-coolify.com" COOLIFY_ACCESS_TOKEN="token" node dist/index.js
 ```
 
-Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [contributor docs](https://coolify-mcp.stumason.dev/contributing/adding-tools).
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the architecture notes in [CLAUDE.md](CLAUDE.md).
+
+## Work with me
+
+I'm Stu Mason. I build MCP servers, AI integrations and agentic systems for agencies, SMEs and enterprise — this repo is what that work looks like in the open.
+
+- **An MCP server for your product** — give Claude, Cursor and every other AI client a proper way into your API, like this one.
+- **Answers from your own stuff** — AI that answers from your documents and data, with the receipts, instead of guessing. Can stay on your own servers.
+- **Work that runs itself** — jobs on a schedule that sort, check and report, with a person signing off before anything goes out.
+
+White-label under your own name if you're an agency. And if a job doesn't need AI, I'll say so before anyone's paid for anything.
+
+📮 [hey@stumason.dev](mailto:hey@stumason.dev) · [stumason.dev](https://stumason.dev) · [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev/#hire)
 
 ## Links
 

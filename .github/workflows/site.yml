@@ -1,0 +1,75 @@
+# Build and format-check the marketing site, separately from the MCP server.
+#
+# Deliberately its own workflow, triggered only by changes under site/ (plus
+# the one server file the build reads). The site and the published npm package
+# share a repository and nothing else: site/ is excluded from the npm tarball
+# (`files: ["dist"]`), from the MCPB bundle (.mcpbignore), from root eslint and
+# from root prettier. This job is the last piece of that — before it existed,
+# an unformatted file in site/ failed all three MCP build matrix jobs.
+#
+# Nothing here gates the npm release. If the site breaks, the server still ships.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'Dockerfile.docs'
+      - 'src/lib/mcp-server.ts'
+      - '.github/workflows/site.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'Dockerfile.docs'
+      - 'src/lib/mcp-server.ts'
+      - '.github/workflows/site.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Build
+        # Also exercises the tool count read from src/lib/mcp-server.ts, which
+        # throws if the registration shape changes.
+        run: npm run build
+
+      - name: Check the built page carries its SEO surface
+        # These were all missing from the old site. A silent regression here is
+        # invisible until something is shared and renders as a bare link.
+        run: |
+          PAGE=dist/client/index.html
+          for needle in \
+            'rel="canonical"' \
+            'property="og:image"' \
+            'property="og:title"' \
+            'name="twitter:card"' \
+            'application/ld+json'
+          do
+            if ! grep -q "$needle" "$PAGE"; then
+              echo "::error::$needle missing from the built page"
+              exit 1
+            fi
+          done
+          test -f dist/client/robots.txt || { echo "::error::robots.txt missing"; exit 1; }
+          test -f dist/client/sitemap-index.xml || { echo "::error::sitemap missing"; exit 1; }
+          test -f dist/client/og.png || { echo "::error::og.png missing"; exit 1; }
+          echo "SEO surface present."

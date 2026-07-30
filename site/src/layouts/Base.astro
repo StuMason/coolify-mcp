@@ -1,0 +1,232 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+}
+
+const { title, description, path = '/' } = Astro.props;
+const site = Astro.site?.toString().replace(/\/$/, '') ?? 'https://coolify-mcp.stumason.dev';
+const canonical = `${site}${path}`;
+const ogImage = `${site}/og.png`;
+
+// Two entities, because the page does two jobs: it documents a piece of
+// software and it sells the person who wrote it. Marking up only the software
+// would leave the sales half invisible to anything reading structured data.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      '@id': `${canonical}#software`,
+      name: 'coolify-mcp',
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'macOS, Linux, Windows',
+      description,
+      url: canonical,
+      downloadUrl: 'https://www.npmjs.com/package/@masonator/coolify-mcp',
+      softwareVersion: '2.17.0',
+      license: 'https://opensource.org/licenses/MIT',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'GBP' },
+      author: { '@id': `${site}/#person` },
+    },
+    {
+      '@type': 'Person',
+      '@id': `${site}/#person`,
+      name: 'Stu Mason',
+      jobTitle: 'Solutions architect — AI, MCP and agentic systems',
+      url: 'https://stumason.dev',
+      email: 'mailto:hey@stumason.dev',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Folkestone',
+        addressRegion: 'Kent',
+        addressCountry: 'GB',
+      },
+      sameAs: ['https://github.com/StuMason', 'https://stumason.dev'],
+    },
+    {
+      // Answers the questions people actually type, and the ones an assistant
+      // asks on their behalf — increasingly how this page gets found at all.
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'What is coolify-mcp?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'An open-source MCP server that lets an AI assistant operate a Coolify hosting platform — deploying applications, diagnosing failures, reading logs, restarting services and managing databases — through natural language, with human confirmation before anything destructive.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Which AI clients does it work with?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Any client that speaks the Model Context Protocol, including Claude Desktop, Claude Code, Cursor and VS Code Copilot. Installation is one configuration block and a Coolify API token.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Is it safe to point at production infrastructure?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Destructive operations stop and ask a person for confirmation in their own client before running, rather than letting the model decide it has permission. Secrets are masked in responses by default, and every release is tested against a live Coolify instance.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'What does it cost?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Nothing. It is free and open source under the MIT licence, installed from npm as @masonator/coolify-mcp.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Can you build an MCP server for our product?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Yes. Stu Mason builds MCP servers, AI integrations and agentic systems for agencies, SMEs and enterprise, including white-label work delivered under an agency’s own name. Contact hey@stumason.dev.',
+          },
+        },
+      ],
+    },
+    {
+      '@type': 'ProfessionalService',
+      '@id': `${site}/#service`,
+      name: 'Stu Mason — AI, MCP and agentic software',
+      description:
+        'White-label AI engineering for agencies, SMEs and enterprise. MCP servers, AI integration and agentic systems built to production standard.',
+      provider: { '@id': `${site}/#person` },
+      areaServed: 'Worldwide',
+      url: 'https://stumason.dev/work-with-me',
+    },
+  ],
+};
+---
+
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="author" content="Stu Mason" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <!-- property=, not name=. The old site used name= on og: tags, which most
+         scrapers ignore, so nothing it shared ever rendered a card. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="coolify-mcp" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_GB" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} is:inline />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  /* Same system as nod.stumason.dev, so the two read as one studio.
+     System Helvetica throughout — no webfonts, nothing to wait for. */
+  :root {
+    --ink: #0a0a0a;
+    --signal: #e5341f;
+    --paper: #ffffff;
+    --paper-idle: #f4f4f2;
+    --ink-60: #4a4a4a;
+    --ink-45: #6e6e6e;
+    --grey: #8e8e8e;
+    --label: #9a9a9a;
+    --rule-soft: #d4d4d4;
+    --rule-2: #e4e4e4;
+    --idle-fill: #f0f0f0;
+    --code-bg: #0b0b0b;
+    --code-ink: #e8e8e8;
+    --code-dim: #6a6a6a;
+    --code-green: #4ec99a;
+    --margin: 26px;
+    --type: Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --mono: ui-monospace, Menlo, 'SF Mono', monospace;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--type);
+    font-size: 15.5px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  ul,
+  dl,
+  dd {
+    margin: 0;
+    padding: 0;
+  }
+  h1,
+  h2,
+  h3 {
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    line-height: 1;
+  }
+  a {
+    color: inherit;
+  }
+  ul {
+    list-style: none;
+  }
+
+  :where(a, button, input, textarea, summary):focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+</style>

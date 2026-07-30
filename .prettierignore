@@ -13,3 +13,9 @@ docs/openapi-chunks/
 # Build output and coverage reports
 dist/
 coverage/
+
+# The marketing site is a separate mini-project with its own toolchain and its
+# own CI job. Keeping it out of the root prettier run means a stray format in
+# site/ can never fail the MCP server's build — which is exactly what happened
+# once already. It is formatted by site/'s own `format:check` script.
+site/

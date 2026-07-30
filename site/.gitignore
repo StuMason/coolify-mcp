@@ -1,5 +1,3 @@
 .astro/
-.vitepress/cache/
-.vitepress/dist/
 dist/
 node_modules/

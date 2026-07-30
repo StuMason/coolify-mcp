@@ -1,5 +1,10 @@
 node_modules
 dist
+# Docker matches the bare names at context root only, so site/node_modules and
+# site/dist would otherwise be copied over the freshly installed tree — with
+# host-arch binaries if the build host is not linux/amd64.
+**/node_modules
+**/dist
 .git
 .github
 .vscode
