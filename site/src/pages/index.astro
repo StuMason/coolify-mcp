@@ -83,7 +83,11 @@ const OFFERS = [
         </div>
         <div class="cta">
           <a class="btn" href="#install">Install it</a>
-          <a class="btn btn-ghost" href="https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb">One-click for Claude Desktop</a>
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb"
+            >One-click for Claude Desktop</a
+          >
           <span class="cta-note">Free, MIT.</span>
         </div>
       </section>
@@ -96,7 +100,9 @@ const OFFERS = [
         </div>
         <div class="demo-row">
           <span class="key">It runs</span>
-          <p class="calls"><code>diagnose_app</code><code>logs</code><code>list_deployments</code></p>
+          <p class="calls">
+            <code>diagnose_app</code><code>logs</code><code>list_deployments</code>
+          </p>
         </div>
         <div class="demo-row demo-last">
           <span class="key">You get</span>
@@ -177,8 +183,9 @@ const OFFERS = [
           <h2 class="h2">Your clients want AI. You need someone who actually ships it.</h2>
           <p class="lede">
             I work out what is possible, what it costs to keep running, and where the data has to
-            live. Then I build it — under your name, if you are an agency. And when the honest answer
-            is that a job does not need AI, I will say so before anyone has paid for anything.
+            live. Then I build it — under your name, if you are an agency. And when the honest
+            answer is that a job does not need AI, I will say so before anyone has paid for
+            anything.
           </p>
         </div>
         <div class="cards cards-3">
@@ -254,6 +261,15 @@ const OFFERS = [
 <script>
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
   const status = document.getElementById('form-status');
+
+  // A no-JS submission is redirected back to /?sent=1. The page is prerendered,
+  // so nothing server-side can render that confirmation — without this, someone
+  // lands back on an empty-looking form, assumes it failed, and sends again.
+  if (status && new URLSearchParams(location.search).has('sent')) {
+    status.className = 'status is-ok';
+    status.textContent = 'Sent. I will come back to you, usually the same day.';
+  }
+
   if (form && status) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -642,12 +658,11 @@ const OFFERS = [
     border-color: var(--ink);
     outline: none;
   }
+  /* display:none, not off-screen. An off-screen input is still rendered and
+     still gets filled by password managers and autofill, which would silently
+     bin a genuine enquiry. */
   .hp {
-    position: absolute;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
+    display: none;
   }
   .status {
     margin-top: 12px;
