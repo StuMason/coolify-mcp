@@ -52,3 +52,7 @@ coverage/
 # Playwright MCP runtime artefacts (screenshots, snapshots)
 .playwright-mcp/
 *.mcpb
+
+# Local Claude Desktop config scratch — untracked and previously unignored,
+# which is one absent-minded `git add -A` away from being committed.
+claude-desktop/

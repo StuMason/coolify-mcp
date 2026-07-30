@@ -1,3 +1,19 @@
+# Auto-merge Dependabot patch and minor updates once CI passes.
+#
+# **Why this needed fixing:** the previous version called
+# `gh pr merge --auto --squash` and reported success on all 24 runs against
+# Dependabot branches — while never merging anything. `--auto` only *arms*
+# GitHub's auto-merge; the PR still has to satisfy branch protection, and `main`
+# requires one approving review that a Dependabot PR never receives. So every
+# run armed a merge that could never fire, and every Dependabot PR was merged by
+# hand afterwards. A green check implied automation that did not exist.
+#
+# The approval step below closes that gap, and makes its trade-off explicit:
+# patch and minor updates now reach `main` without a human reading them, gated
+# only on the required status checks. Major updates still stop for review.
+# If you would rather review dependency bumps by hand, delete this workflow
+# rather than leaving it armed and inert — automation that looks like it works
+# is worse than none.
 name: Dependabot Auto-Merge
 
 on:
@@ -19,6 +35,16 @@ jobs:
         uses: dependabot/fetch-metadata@v3
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      # Must come before arming the merge. Without an approval the merge is
+      # armed and then waits forever on the required-review rule, which is
+      # exactly what this workflow did — greenly — for 24 runs.
+      - name: Approve patch and minor updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge patch and minor updates
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
