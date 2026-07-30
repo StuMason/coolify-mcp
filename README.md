@@ -98,6 +98,10 @@ Prompts are skipped where there is nothing to confirm: an emergency stop on an i
 
 This is progressive enhancement, not a new requirement: clients without elicitation support (Claude Desktop, claude.ai) behave exactly as before. Once a client does advertise support, a decline, a cancel or a timeout all abort the call.
 
+These tools also carry the MCP `destructiveHint` annotation, so on a client that honours annotations **and** supports elicitation you may answer two dialogs in a row — the client's own permission prompt, then this one. That is the client's prompt plus the server's, not a bug. Allowlisting the tool in your client removes the first and leaves this one as the gate.
+
+Set `COOLIFY_MCP_ELICITATION=off` to turn the confirmations off entirely. It exists for the case where a client advertises elicitation support but does not actually implement it — otherwise every guarded tool would return `could not confirm with the user` with no way to recover. It is an escape hatch, not a normal setting.
+
 > **If confirmations time out before you can answer them**, raise your client's MCP tool timeout. The prompt runs inside the tool call, and the MCP SDK's default request timeout is 60 seconds. The server aborts cleanly when the client gives up — nothing runs behind your back — but you will see the call fail rather than the dialog you were reading.
 
 ## Secure by default

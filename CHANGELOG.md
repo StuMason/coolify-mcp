@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> **`redeploy_project` and `restart_project_apps` now actually do something.** Both have been silent no-ops since they were written — they filtered on a field `GET /applications` does not return, matched zero applications every time, and returned `{"summary":{"total":0,"succeeded":0,"failed":0}}`. If you have been calling either and reading that zero as "nothing needed doing", the same call now restarts or redeploys every application in the project, with the downtime that implies. See the first entry under Fixed.
+
 ### Added
 
 - **Destructive operations now ask the human, not the model** (#261) — `stop_all_apps` was gated on a `confirm: true` parameter that the _model_ fills in, which is the model confirming with itself before taking every application on the estate down. On clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) the confirmation now happens in client UI, outside the model's control.
@@ -29,7 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Delete prompts spell out what happens to persistent volumes, and this is the sharp edge worth naming: `delete_volumes` is documented `default: true` on all three DELETE endpoints, so **omitting the optional flag destroys the data** — the opposite of what "optional boolean, left unset" reads like at a call site. Only an explicit `false` is reported as "volumes kept".
 
-  Env var _values_ never appear in a prompt. `bulk_env_update` names the key and the app count, because the prompt surfaces in client UI and in logs, and echoing the value would leak whatever secret is being rotated.
+  Env var _values_ never appear in a prompt. `bulk_env_update` names the key and the applications it will touch — resolving their names costs one list call, made only on clients that will show the question — because `app_uuids` is a set the _model_ assembled rather than one the human handed over, which is exactly where a bare count asks someone to approve something they cannot see. The value itself stays out: the prompt surfaces in client UI and in logs, and echoing it would leak whatever secret is being rotated.
+
+  Prompts are calibrated to what the operation can actually do, because one that overstates its danger teaches the same habit as one raised too often. Deleting a project names the applications that go with it, since the API documents no "project has resources" refusal to fall back on; deleting an environment says outright that Coolify refuses a non-empty one (documented `400`), so it only ever succeeds against an empty environment.
+
+  `COOLIFY_MCP_ELICITATION=off` is an escape hatch, not a feature. Once a client advertises the capability, every rejection from `elicitInput` aborts — including `-32601 Method not found` — so a client that advertises `elicitation` without implementing the handler, or a proxy that drops the request, would make nine tools permanently unusable with no way out but downgrading the package. The default is unchanged and still fails closed.
 
   Tool count unchanged at 44. Tests drive a real client over an in-memory transport rather than stubbing the capability check, since the thing most likely to be wrong is the negotiation itself — a server that elicits against a client which never advertised support fails precisely in the environment where nobody is watching a test suite.
 

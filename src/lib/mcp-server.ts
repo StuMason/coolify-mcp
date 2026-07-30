@@ -747,9 +747,28 @@ export class CoolifyMcpServer extends McpServer {
             return this.guardDestructive(
               extra.signal,
               `Delete a Coolify project and everything in it.`,
+              // The label says "and everything in it" but the message is what
+              // the human actually reads, so it has to carry the same weight.
+              // Unlike the environment delete below, the spec documents only a
+              // generic 400 here — there is no documented "project has
+              // resources" refusal — so this cannot assume Coolify will catch a
+              // non-empty project. Naming what is inside is correct whether or
+              // not upstream refuses: if it refuses, the count explains why; if
+              // it does not, the count is the whole point.
               async () => {
                 const project = await this.client.getProject(uuid);
-                return `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})? This cannot be undone.`;
+                const apps = await this.client.applicationsInProject(uuid);
+                const contents =
+                  apps.length > 0
+                    ? `It contains ${describeBlastRadius(
+                        'application',
+                        apps.map((app) => app.name || app.uuid),
+                      )}, which go with it.`
+                    : `It has no applications in it.`;
+                return (
+                  `Delete project "${sanitizeForPrompt(project.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
+                  `${contents} This cannot be undone.`
+                );
               },
               () => this.client.deleteProject(uuid),
             );
@@ -790,8 +809,17 @@ export class CoolifyMcpServer extends McpServer {
             return this.guardDestructive(
               extra.signal,
               `Delete an environment from a Coolify project.`,
+              // Says that Coolify refuses a non-empty environment (documented
+              // 400, `Environment has resources, so it cannot be deleted.`)
+              // rather than dropping the prompt entirely. The operation is
+              // still a delete and still worth confirming, but a dialog that
+              // implies more danger than it carries is exactly how people learn
+              // to click through these — the same argument as
+              // BULK_ENV_CONFIRM_THRESHOLD, applied to wording instead of
+              // frequency.
               () =>
-                `Delete environment "${sanitizeForPrompt(name)}" from project ${sanitizeForPrompt(project_uuid)}? This cannot be undone.`,
+                `Delete environment "${sanitizeForPrompt(name)}" from project ${sanitizeForPrompt(project_uuid)}?\n\n` +
+                `Coolify refuses this if the environment still has resources in it, so this only succeeds on an empty one.`,
               () => this.client.deleteProjectEnvironment(project_uuid, name),
             );
         }
@@ -2614,10 +2642,23 @@ export class CoolifyMcpServer extends McpServer {
         return this.guardDestructive(
           extra.signal,
           `Set env var "${sanitizeForPrompt(key)}" across ${app_uuids.length} applications.`,
-          // No pre-flight needed: the caller already told us the blast radius.
-          () =>
-            `Set env var "${sanitizeForPrompt(key)}" on ${app_uuids.length} applications?\n\n` +
-            `Existing values for "${sanitizeForPrompt(key)}" on those applications will be overwritten.`,
+          // Every other prompt names what it is about to touch, and this is the
+          // one where that matters most: `app_uuids` is a list the *model*
+          // assembled, not one the human handed over like a project uuid, so a
+          // bare count asks them to approve a set they cannot see. Resolving
+          // names costs one list call, and only on clients that will show the
+          // question. If it fails, `confirmDestructive` catches and degrades to
+          // the label above, which still carries the key and the count.
+          async () => {
+            const apps = (await this.client.listApplications()) as Application[];
+            const names = app_uuids.map(
+              (uuid) => apps.find((app) => app.uuid === uuid)?.name || uuid,
+            );
+            return (
+              `Set env var "${sanitizeForPrompt(key)}" on ${describeBlastRadius('application', names)}?\n\n` +
+              `Existing values for "${sanitizeForPrompt(key)}" on those applications will be overwritten.`
+            );
+          },
           () => this.client.bulkEnvUpdate(app_uuids, key, value, is_buildtime, is_runtime),
         );
       },

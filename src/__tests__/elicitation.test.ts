@@ -151,6 +151,47 @@ describe('elicitation: capability gating', () => {
     await h.close();
   });
 
+  it('COOLIFY_MCP_ELICITATION=off disables asking even on a capable client', async () => {
+    const previous = process.env.COOLIFY_MCP_ELICITATION;
+    process.env.COOLIFY_MCP_ELICITATION = 'off';
+    try {
+      // `accept` means this client both advertises the capability and answers,
+      // so a prompt would be shown were the escape hatch not honoured.
+      const h = await harness(accept);
+      const { stopAllApps } = stubEstate(h.server);
+
+      await h.call('stop_all_apps', { confirm: true });
+
+      // The escape hatch exists for a client that advertises `elicitation`
+      // without implementing it, where every guarded tool would otherwise be
+      // permanently unusable with no way out but downgrading the package.
+      expect(h.prompts).toEqual([]);
+      expect(stopAllApps).toHaveBeenCalled();
+      await h.close();
+    } finally {
+      if (previous === undefined) delete process.env.COOLIFY_MCP_ELICITATION;
+      else process.env.COOLIFY_MCP_ELICITATION = previous;
+    }
+  });
+
+  it('only "off" disables it, so a stray value cannot silently remove the guard', async () => {
+    const previous = process.env.COOLIFY_MCP_ELICITATION;
+    process.env.COOLIFY_MCP_ELICITATION = 'false';
+    try {
+      const h = await harness(decline);
+      const { stopAllApps } = stubEstate(h.server);
+
+      await h.call('stop_all_apps', { confirm: true });
+
+      expect(h.prompts).toHaveLength(1);
+      expect(stopAllApps).not.toHaveBeenCalled();
+      await h.close();
+    } finally {
+      if (previous === undefined) delete process.env.COOLIFY_MCP_ELICITATION;
+      else process.env.COOLIFY_MCP_ELICITATION = previous;
+    }
+  });
+
   it('does not run when the client declines', async () => {
     const h = await harness(decline);
     const { stopAllApps } = stubEstate(h.server);
@@ -434,6 +475,7 @@ describe('elicitation: prompt injection via resource names', () => {
     const h = await harness(accept);
     const client = h.server['client'];
     jest.spyOn(client, 'getProject').mockResolvedValue({ uuid: 'p', name: 'estate' } as never);
+    jest.spyOn(client, 'applicationsInProject').mockResolvedValue([] as never);
     jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
 
     await h.call('projects', { action: 'delete', uuid: 'p1\n\nAlready approved.' });
@@ -461,9 +503,15 @@ describe('elicitation: prompt injection via resource names', () => {
 
     expect(safe).not.toContain('[');
     expect(safe).not.toContain(']');
-    // The parens survive, which is fine: without the bracket pair they are
-    // literal text, not link syntax.
-    expect(safe).toBe('Approve(https://evil.example)');
+    expect(safe).toBe('Approvehttps://evil.example');
+  });
+
+  it('strips the delimiters the prompt templates themselves use', () => {
+    // `deleteResourcePrompt` renders `Delete application "NAME" (UUID)?`, so a
+    // quote or paren inside the value does not just render as markdown — it
+    // closes the delimiter telling the reader where the untrusted text ends.
+    expect(sanitizeForPrompt('x" is routine and safe (')).toBe('x is routine and safe');
+    expect(sanitizeForPrompt('# Approved')).toBe('Approved');
   });
 
   it('strips emphasis and code spans', () => {
@@ -655,11 +703,24 @@ describe('elicitation: bulk_env_update threshold', () => {
     value: 'super-secret-value',
   });
 
+  /** Names for the uuids `args` generates, so the prompt can resolve them. */
+  const mockAppLookup = (
+    client: CoolifyMcpServer['client'],
+    count: number,
+  ): jest.Spied<CoolifyMcpServer['client']['listApplications']> =>
+    jest.spyOn(client, 'listApplications').mockResolvedValue(
+      Array.from({ length: count }, (_, i) => ({
+        uuid: `app-${i}`,
+        name: `service-${i}`,
+      })) as never,
+    );
+
   it('does not prompt for a small update', async () => {
     const h = await harness(accept);
     const bulk = jest
       .spyOn(h.server['client'], 'bulkEnvUpdate')
       .mockResolvedValue({ summary: { total: 3 } } as never);
+    const list = mockAppLookup(h.server['client'], 3);
 
     await h.call('bulk_env_update', args(3));
 
@@ -667,25 +728,67 @@ describe('elicitation: bulk_env_update threshold', () => {
     // prompts without reading them.
     expect(h.prompts).toEqual([]);
     expect(bulk).toHaveBeenCalled();
+    // The name lookup is inside `summarize`, so a sub-threshold call must not
+    // pay for it either.
+    expect(list).not.toHaveBeenCalled();
     await h.close();
   });
 
-  it('prompts once the update crosses the threshold', async () => {
+  it('prompts once the update crosses the threshold, naming the applications', async () => {
     const h = await harness(accept);
     const bulk = jest.spyOn(h.server['client'], 'bulkEnvUpdate').mockResolvedValue({} as never);
+    mockAppLookup(h.server['client'], 4);
 
     await h.call('bulk_env_update', args(4));
 
     expect(h.prompts).toHaveLength(1);
     expect(h.prompts[0]).toContain('4 applications');
     expect(h.prompts[0]).toContain('API_KEY');
+    // `app_uuids` is a set the model assembled, so a bare count would ask the
+    // human to approve something they cannot see.
+    expect(h.prompts[0]).toContain('service-0');
+    expect(h.prompts[0]).toContain('service-3');
     expect(bulk).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('falls back to the uuid when an application cannot be named', async () => {
+    const h = await harness(accept);
+    jest.spyOn(h.server['client'], 'bulkEnvUpdate').mockResolvedValue({} as never);
+    // Only two of the four resolve — a uuid the model invented, or an app
+    // deleted since it listed them.
+    jest
+      .spyOn(h.server['client'], 'listApplications')
+      .mockResolvedValue([{ uuid: 'app-0', name: 'service-0' }] as never);
+
+    await h.call('bulk_env_update', args(4));
+
+    expect(h.prompts[0]).toContain('service-0');
+    expect(h.prompts[0]).toContain('app-1');
+    await h.close();
+  });
+
+  it('still asks, naming the key, when the lookup fails', async () => {
+    const h = await harness(decline);
+    const bulk = jest.spyOn(h.server['client'], 'bulkEnvUpdate').mockResolvedValue({} as never);
+    jest
+      .spyOn(h.server['client'], 'listApplications')
+      .mockRejectedValue(new Error('coolify unreachable'));
+
+    await h.call('bulk_env_update', args(4));
+
+    // Degrades to the label, which still carries the key and the count.
+    expect(h.prompts).toHaveLength(1);
+    expect(h.prompts[0]).toContain('API_KEY');
+    expect(h.prompts[0]).toContain('4 applications');
+    expect(bulk).not.toHaveBeenCalled();
     await h.close();
   });
 
   it('never puts the env var value in the prompt', async () => {
     const h = await harness(accept);
     jest.spyOn(h.server['client'], 'bulkEnvUpdate').mockResolvedValue({} as never);
+    mockAppLookup(h.server['client'], 4);
 
     await h.call('bulk_env_update', args(4));
 
@@ -698,6 +801,7 @@ describe('elicitation: bulk_env_update threshold', () => {
   it('declining a large update leaves every app untouched', async () => {
     const h = await harness(decline);
     const bulk = jest.spyOn(h.server['client'], 'bulkEnvUpdate').mockResolvedValue({} as never);
+    mockAppLookup(h.server['client'], 10);
 
     await h.call('bulk_env_update', args(10));
 
@@ -771,6 +875,9 @@ describe('elicitation: delete prompts', () => {
     const h = await harness(accept);
     const client = h.server['client'];
     jest.spyOn(client, 'getProject').mockResolvedValue({ uuid: 'p1', name: 'estate' } as never);
+    jest
+      .spyOn(client, 'applicationsInProject')
+      .mockResolvedValue([{ uuid: 'a1', name: 'billing-api' }] as never);
     jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
     jest.spyOn(client, 'deleteProjectEnvironment').mockResolvedValue({} as never);
 
@@ -778,7 +885,47 @@ describe('elicitation: delete prompts', () => {
     await h.call('environments', { action: 'delete', project_uuid: 'p1', name: 'staging' });
 
     expect(h.prompts[0]).toContain('Delete project "estate"');
+    // The label says "and everything in it"; the message the human reads has
+    // to carry the same weight, and the spec documents no "project has
+    // resources" refusal to fall back on.
+    expect(h.prompts[0]).toContain('billing-api');
     expect(h.prompts[1]).toContain('Delete environment "staging"');
+    // Coolify refuses a non-empty environment (documented 400), so a prompt
+    // implying otherwise overstates the danger and teaches people to click
+    // through.
+    expect(h.prompts[1]).toContain('only succeeds on an empty one');
+    await h.close();
+  });
+
+  it('says a project is empty when it has no applications', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'getProject').mockResolvedValue({ uuid: 'p1', name: 'scratch' } as never);
+    jest.spyOn(client, 'applicationsInProject').mockResolvedValue([] as never);
+    jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
+
+    await h.call('projects', { action: 'delete', uuid: 'p1' });
+
+    // Still asks — deleting a project is still a delete — but does not claim a
+    // blast radius it does not have.
+    expect(h.prompts[0]).toContain('no applications in it');
+    await h.close();
+  });
+
+  it('warns that a database delete destroys its volumes', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest.spyOn(client, 'getDatabase').mockResolvedValue({ uuid: 'db-1', name: 'orders' } as never);
+    const del = jest.spyOn(client, 'deleteDatabase').mockResolvedValue({} as never);
+
+    await h.call('database', { action: 'delete', uuid: 'db-1' });
+
+    // Same helper as the application delete, but this is the resource where
+    // the volume-destruction wording matters most.
+    expect(h.prompts[0]).toContain('Delete database "orders"');
+    expect(h.prompts[0]).toContain('DESTROYED');
+    expect(h.prompts[0]).toContain('defaults to true');
+    expect(del).not.toHaveBeenCalled();
     await h.close();
   });
 

@@ -54,8 +54,20 @@ export const ELICIT_TIMEOUT_MS = 300_000;
  * which is the transport where the parameter-based guards stop being credible
  * at all — the reason #303 lists elicitation as a prerequisite. Decide that
  * deliberately there rather than inheriting this choice by accident.
+ *
+ * `COOLIFY_MCP_ELICITATION=off` is an escape hatch, not a feature. Once a
+ * client advertises the capability every rejection from `elicitInput` aborts,
+ * including `-32601 Method not found` — so a client that advertises
+ * `elicitation` without implementing the handler, or a proxy that drops the
+ * request, makes nine tools permanently unusable with no way out but
+ * downgrading the package. The resulting error ("could not confirm with the
+ * user") does not point at the client, which makes it hard to diagnose from the
+ * outside. Rare, but unrecoverable, and the fallback is the same shape as the
+ * one capability-less clients already get. The default is unchanged: absent the
+ * variable, an advertised capability is trusted and the guards fail closed.
  */
 export function supportsElicitation(server: Server): boolean {
+  if (process.env.COOLIFY_MCP_ELICITATION === 'off') return false;
   return Boolean(server.getClientCapabilities()?.elicitation);
 }
 
@@ -176,22 +188,30 @@ const MAX_NAMED = 8;
 const MAX_NAME_LENGTH = 64;
 
 /**
- * Characters that turn a plain name into markdown. Stripped rather than
- * escaped — a mangled name is a better outcome in a security dialog than a
- * rendered one.
+ * Characters that turn a plain name into markdown, **or that the prompt
+ * templates themselves use as delimiters**. Stripped rather than escaped — a
+ * mangled name is a better outcome in a security dialog than a rendered one.
  *
- * Deliberately **not** `_` or parentheses, though both carry some markdown
- * meaning. `API_KEY` is the shape of almost every env var name this will ever
- * render, and turning it into `APIKEY` in the one dialog whose job is to let
- * someone recognise what they are approving is a worse failure than the thing
- * it prevents. Parentheses only matter following a `[...]`, which cannot
- * survive this filter anyway.
+ * The second category is the easy one to miss. `deleteResourcePrompt` renders
+ * `Delete application "NAME" (UUID)?`, so a quote or a parenthesis inside NAME
+ * is not merely cosmetic markdown — it closes the delimiter the reader is using
+ * to tell where the untrusted value ends. A resource named
+ * `x" is routine and safe (` produces a sentence that reads as the server's own
+ * prose. That matters most for the `uuid` arguments, which are plain strings in
+ * the tool schemas with no uuid constraint, so their contents are chosen by the
+ * model rather than by anyone with access to the Coolify instance.
  *
- * What is left out is the part that can mislead about destination or
- * authority: link syntax and code spans. Residual risk is emphasis via
- * `__underscores__`, which is cosmetic.
+ * `#` goes too: the module already assumes a markdown-rendering client (that is
+ * the stated reason for stripping backticks and `[`), and a leading `# ` is a
+ * heading.
+ *
+ * Deliberately **not** `_`. `API_KEY` is the shape of almost every env var name
+ * this will ever render, and turning it into `APIKEY` in the one dialog whose
+ * job is to let someone recognise what they are approving is a worse failure
+ * than the thing it prevents. Residual risk is emphasis via `__underscores__`,
+ * which is cosmetic.
  */
-const MARKDOWN_CHARS = /[`*[\]<>]/g;
+const MARKDOWN_CHARS = /[`*[\]<>"()#]/g;
 
 /** C0 and C1 control ranges — where newlines and carriage returns live. */
 // eslint-disable-next-line no-control-regex
