@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.17.0] - 2026-07-30
 
 > **Heads up:** `redeploy_project` and `restart_project_apps` were silent no-ops and now actually run. If you called either and read the `0 succeeded` as "nothing needed doing", the same call now restarts or redeploys every application in the project.
 
