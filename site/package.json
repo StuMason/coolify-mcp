@@ -1,16 +1,18 @@
 {
-  "name": "@masonator/coolify-mcp-docs",
+  "name": "@masonator/coolify-mcp-site",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "start": "node ./dist/server/entry.mjs"
   },
-  "devDependencies": {
-    "mermaid": "^11.15.0",
-    "vitepress": "^1.5.0",
-    "vitepress-plugin-mermaid": "^2.0.17"
+  "dependencies": {
+    "@astrojs/node": "^9.4.4",
+    "@astrojs/sitemap": "^3.6.0",
+    "@aws-sdk/client-sesv2": "^3.906.0",
+    "astro": "^5.16.2"
   }
 }

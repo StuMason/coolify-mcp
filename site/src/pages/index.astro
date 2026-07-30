@@ -1,0 +1,711 @@
+---
+import Base from '../layouts/Base.astro';
+import { CAPABILITIES, TOOL_COUNT } from '../data/tools.ts';
+
+export const prerender = true;
+
+const title = 'coolify-mcp — let an AI run your infrastructure, safely';
+const description =
+  'An open-source MCP server that gives Claude, Cursor and any AI client a deliberate, safe way to operate a live Coolify platform — deploy, diagnose, restart and roll back. Free and MIT.';
+
+const CONFIG = `{
+  "mcpServers": {
+    "coolify": {
+      "command": "npx",
+      "args": ["-y", "@masonator/coolify-mcp"],
+      "env": {
+        "COOLIFY_BASE_URL": "https://coolify.example.com",
+        "COOLIFY_ACCESS_TOKEN": "your-api-token"
+      }
+    }
+  }
+}`;
+
+const PRINCIPLES = [
+  {
+    k: 'It asks before it hurts',
+    v: 'Destructive operations stop and put the question to a person, in their own client, before anything happens.',
+  },
+  {
+    k: 'Secrets stay hidden',
+    v: 'Environment variables come back masked. Revealing one is a separate, deliberate request.',
+  },
+  {
+    k: 'It fits in the context window',
+    v: 'Lists return summaries, not whole objects. Responses are 90–99% smaller than the raw API.',
+  },
+  {
+    k: 'Tested against a real server',
+    v: 'Every release runs against a live Coolify, not a mock. That is how the API quirks got found.',
+  },
+];
+
+const OFFERS = [
+  {
+    t: 'An MCP server for your product',
+    d: 'Give Claude, Cursor and every other AI client a proper way into your API — like this one.',
+  },
+  {
+    t: 'Answers from your own stuff',
+    d: 'AI that answers from your documents and data, with the receipts, instead of guessing.',
+  },
+  {
+    t: 'Work that runs itself',
+    d: 'A job on a schedule that sorts, checks or reports, with a person signing off before it goes out.',
+  },
+];
+---
+
+<Base {title} {description} path="/">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <div class="page">
+    <header class="head">
+      <p class="mark">coolify-mcp<span>.</span></p>
+      <nav class="nav" aria-label="Primary">
+        <a href="#install">Install</a>
+        <a href="#tools">Tools</a>
+        <a href="#hire">Work with me</a>
+        <a href="https://github.com/StuMason/coolify-mcp" rel="noopener">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- ── hero ─────────────────────────────────────────────── -->
+      <section class="hero">
+        <div class="split">
+          <h1 class="h1">Your AI can read your infrastructure. It should be able to run it.</h1>
+          <p class="lede">
+            coolify-mcp gives Claude, Cursor and any other MCP client a deliberate way to operate a
+            live Coolify platform — deploy, diagnose, restart, roll back — and hands it only what it
+            can take in.
+          </p>
+        </div>
+        <div class="cta">
+          <a class="btn" href="#install">Install it</a>
+          <a class="btn btn-ghost" href="https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb">One-click for Claude Desktop</a>
+          <span class="cta-note">Free, MIT.</span>
+        </div>
+      </section>
+
+      <!-- the product, stated once -->
+      <div class="demo">
+        <div class="demo-row">
+          <span class="key">You say</span>
+          <p class="say">“Why is checkout-web down?”</p>
+        </div>
+        <div class="demo-row">
+          <span class="key">It runs</span>
+          <p class="calls"><code>diagnose_app</code><code>logs</code><code>list_deployments</code></p>
+        </div>
+        <div class="demo-row demo-last">
+          <span class="key">You get</span>
+          <p class="got">
+            exited:unhealthy — OOM killed at 14:22. The deploy three hours ago raised the memory
+            request, not the limit.
+          </p>
+        </div>
+      </div>
+
+      <!-- ── 01 install ───────────────────────────────────────── -->
+      <section id="install" class="sec">
+        <p class="eyebrow"><i>01</i> Install</p>
+        <div class="split">
+          <h2 class="h2">One config block and an API token.</h2>
+          <p class="lede">
+            Works in Claude Desktop, Claude Code, Cursor and anything else that speaks MCP. Nothing
+            to host. Your token never leaves your machine.
+          </p>
+        </div>
+        <figure class="code">
+          <figcaption>
+            <span class="code-file">claude_desktop_config.json</span>
+            <span class="code-dim">Coolify 4.0+ · Node 20+</span>
+          </figcaption>
+          <pre><code>{CONFIG}</code></pre>
+        </figure>
+      </section>
+
+      <!-- ── 02 what it can do ────────────────────────────────── -->
+      <section id="tools" class="sec">
+        <p class="eyebrow"><i>02</i> What it can do</p>
+        <div class="split">
+          <h2 class="h2">{TOOL_COUNT} tools, covering the whole platform.</h2>
+          <p class="lede">
+            The full list lives in the README, where it stays current. What matters here is the
+            shape of it.
+          </p>
+        </div>
+        <div class="groups">
+          {
+            CAPABILITIES.map((c) => (
+              <div class="group">
+                <h3 class="group-t">{c.t}</h3>
+                <p class="group-b">{c.d}</p>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <!-- ── 03 safety ────────────────────────────────────────── -->
+      <section id="safety" class="sec sec-idle">
+        <p class="eyebrow"><i>03</i> Why you can point it at production</p>
+        <div class="split">
+          <h2 class="h2">It stops and asks a person before it does anything it cannot undo.</h2>
+          <p class="lede">
+            Not the model deciding it has permission. An actual human being asked “stop all 26
+            running applications?” in their own client, and having to answer.
+          </p>
+        </div>
+        <div class="cards">
+          {
+            PRINCIPLES.map((p) => (
+              <div class="card">
+                <h3 class="card-t">{p.k}</h3>
+                <p class="card-d">{p.v}</p>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <!-- ── 05 hire ──────────────────────────────────────────── -->
+      <section id="hire" class="sec">
+        <p class="eyebrow"><i>04</i> Work with me</p>
+        <div class="split">
+          <h2 class="h2">Your clients want AI. You need someone who actually ships it.</h2>
+          <p class="lede">
+            I work out what is possible, what it costs to keep running, and where the data has to
+            live. Then I build it — under your name, if you are an agency. And when the honest answer
+            is that a job does not need AI, I will say so before anyone has paid for anything.
+          </p>
+        </div>
+        <div class="cards cards-3">
+          {
+            OFFERS.map((o) => (
+              <div class="card">
+                <h3 class="card-t">{o.t}</h3>
+                <p class="card-d">{o.d}</p>
+              </div>
+            ))
+          }
+        </div>
+        <p class="foot-note">
+          Building since 2006 · Folkestone, Kent · Agencies, SMEs and enterprise · Day rate, hourly,
+          or priced by the job
+        </p>
+      </section>
+
+      <!-- ── contact ──────────────────────────────────────────── -->
+      <section id="contact" class="sec sec-idle">
+        <div class="contact">
+          <div>
+            <p class="eyebrow"><i>05</i> Get in touch</p>
+            <h2 class="h2 h2-sm">Tell me what you are trying to build.</h2>
+            <p class="lede lede-wide">
+              A rough paragraph is enough to start. You will get a straight answer from a person,
+              usually the same day — including if I think you do not need me.
+            </p>
+            <p class="foot-note">
+              Or email <a class="ul" href="mailto:hey@stumason.dev">hey@stumason.dev</a>
+            </p>
+          </div>
+
+          <form class="form" method="POST" action="/api/contact" id="contact-form">
+            <label class="f">
+              <span>Your name</span>
+              <input name="name" type="text" required autocomplete="name" />
+            </label>
+            <label class="f">
+              <span>Email</span>
+              <input name="email" type="email" required autocomplete="email" />
+            </label>
+            <label class="f">
+              <span>Company <i>optional</i></span>
+              <input name="company" type="text" autocomplete="organization" />
+            </label>
+            <label class="f">
+              <span>What do you need?</span>
+              <textarea name="message" rows="5" required></textarea>
+            </label>
+            <div class="hp" aria-hidden="true">
+              <label for="website">Leave this empty</label>
+              <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+            <button class="btn btn-full" type="submit">Send it</button>
+            <p class="status" id="form-status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p class="mark mark-sm">coolify-mcp<span>.</span></p>
+      <nav class="foot-nav" aria-label="Footer">
+        <a href="https://github.com/StuMason/coolify-mcp" rel="noopener">GitHub</a>
+        <a href="https://www.npmjs.com/package/@masonator/coolify-mcp" rel="noopener">npm</a>
+        <a href="https://stumason.dev" rel="noopener">Built by stumason.dev</a>
+      </nav>
+    </footer>
+  </div>
+</Base>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement | null;
+  const status = document.getElementById('form-status');
+  if (form && status) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const button = form.querySelector('button[type=submit]') as HTMLButtonElement;
+      button.disabled = true;
+      status.textContent = 'Sending…';
+      status.className = 'status';
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: new FormData(form),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          form.reset();
+          status.className = 'status is-ok';
+          status.textContent = 'Sent. I will come back to you, usually the same day.';
+        } else {
+          status.className = 'status is-bad';
+          status.textContent =
+            (data && data.error) ||
+            'That did not send. Email hey@stumason.dev and it reaches me directly.';
+        }
+      } catch {
+        status.className = 'status is-bad';
+        status.textContent =
+          'That did not send — you may be offline. Email hey@stumason.dev instead.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+</script>
+
+<style>
+  .skip {
+    position: absolute;
+    left: -9999px;
+  }
+  .skip:focus {
+    left: 12px;
+    top: 12px;
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 16px;
+    z-index: 20;
+  }
+
+  .page {
+    max-width: 1320px;
+    margin-inline: auto;
+    padding-inline: clamp(20px, 4vw, 72px);
+  }
+
+  /* ── header ── */
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-block: 30px 0;
+  }
+  .mark {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+  }
+  .mark span {
+    color: var(--signal);
+  }
+  .nav {
+    display: flex;
+    gap: 26px;
+    font-size: 14px;
+    color: var(--ink-60);
+  }
+  .nav a {
+    text-decoration: none;
+  }
+  .nav a:hover {
+    color: var(--ink);
+  }
+
+  /* ── shared ── */
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.75fr);
+    gap: clamp(28px, 5vw, 90px);
+    align-items: start;
+  }
+  .lede {
+    font-size: 15.5px;
+    line-height: 1.62;
+    color: var(--ink-60);
+    max-width: 46ch;
+  }
+  .lede-wide {
+    max-width: 52ch;
+  }
+  .h1 {
+    font-size: clamp(38px, 5.1vw, 68px);
+    max-width: 15ch;
+  }
+  .h2 {
+    font-size: clamp(27px, 2.9vw, 38px);
+    max-width: 22ch;
+  }
+  .h2-sm {
+    font-size: clamp(25px, 2.5vw, 33px);
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--label);
+    margin-bottom: 26px;
+  }
+  .eyebrow i {
+    font-style: normal;
+    color: var(--signal);
+    margin-right: 10px;
+  }
+
+  .sec {
+    padding-block: clamp(56px, 8vw, 104px);
+    border-top: 1px solid var(--rule-2);
+  }
+  .sec-idle {
+    background: var(--paper-idle);
+    margin-inline: calc(clamp(20px, 4vw, 72px) * -1);
+    padding-inline: clamp(20px, 4vw, 72px);
+  }
+
+  .hero {
+    padding-block: clamp(48px, 8vw, 104px) clamp(28px, 4vw, 44px);
+  }
+  .cta {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-top: clamp(28px, 4vw, 42px);
+  }
+  .cta-note {
+    font-size: 14px;
+    color: var(--grey);
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--ink);
+    color: #fff;
+    border: 0;
+    font-family: var(--type);
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    padding: 14px 26px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.14s;
+  }
+  .btn:hover {
+    background: var(--signal);
+  }
+  .btn-full {
+    width: 100%;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
+  }
+  .btn-ghost:hover {
+    background: var(--ink);
+    color: #fff;
+  }
+
+  /* ── demo panel ── */
+  .demo {
+    border: 1px solid var(--ink);
+    margin-bottom: clamp(8px, 2vw, 20px);
+  }
+  .demo-row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 22px;
+    padding: 22px clamp(18px, 2.6vw, 32px);
+    border-bottom: 1px solid var(--rule-2);
+    align-items: baseline;
+  }
+  .demo-last {
+    border-bottom: 0;
+  }
+  .key {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--label);
+  }
+  .say {
+    font-size: clamp(19px, 2.1vw, 26px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+  .calls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .calls code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--idle-fill);
+    padding: 5px 9px;
+  }
+  .got {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--ink-60);
+  }
+
+  /* ── code ── */
+  .code {
+    margin: clamp(32px, 4vw, 52px) 0 0;
+    background: var(--code-bg);
+  }
+  .code figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 13px 20px;
+    border-bottom: 1px solid #1e1e1e;
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .code-file {
+    color: var(--code-green);
+  }
+  .code-dim {
+    color: var(--code-dim);
+  }
+  .code pre {
+    margin: 0;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .code code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--code-ink);
+  }
+
+  /* ── tools ── */
+  /* Explicit column counts, not auto-fit: there are five groups, and auto-fit
+     resolved to four columns at this width, which stranded the fifth alone
+     across the full page. Three columns puts the remainder as a deliberate
+     3 + 2, with the fifth still one column wide. */
+  .groups {
+    margin-top: clamp(38px, 5vw, 60px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  @media (min-width: 700px) {
+    .groups {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1080px) {
+    .groups {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  .group {
+    border-top: 1px solid var(--ink);
+    padding: 20px 30px 34px 0;
+  }
+  .group-t {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  .group-b {
+    font-size: 13.5px;
+    color: var(--grey);
+    margin-top: 8px;
+    max-width: 34ch;
+    line-height: 1.55;
+  }
+
+  /* ── cards ── */
+  .cards {
+    margin-top: clamp(38px, 5vw, 58px);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0;
+  }
+  .cards-3 {
+    grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  }
+  .card {
+    border-top: 1px solid var(--ink);
+    padding: 18px 28px 26px 0;
+  }
+  .card-t {
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .card-d {
+    font-size: 13.5px;
+    color: var(--grey);
+    margin-top: 9px;
+    line-height: 1.6;
+    max-width: 34ch;
+  }
+
+  .foot-note {
+    margin-top: clamp(28px, 3.5vw, 42px);
+    font-size: 13px;
+    color: var(--grey);
+  }
+  .ul {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ul:hover {
+    color: var(--signal);
+  }
+
+  /* ── contact ── */
+  .contact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    gap: clamp(32px, 5vw, 80px);
+    align-items: start;
+  }
+  .form {
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    padding: clamp(20px, 2.6vw, 30px);
+  }
+  .f {
+    display: block;
+    margin-bottom: 15px;
+  }
+  .f > span {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--label);
+    margin-bottom: 6px;
+  }
+  .f > span i {
+    font-style: normal;
+    color: var(--rule-soft);
+  }
+  .f input,
+  .f textarea {
+    width: 100%;
+    font-family: var(--type);
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    padding: 11px 13px;
+    border-radius: 0;
+  }
+  .f textarea {
+    resize: vertical;
+  }
+  .f input:focus,
+  .f textarea:focus {
+    border-color: var(--ink);
+    outline: none;
+  }
+  .hp {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+  .status {
+    margin-top: 12px;
+    font-size: 13.5px;
+    color: var(--grey);
+    min-height: 1.2em;
+  }
+  .status.is-ok {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .status.is-bad {
+    color: var(--signal);
+  }
+
+  /* ── footer ── */
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-block: 34px 42px;
+    border-top: 1px solid var(--rule-2);
+  }
+  .mark-sm {
+    font-size: 15px;
+  }
+  .foot-nav {
+    display: flex;
+    gap: 24px;
+    font-size: 13.5px;
+    color: var(--grey);
+  }
+  .foot-nav a {
+    text-decoration: none;
+  }
+  .foot-nav a:hover {
+    color: var(--ink);
+  }
+
+  @media (max-width: 860px) {
+    .split,
+    .contact {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .h1,
+    .h2 {
+      max-width: none;
+    }
+  }
+  @media (max-width: 560px) {
+    .demo-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+    }
+    .nav {
+      gap: 16px;
+    }
+  }
+</style>

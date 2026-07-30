@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://coolify-mcp.stumason.dev/sitemap-index.xml
