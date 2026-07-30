@@ -88,7 +88,8 @@ Destructive operations pause and ask **you**, not the model, on clients that sup
 
 ```text
 EMERGENCY STOP: take down 12 running applications
-(api, worker, cockpit, umami and 8 more) across 3 servers?
+(api, worker, cockpit, umami, scheduler, mailer, search, billing and 4 more)
+across 3 servers?
 ```
 
 Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.

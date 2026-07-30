@@ -2704,15 +2704,15 @@ export class CoolifyClient {
    * future instance stops expanding it, the fix is to fall back to
    * `listProjectEnvironments` here rather than to soften the check.
    *
-   * @param apps Pre-fetched applications, when a caller has already listed them
-   *   (the #261 confirmation prompt does). Avoids a second unpaginated fetch
-   *   and, more importantly, makes the operation act on the same set the human
-   *   was shown rather than a freshly-computed one.
+   * Deliberately takes no pre-fetched application list. The #261 confirmation
+   * path shares the set the human approved by passing it to the *operation*
+   * (`restartProjectApps` / `redeployProjectApps` both accept it), not by
+   * re-entering this lookup, so a pre-fetch parameter here would have no caller.
    */
-  async applicationsInProject(projectUuid: string, apps?: Application[]): Promise<Application[]> {
+  async applicationsInProject(projectUuid: string): Promise<Application[]> {
     const [project, allApps] = await Promise.all([
       this.getProject(projectUuid),
-      apps ? Promise.resolve(apps) : (this.listApplications() as Promise<Application[]>),
+      this.listApplications() as Promise<Application[]>,
     ]);
     // Throw rather than treat a missing `environments` as an empty one. An
     // absent array means the project's environments could not be resolved —

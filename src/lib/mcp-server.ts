@@ -2558,6 +2558,20 @@ export class CoolifyMcpServer extends McpServer {
       'Restart all apps in project',
       { project_uuid: z.string() },
       async ({ project_uuid }, extra) => {
+        // On the happy path `approved` carries the resolved set into the
+        // operation, so the restart acts on exactly what the human was shown and
+        // the lookup happens once.
+        //
+        // When the lookup *throws*, `approved` stays undefined, the degraded
+        // prompt is shown, and an accept re-runs the same lookup inside
+        // `restartProjectApps` — which for a deterministic failure (the
+        // "could not resolve environments" throw) fails identically, so the
+        // human is asked a question whose only reachable answer is the error
+        // they would have seen anyway. Left as-is deliberately: the alternative
+        // is inspecting the error to decide whether to ask, which couples this
+        // call site to the client's error strings, and the transient case
+        // (`listApplications` timing out) genuinely can succeed on the retry.
+        // The cost is one extra lookup on an already-failing request.
         let approved: Application[] | undefined;
         return this.guardDestructive(
           extra.signal,

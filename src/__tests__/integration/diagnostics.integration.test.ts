@@ -61,24 +61,32 @@ describeFn('Diagnostic Integration Tests', () => {
       client.listApplications() as Promise<Application[]>,
     ]);
     fixtures.serverUuid = servers[0]?.uuid;
-    // `running` and not `unhealthy` — 'unhealthy' contains 'healthy', so a
-    // naive substring test picks exactly the wrong application here.
+    // Deliberately NOT `isRunningStatus`. That predicate answers "what should
+    // `stop_all_apps` target", where over-matching is the safe direction — it
+    // treats `exited:unhealthy` as running because 'unhealthy' contains
+    // 'healthy'. The question here is the stricter "which application is
+    // actually healthy", so that an app in a bad state is not handed to the
+    // test asserting healthy diagnostics. Different question, so a different
+    // test, not a rival copy of the same one.
     fixtures.healthyAppUuid = apps.find(
       (app) => app.status?.includes('running') && !app.status.includes('unhealthy'),
     )?.uuid;
     fixtures.unhealthyAppUuid = apps.find(
       (app) => app.status?.includes('exited') || app.status?.includes('unhealthy'),
     )?.uuid;
-  }, 60000);
 
-  // Without this, a `.env` pointing at an instance with nothing on it would
-  // let every assertion below short-circuit and the suite would report green
-  // having verified nothing — the same false confidence helpers.ts exists to
-  // prevent.
-  it('discovered fixtures from the live instance', () => {
-    expect(fixtures.serverUuid).toBeDefined();
-    expect(fixtures.healthyAppUuid).toBeDefined();
-  });
+    // Fail here, once, rather than letting each test below dereference an
+    // undefined uuid and fail separately against `/applications/undefined`.
+    // One honest error beats three confusing ones, and an instance with no
+    // servers or no running application cannot verify anything in this suite.
+    if (!fixtures.serverUuid || !fixtures.healthyAppUuid) {
+      throw new Error(
+        `Cannot run diagnostics integration tests against ${COOLIFY_URL}: ` +
+          `discovered ${servers.length} servers and ${apps.length} applications, ` +
+          `needing at least one server and one healthy running application.`,
+      );
+    }
+  }, 60000);
 
   describe('diagnoseApplication', () => {
     it('should return diagnostic data for a healthy application', async () => {
