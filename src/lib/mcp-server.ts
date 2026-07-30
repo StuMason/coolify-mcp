@@ -1857,7 +1857,7 @@ export class CoolifyMcpServer extends McpServer {
         description: z.string().optional(),
         private_key: z.string().optional(),
       },
-      async ({ action, uuid, name, description, private_key }) => {
+      async ({ action, uuid, name, description, private_key }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listPrivateKeys());
@@ -1884,7 +1884,25 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deletePrivateKey(uuid));
+            // #315: guarded because the loss is irrecoverable — Coolify never
+            // returns key material after v4.2 hides secrets, and often not
+            // before, so a deleted key cannot be re-read and re-added. The
+            // routine deletes (storages, scheduled tasks, env vars) stay
+            // unguarded on purpose; a prompt on every delete is how prompts
+            // stop being read.
+            return this.guardDestructive(
+              extra.signal,
+              `Delete an SSH private key. Not recoverable from Coolify.`,
+              async () => {
+                const key = await this.client.getPrivateKey(uuid);
+                return (
+                  `Delete SSH private key "${sanitizeForPrompt(key.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
+                  `The key material is not recoverable from Coolify. Any server access or ` +
+                  `private-repo deploys using this key stop working until you add the key again from your own copy.`
+                );
+              },
+              () => this.client.deletePrivateKey(uuid),
+            );
         }
       },
     );
@@ -1925,7 +1943,7 @@ export class CoolifyMcpServer extends McpServer {
         private_key_uuid: z.string().optional(),
         is_system_wide: z.boolean().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { action, id, ...apiData } = args;
         switch (action) {
           case 'list':
@@ -1985,7 +2003,39 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(() => this.client.updateGitHubApp(id, apiData));
           case 'delete':
             if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
-            return wrap(() => this.client.deleteGitHubApp(id));
+            // #315: guarded because the blast radius is every application
+            // sourced from the installation — they all lose their deploy
+            // source at once — and it is countable, so the prompt counts it.
+            return this.guardDestructive(
+              extra.signal,
+              `Delete a GitHub app installation. Every application sourced from it loses its deploy source.`,
+              async () => {
+                const [apps, ghApps] = await Promise.all([
+                  this.client.listApplications() as Promise<Application[]>,
+                  this.client.listGitHubApps() as Promise<GitHubApp[]>,
+                ]);
+                const target = ghApps.find((app) => app.id === id);
+                // source_id alone can collide with a GitLab source carrying
+                // the same numeric id, so the type is checked too. Verified
+                // live: source_type is the Laravel class name
+                // "App\Models\GithubApp" (null for public-repo apps).
+                const sourced = apps.filter(
+                  (app) => app.source_id === id && (app.source_type ?? '').includes('GithubApp'),
+                );
+                const impact =
+                  sourced.length === 0
+                    ? `No applications are currently sourced from it.`
+                    : `${describeBlastRadius(
+                        'application',
+                        sourced.map((app) => app.name || app.uuid),
+                      )} sourced from it will lose their deploy source and cannot deploy until re-linked.`;
+                return (
+                  `Delete GitHub app "${sanitizeForPrompt(target?.name || String(id))}" (id ${id})?\n\n` +
+                  impact
+                );
+              },
+              () => this.client.deleteGitHubApp(id),
+            );
           case 'list_repos':
             if (!id) return { content: [{ type: 'text' as const, text: 'Error: id required' }] };
             return wrap(() => this.client.listGitHubAppRepositories(id));
@@ -2128,7 +2178,7 @@ export class CoolifyMcpServer extends McpServer {
         token: z.string().optional(),
         name: z.string().optional(),
       },
-      async ({ action, uuid, provider, token, name }) => {
+      async ({ action, uuid, provider, token, name }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listCloudTokens());
@@ -2149,7 +2199,22 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() => this.client.deleteCloudToken(uuid));
+            // #315: same shape as the private-key delete — the token value is
+            // write-only in Coolify, so deletion is irreversible without the
+            // original credential.
+            return this.guardDestructive(
+              extra.signal,
+              `Delete a cloud-provider API token. Not recoverable from Coolify.`,
+              async () => {
+                const stored = await this.client.getCloudToken(uuid);
+                return (
+                  `Delete cloud-provider token "${sanitizeForPrompt(stored.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
+                  `The token value is not recoverable from Coolify. Server provisioning through ` +
+                  `this provider stops working until you re-add the token from the provider's console.`
+                );
+              },
+              () => this.client.deleteCloudToken(uuid),
+            );
           case 'validate':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };

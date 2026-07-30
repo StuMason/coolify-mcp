@@ -94,7 +94,7 @@ EMERGENCY STOP: take down 12 running applications
 across 3 servers?
 ```
 
-Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, and `bulk_env_update` across more than three apps. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
+Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, the credential deletes (`private_keys`, `cloud_tokens`, `github_apps` — none recoverable from Coolify once gone), and `bulk_env_update` across more than three apps. Routine deletes (storages, scheduled tasks, individual env vars, backup schedules) deliberately stay unprompted — a dialog on every delete is how dialogs stop being read. Deleting a resource spells out whether its **persistent volumes** go with it — `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
 
 Prompts are skipped where there is nothing to confirm: an emergency stop on an idle estate, or a redeploy of an empty project, just runs.
 
