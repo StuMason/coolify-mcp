@@ -21,11 +21,25 @@ Configuration: [`.github/dependabot.yml`](.github/dependabot.yml)
 **Weekly OpenAPI Drift Check** monitors Coolify's API for changes:
 
 - Runs every Monday at 7am UK time
-- Compares current Coolify OpenAPI spec against our baseline
-- Creates GitHub issues when changes are detected
-- Labels issues with `api-drift` and `maintenance`
+- Compares upstream's `openapi.yaml` against the copy vendored at `docs/coolify-openapi.yaml`
+- Opens (or comments on) a GitHub issue labelled `api-drift` when they differ
+- Resolution is to re-vendor the spec and run `npm run build:chunks`
+
+The vendored spec _is_ the baseline — the workflow keeps no separate copy. It is
+read-only and cannot write to the repo.
+
+The comparison is byte-exact rather than semantic, which is a deliberate
+trade: a reworded description or a version bump upstream will open an issue with
+no real API change behind it. Since the action either way is "re-vendor and look
+at the diff", a false positive costs a glance; a false negative costs a missed
+endpoint.
 
 This ensures we know when Coolify adds/removes/changes endpoints so we can update our tools accordingly.
+
+**Dependabot patch and minor updates merge themselves** once CI passes — the
+workflow approves and enables auto-merge, so they reach `main` without a human
+reading them. Major updates stop for review. If you would rather review every
+bump, delete `.github/workflows/dependabot-auto-merge.yml`.
 
 Configuration: [`.github/workflows/openapi-drift.yml`](.github/workflows/openapi-drift.yml)
 

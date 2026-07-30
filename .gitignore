@@ -52,3 +52,11 @@ coverage/
 # Playwright MCP runtime artefacts (screenshots, snapshots)
 .playwright-mcp/
 *.mcpb
+
+# Repomix snapshots — a 2,362-line stale copy of the source was committed once
+# and sat there for 17 months describing files that no longer existed.
+repomix-output.xml
+
+# Local Claude Desktop config scratch — untracked and previously unignored,
+# which is one absent-minded `git add -A` away from being committed.
+claude-desktop/
