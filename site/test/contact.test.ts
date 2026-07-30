@@ -312,6 +312,12 @@ describe('honeypot', () => {
 });
 
 describe('origin checking', () => {
+  // Same caveat as the limiter: x-forwarded-host is client-supplied unless the
+  // edge rewrites it, so an attacker who sets both Origin and X-Forwarded-Host
+  // passes this check. That is acceptable because origin checking is not the
+  // control that matters here — the worst a forged submission achieves is an
+  // email to the site owner, and rate limiting is the real gate. These tests
+  // document routing, not a security boundary.
   it('rejects a cross-origin submission', async () => {
     // `host` must be set explicitly: new Request() never populates a Host
     // header (undici adds it at dispatch), so without this the 403 would come
