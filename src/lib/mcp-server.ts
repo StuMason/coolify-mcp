@@ -1875,12 +1875,32 @@ export class CoolifyMcpServer extends McpServer {
                 description,
               }),
             );
-          case 'update':
+          case 'update': {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            return wrap(() =>
-              this.client.updatePrivateKey(uuid, { name, description, private_key }),
+            // Renames and descriptions pass freely, but replacing the key
+            // material is guarded like the delete, because it IS the delete of
+            // the old key: Coolify never returns key material, so the
+            // overwritten value is exactly as gone as a deleted one, and a
+            // model "fixing" a key by overwriting it takes the same servers
+            // offline.
+            if (private_key === undefined) {
+              return wrap(() => this.client.updatePrivateKey(uuid, { name, description }));
+            }
+            return this.guardDestructive(
+              extra.signal,
+              `Replace an SSH private key's material. The current key is not recoverable.`,
+              async () => {
+                const key = await this.client.getPrivateKey(uuid);
+                return (
+                  `Replace the key material of SSH private key "${sanitizeForPrompt(key.name || uuid)}" (${sanitizeForPrompt(uuid)})?\n\n` +
+                  `The current key material is overwritten and is not recoverable from Coolify. ` +
+                  `Anything authenticating with the old key stops working unless the new key is authorised in its place.`
+                );
+              },
+              () => this.client.updatePrivateKey(uuid, { name, description, private_key }),
             );
+          }
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
@@ -2010,6 +2030,9 @@ export class CoolifyMcpServer extends McpServer {
               extra.signal,
               `Delete a GitHub app installation. Every application sourced from it loses its deploy source.`,
               async () => {
+                // Full objects, necessarily: toApplicationSummary drops both
+                // source_id and source_type, so { summary: true } would zero
+                // this count — the same false reassurance in cheaper clothes.
                 const [apps, ghApps] = await Promise.all([
                   this.client.listApplications() as Promise<Application[]>,
                   this.client.listGitHubApps() as Promise<GitHubApp[]>,
@@ -2018,13 +2041,27 @@ export class CoolifyMcpServer extends McpServer {
                 // source_id alone can collide with a GitLab source carrying
                 // the same numeric id, so the type is checked too. Verified
                 // live: source_type is the Laravel class name
-                // "App\Models\GithubApp" (null for public-repo apps).
+                // "App\Models\GithubApp"; public-repo applications carry null
+                // for BOTH fields, so they drop out on source_id, not here.
+                //
+                // A matching source_id with a *missing* type is counted, not
+                // excluded: source_type is absent from the vendored spec and
+                // only live-verified on 4.1.2, and excluding on absence would
+                // turn "19 apps break" into "No applications are currently
+                // sourced from it" — the most reassuring sentence this dialog
+                // can emit — the day a version stops serialising the field.
+                // Over-counting asks harder; that is this module's chosen
+                // failure direction.
                 const sourced = apps.filter(
-                  (app) => app.source_id === id && (app.source_type ?? '').includes('GithubApp'),
+                  (app) =>
+                    app.source_id === id &&
+                    (app.source_type == null || app.source_type.includes('GithubApp')),
                 );
                 const impact =
                   sourced.length === 0
-                    ? `No applications are currently sourced from it.`
+                    ? `No applications are currently sourced from it, but deleting the ` +
+                      `installation is not undoable from Coolify — re-linking anything later ` +
+                      `means re-creating the app on GitHub.`
                     : `${describeBlastRadius(
                         'application',
                         sourced.map((app) => app.name || app.uuid),
