@@ -19,13 +19,27 @@ const REGION = process.env.AWS_REGION || 'eu-west-2';
 
 const MAX = { name: 120, email: 200, company: 160, message: 5000 } as const;
 
-/** Reject anything that could inject headers, and clamp length. */
+/**
+ * For header-bound fields (name, email, company → SES Subject / Reply-To):
+ * reject anything that could inject headers, and clamp length.
+ */
 function clean(value: FormDataEntryValue | null, limit: number): string {
   if (typeof value !== 'string') return '';
   return value
     .replace(/[\r\n]+/g, ' ')
     .trim()
     .slice(0, limit);
+}
+
+/**
+ * For the message body: newlines are content there, not an injection vector —
+ * the body is not a header, and flattening it delivers every multi-paragraph
+ * enquiry as one long line. Only \r goes (normalising CRLF to LF), plus the
+ * same clamp.
+ */
+function cleanBody(value: FormDataEntryValue | null, limit: number): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\r/g, '').trim().slice(0, limit);
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
@@ -157,7 +171,7 @@ export const POST: APIRoute = async ({ request }) => {
   const name = clean(form.get('name'), MAX.name);
   const email = clean(form.get('email'), MAX.email);
   const company = clean(form.get('company'), MAX.company);
-  const message = clean(form.get('message'), MAX.message);
+  const message = cleanBody(form.get('message'), MAX.message);
 
   if (!name || !email || !message) {
     return json({ error: 'Name, email and a message are all needed.' }, 400);

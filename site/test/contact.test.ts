@@ -58,9 +58,9 @@ interface PostOptions {
 
 function makeContext(request: Request): APIContext {
   // Only `request` is read by the handler. A full APIContext would drag in
-  // cookies/session/locals machinery no test needs, so this narrows honestly:
-  // if the handler starts reading more of the context, tests fail loudly on
-  // the missing property instead of silently on a half-mocked one.
+  // cookies/session/locals machinery no test needs. The cast means a handler
+  // that starts reading more of the context gets a silent undefined, not an
+  // error — if that happens, widen this factory rather than the cast.
   return { request } as unknown as APIContext;
 }
 
@@ -70,7 +70,7 @@ function post(fields: Record<string, string>, options: PostOptions = {}): Promis
   const body = form.toString();
   const requestHeaders: Record<string, string> = {
     'content-type': 'application/x-www-form-urlencoded',
-    'content-length': String(body.length),
+    'content-length': String(Buffer.byteLength(body)),
     accept: 'application/json',
     ...headers,
   };
@@ -190,6 +190,36 @@ describe('header injection', () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  it('preserves paragraphs in the message body', async () => {
+    // Newlines in the BODY are content, not an injection vector — the body is
+    // not a header. An earlier clean() flattened every multi-paragraph enquiry
+    // to one line; this pins the corrected contract.
+    await post({ ...VALID, message: 'First paragraph.\r\n\r\nSecond paragraph.' });
+
+    const bodyText = (commandInputs.at(-1) as SesInput).Content.Simple.Body.Text.Data;
+    expect(bodyText).toContain('First paragraph.\n\nSecond paragraph.');
+    // CR is still normalised away — LF-only line endings in the delivered mail.
+    expect(bodyText).not.toContain('\r');
+  });
+
+  it('clamps the message at exactly its limit', async () => {
+    await post({ ...VALID, message: 'm'.repeat(6000) });
+
+    const bodyText = (commandInputs.at(-1) as SesInput).Content.Simple.Body.Text.Data;
+    // MAX.message is 5000; the surrounding template adds the labelled header
+    // lines and footer, so pin the clamp by the run of m's itself.
+    expect(bodyText).toContain('m'.repeat(5000));
+    expect(bodyText).not.toContain('m'.repeat(5001));
+  });
+
+  it('omits the company suffix and body line when company is blank', async () => {
+    await post(VALID);
+
+    const input = commandInputs.at(-1) as SesInput;
+    expect(input.Content.Simple.Subject.Data).toBe('coolify-mcp enquiry — Jane Doe');
+    expect(input.Content.Simple.Body.Text.Data).not.toContain('Company:');
+  });
+
   it('clamps the name at exactly its limit', async () => {
     await post({ ...VALID, name: 'a'.repeat(500) });
 
@@ -218,6 +248,10 @@ describe('validation', () => {
   );
 
   it('rejects a body whose declared size could not be a real enquiry', async () => {
+    // Guards only the declared content-length: a chunked POST with no such
+    // header sails past this check and is bounded by formData() itself, not
+    // by MAX_BODY_BYTES. This test pins the guard that exists, not one that
+    // does not.
     const res = await post(VALID, { headers: { 'content-length': String(1024 * 1024) } });
 
     expect(res.status).toBe(413);
@@ -257,11 +291,35 @@ describe('honeypot', () => {
     expect(await res.json()).toEqual({ ok: true });
     expect(sendMock).not.toHaveBeenCalled();
   });
+
+  it('logs the discard, because that log line is the only false-positive trail', async () => {
+    // The endpoint's own comment: browser autofill does sometimes fill a field
+    // named "website", and when it does a real enquiry is discarded while the
+    // sender is told it sent. The warn is the only way anyone finds out — and
+    // an untested log line is exactly what a later refactor deletes silently.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await post({ ...VALID, website: 'https://spam.example' });
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('honeypot'),
+        expect.objectContaining({ from: VALID.email }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('origin checking', () => {
   it('rejects a cross-origin submission', async () => {
-    const res = await post(VALID, { headers: { origin: 'https://evil.example' } });
+    // `host` must be set explicitly: new Request() never populates a Host
+    // header (undici adds it at dispatch), so without this the 403 would come
+    // from the missing-host short-circuit and the origin comparison this test
+    // names would never run.
+    const res = await post(VALID, {
+      headers: { origin: 'https://evil.example', host: 'coolify-mcp.stumason.dev' },
+    });
 
     expect(res.status).toBe(403);
     expect(sendMock).not.toHaveBeenCalled();
@@ -296,7 +354,12 @@ describe('origin checking', () => {
   });
 
   it('rejects a garbage origin header rather than throwing on it', async () => {
-    const res = await post(VALID, { headers: { origin: 'not a url' } });
+    // Host present for the same reason as the cross-origin test: without it
+    // the URL parse — the thing this test exists to exercise — is never
+    // reached.
+    const res = await post(VALID, {
+      headers: { origin: 'not a url', host: 'coolify-mcp.stumason.dev' },
+    });
 
     expect(res.status).toBe(403);
   });
@@ -409,8 +472,14 @@ describe('failure honesty', () => {
 
         expect(res.status).toBe(503);
         expect(sendMock).not.toHaveBeenCalled();
+        // Same failure-honesty property as the 502: the visitor must leave
+        // knowing how to reach a human anyway.
+        expect(((await res.json()) as { error: string }).error).toContain('hey@stumason.dev');
       } finally {
-        process.env[name] = value;
+        // A plain assignment would write the literal string "undefined" if the
+        // var had been unset, and "undefined" passes the truthiness guard.
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
       }
     },
   );
