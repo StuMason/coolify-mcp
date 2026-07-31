@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.18.0] - 2026-07-31
 
 ### Added
+
+- **Test suite and type checking for the docs site's contact endpoint** (#319) — the site had no test runner while `/api/contact` feeds unauthenticated form fields into SES subject and reply-to headers. 33 vitest cases now drive the real handler (header injection, origin checks, rate-limiter branches including the global ceiling, failure honesty), and `astro check` enforces the strict tsconfig in CI. Site-only; nothing in the npm package changes.
+
+### Fixed
+
+- **Multi-paragraph enquiries through the site contact form arrived as one line** — the CRLF flattening that protects the SES headers also ran over the message body, where newlines are content, not an injection vector. The body now keeps its paragraphs (CRLF normalised to LF).
 
 - **`private_keys update` with new key material is guarded like the delete** (#315 review) — overwriting key material IS deleting the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
 
