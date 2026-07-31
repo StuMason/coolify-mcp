@@ -273,8 +273,10 @@ const OFFERS = [
   if (form && status) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const button = form.querySelector('button[type=submit]') as HTMLButtonElement;
-      button.disabled = true;
+      // querySelector<T> narrows without casting away the null; a missing
+      // button (markup drift) then no-ops instead of throwing mid-submit.
+      const button = form.querySelector<HTMLButtonElement>('button[type=submit]');
+      if (button) button.disabled = true;
       status.textContent = 'Sending…';
       status.className = 'status';
       try {
@@ -299,7 +301,7 @@ const OFFERS = [
         status.textContent =
           'That did not send — you may be offline. Email hey@stumason.dev instead.';
       } finally {
-        button.disabled = false;
+        if (button) button.disabled = false;
       }
     });
   }

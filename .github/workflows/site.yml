@@ -47,6 +47,18 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      - name: Type check
+        # tsconfig extends astro/tsconfigs/strict; without this step that
+        # strictness is decorative — nothing else runs the compiler over
+        # .astro files.
+        run: npm run check
+
+      - name: Test
+        # The contact endpoint takes unauthenticated POSTs and feeds form
+        # fields into SES subject/reply-to headers. Its CRLF stripping is the
+        # header-injection defence, and this is what regression-tests it.
+        run: npm test
+
       - name: Build
         # Also exercises the tool count read from src/lib/mcp-server.ts, which
         # throws if the registration shape changes.
