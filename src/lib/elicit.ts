@@ -59,7 +59,7 @@ export const ELICIT_TIMEOUT_MS = 300_000;
  * client advertises the capability every rejection from `elicitInput` aborts,
  * including `-32601 Method not found` — so a client that advertises
  * `elicitation` without implementing the handler, or a proxy that drops the
- * request, makes nine tools permanently unusable with no way out but
+ * request, makes every guarded tool permanently unusable with no way out but
  * downgrading the package. The resulting error ("could not confirm with the
  * user") does not point at the client, which makes it hard to diagnose from the
  * outside. Rare, but unrecoverable, and the fallback is the same shape as the

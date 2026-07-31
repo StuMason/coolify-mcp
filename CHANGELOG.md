@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`private_keys update` with new key material is guarded like the delete** (#315 review) — overwriting key material IS deleting the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
+
+- **Confirmation for the credential deletes** (#315) — `private_keys delete`, `cloud_tokens delete` and `github_apps delete` now elicit like the other destructive operations. The boundary drawn, recorded here so it is a decision rather than an accident: a delete gets a prompt when the loss is **irrecoverable** (key material and token values are write-only in Coolify — once deleted, they only come back if you still hold the original) or **estate-wide** (deleting a GitHub app breaks every application sourced from it, and the prompt counts them: "2 applications (api, worker) sourced from it will lose their deploy source"). Routine deletes — storages, scheduled tasks, individual env vars, backup schedules, `deployment cancel` — deliberately stay unprompted, and a test pins that so growing a guard is a revisit of the boundary, not a side effect. Prompt fatigue is the failure mode: a dialog on every delete is how dialogs stop being read.
+
+  The GitHub-app blast radius filters by `source_type` as well as `source_id`, because the numeric id can collide with a GitLab source. Verified live: `source_type` is the Laravel class name (`App\Models\GithubApp`), null for public-repo applications.
+
 ## [2.17.0] - 2026-07-30
 
 > **Heads up:** `redeploy_project` and `restart_project_apps` were silent no-ops and now actually run. If you called either and read the `0 succeeded` as "nothing needed doing", the same call now restarts or redeploys every application in the project.

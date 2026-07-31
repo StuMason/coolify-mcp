@@ -982,3 +982,194 @@ describe('elicitation: delete prompts', () => {
     await h.close();
   });
 });
+
+describe('elicitation: credential deletes (#315)', () => {
+  it('asks before deleting a private key, and says it is unrecoverable', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getPrivateKey')
+      .mockResolvedValue({ uuid: 'key-1', name: 'deploy-key' } as never);
+    const del = jest.spyOn(client, 'deletePrivateKey').mockResolvedValue({} as never);
+
+    const text = await h.call('private_keys', { action: 'delete', uuid: 'key-1' });
+
+    // The reason this delete is guarded and the routine ones are not: the key
+    // material is write-only in Coolify, so there is no undo.
+    expect(h.prompts[0]).toContain('Delete SSH private key "deploy-key"');
+    expect(h.prompts[0]).toContain('not recoverable');
+    expect(del).not.toHaveBeenCalled();
+    expect(text).toContain('Nothing was changed');
+    await h.close();
+  });
+
+  it('asks before deleting a cloud token', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getCloudToken')
+      .mockResolvedValue({ uuid: 'ct-1', name: 'hetzner-prod' } as never);
+    const del = jest.spyOn(client, 'deleteCloudToken').mockResolvedValue({} as never);
+
+    await h.call('cloud_tokens', { action: 'delete', uuid: 'ct-1' });
+
+    expect(h.prompts[0]).toContain('Delete cloud-provider token "hetzner-prod"');
+    expect(del).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('counts the applications sourced from a GitHub app before deleting it', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest.spyOn(client, 'listApplications').mockResolvedValue([
+      { uuid: 'a', name: 'api', source_id: 7, source_type: 'App\\Models\\GithubApp' },
+      { uuid: 'b', name: 'web', source_id: 7, source_type: 'App\\Models\\GithubApp' },
+      // Same numeric id, different source type — must not be counted.
+      { uuid: 'c', name: 'gl', source_id: 7, source_type: 'App\\Models\\GitlabApp' },
+      { uuid: 'd', name: 'pub', source_id: null, source_type: null },
+    ] as never);
+    jest
+      .spyOn(client, 'listGitHubApps')
+      .mockResolvedValue([{ id: 7, name: 'my-installation' }] as never);
+    const del = jest.spyOn(client, 'deleteGitHubApp').mockResolvedValue({} as never);
+
+    await h.call('github_apps', { action: 'delete', id: 7 });
+
+    expect(h.prompts[0]).toContain('Delete GitHub app "my-installation"');
+    expect(h.prompts[0]).toContain('2 applications');
+    expect(h.prompts[0]).toContain('lose their deploy source');
+    expect(h.prompts[0]).not.toContain('gl');
+    expect(del).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('says so plainly when no applications are sourced from the GitHub app', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'listApplications').mockResolvedValue([] as never);
+    jest.spyOn(client, 'listGitHubApps').mockResolvedValue([{ id: 7, name: 'idle' }] as never);
+    const del = jest.spyOn(client, 'deleteGitHubApp').mockResolvedValue({} as never);
+
+    await h.call('github_apps', { action: 'delete', id: 7 });
+
+    // Still asks — deleting an installation is not undoable from Coolify's
+    // side either — but the prompt is honest that nothing currently breaks.
+    expect(h.prompts[0]).toContain('No applications are currently sourced from it');
+    expect(del).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('leaves the routine deletes unguarded, by decision not omission', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    const delStorage = jest
+      .spyOn(client, 'deleteApplicationStorage')
+      .mockResolvedValue({} as never);
+
+    await h.call('storages', {
+      action: 'delete',
+      resource: 'application',
+      uuid: 'app-1',
+      storage_uuid: 'st-1',
+    });
+
+    // #315's boundary: prompting on every delete is how prompts stop being
+    // read. If this test starts failing because storages grew a guard, that
+    // should be a deliberate revisit of the boundary, not a side effect.
+    expect(h.prompts).toEqual([]);
+    expect(delStorage).toHaveBeenCalled();
+    await h.close();
+  });
+});
+
+describe('elicitation: #315 review round', () => {
+  it('counts an app whose source_type is absent rather than reassuring falsely', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest.spyOn(client, 'listApplications').mockResolvedValue([
+      // source_id matches but the instance did not serialise source_type —
+      // the field is absent from the vendored spec and only live-verified on
+      // 4.1.2, so this response shape is plausible on other versions.
+      { uuid: 'a', name: 'api', source_id: 7 },
+    ] as never);
+    jest.spyOn(client, 'listGitHubApps').mockResolvedValue([{ id: 7, name: 'inst' }] as never);
+    jest.spyOn(client, 'deleteGitHubApp').mockResolvedValue({} as never);
+
+    await h.call('github_apps', { action: 'delete', id: 7 });
+
+    // Excluding on a missing type would print "No applications are currently
+    // sourced from it" — the most reassuring sentence this dialog can emit —
+    // for a delete that breaks the app. Over-counting asks harder instead.
+    expect(h.prompts[0]).toContain('1 application (api)');
+    await h.close();
+  });
+
+  it('still asks, carrying the label, when the github_apps pre-flight fails', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    // The only summarize in the codebase making two calls in Promise.all —
+    // the most ways to reject, on exactly the flaky-Coolify days when the
+    // guard matters most.
+    jest.spyOn(client, 'listApplications').mockRejectedValue(new Error('coolify unreachable'));
+    jest.spyOn(client, 'listGitHubApps').mockResolvedValue([] as never);
+    const del = jest.spyOn(client, 'deleteGitHubApp').mockResolvedValue({} as never);
+
+    await h.call('github_apps', { action: 'delete', id: 7 });
+
+    expect(h.prompts[0]).toContain('Delete a GitHub app installation');
+    expect(h.prompts[0]).toContain('Could not load the details first');
+    expect(del).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('guards a key-material replacement exactly like a delete', async () => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getPrivateKey')
+      .mockResolvedValue({ uuid: 'key-1', name: 'deploy-key' } as never);
+    const update = jest.spyOn(client, 'updatePrivateKey').mockResolvedValue({} as never);
+
+    await h.call('private_keys', {
+      action: 'update',
+      uuid: 'key-1',
+      private_key: '-----BEGIN OPENSSH PRIVATE KEY-----\nnew material',
+    });
+
+    // Overwriting key material IS deleting the old key: Coolify never returns
+    // key material, so the previous value is exactly as gone either way.
+    expect(h.prompts[0]).toContain('Replace the key material');
+    expect(h.prompts[0]).toContain('not recoverable');
+    expect(update).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('lets a rename through without a prompt', async () => {
+    const h = await harness(accept);
+    const update = jest
+      .spyOn(h.server['client'], 'updatePrivateKey')
+      .mockResolvedValue({} as never);
+
+    await h.call('private_keys', { action: 'update', uuid: 'key-1', name: 'renamed' });
+
+    // A rename destroys nothing; prompting on it would be pure fatigue.
+    expect(h.prompts).toEqual([]);
+    expect(update).toHaveBeenCalledWith('key-1', { name: 'renamed', description: undefined });
+    await h.close();
+  });
+
+  it('names the consequence even when no applications are sourced', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest.spyOn(client, 'listApplications').mockResolvedValue([] as never);
+    jest.spyOn(client, 'listGitHubApps').mockResolvedValue([{ id: 7, name: 'idle' }] as never);
+    jest.spyOn(client, 'deleteGitHubApp').mockResolvedValue({} as never);
+
+    await h.call('github_apps', { action: 'delete', id: 7 });
+
+    // Every other prompt names what the reader loses; this one must too —
+    // re-creating and re-installing the app on GitHub is real work.
+    expect(h.prompts[0]).toContain('not undoable from Coolify');
+    await h.close();
+  });
+});
