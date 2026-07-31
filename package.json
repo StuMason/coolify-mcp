@@ -63,12 +63,15 @@
     "url": "https://github.com/StuMason/coolify-mcp/issues"
   },
   "dependencies": {
+    "@modelcontextprotocol/core": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.23.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "minisearch": "^7.2.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.0.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
