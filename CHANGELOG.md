@@ -9,17 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Confirmation for the credential deletes** (#315) — `private_keys delete`, `cloud_tokens delete` and `github_apps delete` now elicit like the other destructive operations. The boundary drawn, recorded here so it is a decision rather than an accident: a delete gets a prompt when the loss is **irrecoverable** (key material and token values are write-only in Coolify — once deleted, they only come back if you still hold the original) or **estate-wide** (deleting a GitHub app breaks every application sourced from it, and the prompt counts them: "2 applications (api, worker) sourced from it will lose their deploy source"). Routine deletes — storages, scheduled tasks, individual env vars, backup schedules, `deployment cancel` — deliberately stay unprompted, and a test pins that so growing a guard is a revisit of the boundary, not a side effect. Prompt fatigue is the failure mode: a dialog on every delete is how dialogs stop being read.
+
+  The GitHub-app blast radius filters by `source_type` as well as `source_id`, because the numeric id can collide with a GitLab source. Verified live: `source_type` is the Laravel class name (`App\Models\GithubApp`), null for public-repo applications.
+
+- **`private_keys update` with new key material is guarded like the delete** (#315 review) — overwriting key material IS deleting the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
+
 - **Test suite and type checking for the docs site's contact endpoint** (#319) — the site had no test runner while `/api/contact` feeds unauthenticated form fields into SES subject and reply-to headers. 33 vitest cases now drive the real handler (header injection, origin checks, rate-limiter branches including the global ceiling, failure honesty), and `astro check` enforces the strict tsconfig in CI. Site-only; nothing in the npm package changes.
 
 ### Fixed
 
 - **Multi-paragraph enquiries through the site contact form arrived as one line** — the CRLF flattening that protects the SES headers also ran over the message body, where newlines are content, not an injection vector. The body now keeps its paragraphs (CRLF normalised to LF).
-
-- **`private_keys update` with new key material is guarded like the delete** (#315 review) — overwriting key material IS deleting the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
-
-- **Confirmation for the credential deletes** (#315) — `private_keys delete`, `cloud_tokens delete` and `github_apps delete` now elicit like the other destructive operations. The boundary drawn, recorded here so it is a decision rather than an accident: a delete gets a prompt when the loss is **irrecoverable** (key material and token values are write-only in Coolify — once deleted, they only come back if you still hold the original) or **estate-wide** (deleting a GitHub app breaks every application sourced from it, and the prompt counts them: "2 applications (api, worker) sourced from it will lose their deploy source"). Routine deletes — storages, scheduled tasks, individual env vars, backup schedules, `deployment cancel` — deliberately stay unprompted, and a test pins that so growing a guard is a revisit of the boundary, not a side effect. Prompt fatigue is the failure mode: a dialog on every delete is how dialogs stop being read.
-
-  The GitHub-app blast radius filters by `source_type` as well as `source_id`, because the numeric id can collide with a GitLab source. Verified live: `source_type` is the Laravel class name (`App\Models\GithubApp`), null for public-repo applications.
 
 ## [2.17.0] - 2026-07-30
 
