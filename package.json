@@ -64,7 +64,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/core": "^2.0.0",
-    "@modelcontextprotocol/sdk": "^1.23.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "minisearch": "^7.2.0",
     "zod": "^4.3.5"
@@ -101,9 +100,6 @@
     "@hono/node-server": "^2.0.5",
     "express-rate-limit": "^8.5.2",
     "path-to-regexp": "^8.4.2",
-    "@modelcontextprotocol/sdk": {
-      "ajv": "^8.20.0"
-    },
     "fast-uri": "^4.0.0",
     "ip-address": "^10.2.0",
     "flatted": "^3.4.2",

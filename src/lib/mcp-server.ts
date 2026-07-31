@@ -4,11 +4,8 @@
  */
 
 import { createRequire } from 'module';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import type { Transport, ToolAnnotations, ToolCallback } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
   CoolifyClient,
@@ -451,11 +448,11 @@ export class CoolifyMcpServer extends McpServer {
    * throwing when someone runs the server; the runtime throw remains as a
    * backstop for dynamic callers.
    */
-  private defineTool<Args extends ZodRawShapeCompat>(
+  private defineTool<Args extends z.ZodRawShape>(
     name: ToolName,
     description: string,
     inputSchema: Args,
-    cb: ToolCallback<Args>,
+    cb: ToolCallback<z.ZodObject<Args>>,
   ): void {
     const annotations = TOOL_ANNOTATIONS[name];
     if (!annotations) {
@@ -463,7 +460,10 @@ export class CoolifyMcpServer extends McpServer {
         `Tool "${name}" has no entry in TOOL_ANNOTATIONS. Add one — clients use these hints to decide whether a call needs confirmation.`,
       );
     }
-    this.registerTool(name, { description, inputSchema, annotations }, cb);
+    // Call sites keep the raw-shape ergonomics; the z.object wrap happens here
+    // because SDK v2 deprecates the raw-shape registerTool overload and this
+    // is the one place all 44 registrations pass through.
+    this.registerTool(name, { description, inputSchema: z.object(inputSchema), annotations }, cb);
   }
 
   /**
@@ -756,7 +756,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete a Coolify project and everything in it.`,
               // The label says "and everything in it" but the message is what
               // the human actually reads, so it has to carry the same weight.
@@ -831,7 +831,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete an environment from a Coolify project.`,
               // Says that Coolify refuses a non-empty environment (documented
               // 400, `Environment has resources, so it cannot be deleted.`)
@@ -1215,7 +1215,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete an application, and by default its persistent volumes.`,
               async () => {
                 const app = await this.client.getApplication(uuid);
@@ -1352,7 +1352,7 @@ export class CoolifyMcpServer extends McpServer {
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
           return this.guardDestructive(
-            extra.signal,
+            extra.mcpReq.signal,
             `Delete a database, and by default its persistent volumes.`,
             async () => {
               const db = await this.client.getDatabase(uuid);
@@ -1462,7 +1462,7 @@ export class CoolifyMcpServer extends McpServer {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete a service, and by default its persistent volumes.`,
               async () => {
                 const svc = await this.client.getService(uuid);
@@ -1888,7 +1888,7 @@ export class CoolifyMcpServer extends McpServer {
               return wrap(() => this.client.updatePrivateKey(uuid, { name, description }));
             }
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Replace an SSH private key's material. The current key is not recoverable.`,
               async () => {
                 const key = await this.client.getPrivateKey(uuid);
@@ -1911,7 +1911,7 @@ export class CoolifyMcpServer extends McpServer {
             // unguarded on purpose; a prompt on every delete is how prompts
             // stop being read.
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete an SSH private key. Not recoverable from Coolify.`,
               async () => {
                 const key = await this.client.getPrivateKey(uuid);
@@ -2027,7 +2027,7 @@ export class CoolifyMcpServer extends McpServer {
             // sourced from the installation — they all lose their deploy
             // source at once — and it is countable, so the prompt counts it.
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete a GitHub app installation. Every application sourced from it loses its deploy source.`,
               async () => {
                 // Full objects, necessarily: toApplicationSummary drops both
@@ -2240,7 +2240,7 @@ export class CoolifyMcpServer extends McpServer {
             // write-only in Coolify, so deletion is irreversible without the
             // original credential.
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Delete a cloud-provider API token. Not recoverable from Coolify.`,
               async () => {
                 const stored = await this.client.getCloudToken(uuid);
@@ -2603,7 +2603,7 @@ export class CoolifyMcpServer extends McpServer {
             // turns it back on. Recovery is a trip to the Coolify UI, so this
             // is precisely a decision a human should be making.
             return this.guardDestructive(
-              extra.signal,
+              extra.mcpReq.signal,
               `Disable the Coolify API, which stops every tool in this server.`,
               () =>
                 `Disable the Coolify API?\n\n` +
@@ -2728,7 +2728,7 @@ export class CoolifyMcpServer extends McpServer {
         // The cost is one extra lookup on an already-failing request.
         let approved: Application[] | undefined;
         return this.guardDestructive(
-          extra.signal,
+          extra.mcpReq.signal,
           `Restart every application in a Coolify project.`,
           async () => {
             approved = await this.client.applicationsInProject(project_uuid);
@@ -2766,7 +2766,7 @@ export class CoolifyMcpServer extends McpServer {
           );
         }
         return this.guardDestructive(
-          extra.signal,
+          extra.mcpReq.signal,
           `Set env var "${sanitizeForPrompt(key)}" across ${app_uuids.length} applications.`,
           // Every other prompt names what it is about to touch, and this is the
           // one where that matters most: `app_uuids` is a list the *model*
@@ -2809,7 +2809,7 @@ export class CoolifyMcpServer extends McpServer {
         // set itself.
         let approved: Application[] | undefined;
         return this.guardDestructive(
-          extra.signal,
+          extra.mcpReq.signal,
           `EMERGENCY STOP: stop every running application on this Coolify instance.`,
           async () => {
             const apps = (await this.client.listApplications()) as Application[];
@@ -2863,7 +2863,7 @@ export class CoolifyMcpServer extends McpServer {
       async ({ project_uuid, force }, extra) => {
         let approved: Application[] | undefined;
         return this.guardDestructive(
-          extra.signal,
+          extra.mcpReq.signal,
           `Redeploy every application in a Coolify project.`,
           async () => {
             approved = await this.client.applicationsInProject(project_uuid);

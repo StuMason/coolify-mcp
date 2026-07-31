@@ -24,7 +24,7 @@
  * {@link ConfirmOutcome}.
  */
 
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Server } from '@modelcontextprotocol/server';
 
 /**
  * How long to wait for a human.
