@@ -6017,6 +6017,18 @@ describe('errorHint', () => {
     expect(errorHint(404, '/applications/app-uuid/tags')).toMatch(/different resource type/);
   });
 
+  it('hints at the v4.2 requirement for a 404 on a service application route', () => {
+    // Sub-application management (PATCH /services/{uuid}/applications/{app_uuid})
+    // was added in v4.2.0. Without this hint, the generic uuid mismatch fires.
+    expect(errorHint(404, '/services/svc-uuid/applications/app-uuid')).toMatch(/v4\.2/);
+    expect(
+      errorHint(404, '/services/svc-uuid/applications/app-uuid?force_domain_override=true'),
+    ).toMatch(/v4\.2/);
+    expect(errorHint(404, '/services/svc-uuid/applications/app-uuid')).toMatch(
+      /update_application/,
+    );
+  });
+
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {
     expect(errorHint(404, '/applications/app-uuid')).toMatch(/different resource type/);
   });
