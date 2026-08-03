@@ -1400,10 +1400,16 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'service',
-      'Manage service: create/update/delete/list_containers. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`.',
+      "Manage service: create/update/delete/list_containers/update_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings.",
       {
-        action: z.enum(['create', 'update', 'delete', 'list_containers']),
+        action: z.enum(['create', 'update', 'delete', 'list_containers', 'update_application']),
         uuid: z.string().optional(),
+        app_uuid: z
+          .string()
+          .optional()
+          .describe(
+            'Sub-application UUID, required for update_application. Get from list_containers.',
+          ),
         type: z.string().optional(),
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
@@ -1416,6 +1422,16 @@ export class CoolifyMcpServer extends McpServer {
           .optional()
           .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
         delete_volumes: z.boolean().optional(),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            'FQDN for the sub-application (update_application only). Comma-separated for multiple. Null to clear.',
+          ),
+        force_domain_override: z
+          .boolean()
+          .optional()
+          .describe('Force the domain override even if validation fails (update_application only)'),
       },
       async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
@@ -1470,6 +1486,31 @@ export class CoolifyMcpServer extends McpServer {
               },
               () => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }),
             );
+          case 'update_application': {
+            if (!uuid || !args.app_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid (service) and app_uuid required',
+                  },
+                ],
+              };
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const {
+              action: _,
+              uuid: __,
+              app_uuid,
+              delete_volumes: ___,
+              force_domain_override,
+              ...appData
+            } = args;
+            return wrap(() =>
+              this.client.updateServiceApplication(uuid, app_uuid!, appData, {
+                forceDomainOverride: force_domain_override,
+              }),
+            );
+          }
         }
       },
     );

@@ -868,6 +868,24 @@ export interface UpdateServiceRequest {
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
 }
 
+/**
+ * PATCH /services/{uuid}/applications/{app_uuid} — update a sub-application
+ * within a service (e.g. change its FQDN / url).
+ *
+ * The `url` field maps to Coolify's "FQDN" for the sub-app and accepts a
+ * comma-separated string of URLs (or null to clear).
+ */
+export interface UpdateServiceApplicationRequest {
+  url?: string | null;
+  human_name?: string;
+  description?: string;
+  image?: string;
+  exclude_from_status?: boolean;
+  is_log_drain_enabled?: boolean;
+  is_gzip_enabled?: boolean;
+  is_stripprefix_enabled?: boolean;
+}
+
 export interface ServiceCreateResponse {
   uuid: string;
   domains: string[];

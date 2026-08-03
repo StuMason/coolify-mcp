@@ -59,6 +59,7 @@ import type {
   Service,
   CreateServiceRequest,
   UpdateServiceRequest,
+  UpdateServiceApplicationRequest,
   ServiceCreateResponse,
   // Deployment types
   Deployment,
@@ -1476,6 +1477,21 @@ export class CoolifyClient {
     return this.request<Service>(`/services/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+  }
+
+  async updateServiceApplication(
+    serviceUuid: string,
+    appUuid: string,
+    data: UpdateServiceApplicationRequest,
+    options?: { forceDomainOverride?: boolean },
+  ): Promise<Application> {
+    const query = this.buildQueryString({
+      force_domain_override: options?.forceDomainOverride,
+    });
+    return this.request<Application>(`/services/${serviceUuid}/applications/${appUuid}${query}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   }
 
