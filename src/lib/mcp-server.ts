@@ -31,6 +31,7 @@ import type {
   Deployment,
   DeploymentEssential,
   DeployTriggerResponse,
+  UpdateServiceApplicationRequest,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
@@ -1496,18 +1497,18 @@ export class CoolifyMcpServer extends McpServer {
                   },
                 ],
               };
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const {
-              action: _,
-              uuid: __,
-              app_uuid,
-              delete_volumes: ___,
-              force_domain_override,
-              ...appData
-            } = args;
+            const appData: UpdateServiceApplicationRequest = {
+              url: args.url,
+              human_name: args.human_name,
+              description: args.description,
+              image: args.image,
+              exclude_from_status: args.exclude_from_status,
+              is_gzip_enabled: args.is_gzip_enabled,
+              is_stripprefix_enabled: args.is_stripprefix_enabled,
+            };
             return wrap(() =>
-              this.client.updateServiceApplication(uuid, app_uuid!, appData, {
-                forceDomainOverride: force_domain_override,
+              this.client.updateServiceApplication(uuid, args.app_uuid, appData, {
+                forceDomainOverride: args.force_domain_override,
               }),
             );
           }
