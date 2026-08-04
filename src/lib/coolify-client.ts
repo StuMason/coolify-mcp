@@ -1498,6 +1498,38 @@ export class CoolifyClient {
     });
   }
 
+  async startServiceApplication(
+    serviceUuid: string,
+    appUuid: string,
+    options?: { force?: boolean; latest?: boolean },
+  ): Promise<MessageResponse> {
+    const query = this.buildQueryString({
+      force: options?.force,
+      latest: options?.latest,
+    });
+    return this.request<MessageResponse>(
+      `/services/${serviceUuid}/applications/${appUuid}/start${query}`,
+      {
+        method: 'POST',
+      },
+    );
+  }
+
+  async stopServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${serviceUuid}/applications/${appUuid}/stop`, {
+      method: 'POST',
+    });
+  }
+
+  async restartServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/services/${serviceUuid}/applications/${appUuid}/restart`,
+      {
+        method: 'POST',
+      },
+    );
+  }
+
   async deleteService(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
     const query = this.buildQueryString({
       delete_configurations: options?.deleteConfigurations,
