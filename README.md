@@ -1,5 +1,7 @@
 # Coolify MCP Server
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.StuMason%2Fcoolify.svg)](https://mcptoplist.com/server/io.github.StuMason%2Fcoolify)
+
 [![npm version](https://img.shields.io/npm/v/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/@masonator/coolify-mcp.svg)](https://www.npmjs.com/package/@masonator/coolify-mcp)
 [![CI](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/coolify-mcp/actions/workflows/ci.yml)
