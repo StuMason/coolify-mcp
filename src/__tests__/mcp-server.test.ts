@@ -1852,6 +1852,128 @@ describe('tool annotations (#260)', () => {
   });
 });
 
+/**
+ * One tool's schema can take the whole tool list down on a provider.
+ *
+ * Google's `generateContent` requires every `enum` entry to be a string and
+ * rejects the entire request when one is not — not the offending tool, the
+ * request, so all 44 go with it. `@ai-sdk/google` rewrites a JSON Schema
+ * `const` into `enum: [const]` on the way out, and zod emits `z.literal(true)`
+ * as `const: true`, which is how a single confirmation parameter on
+ * `stop_all_apps` made every Gemini model unusable while Anthropic and the
+ * OpenAI-compatible providers accepted the same list unchanged.
+ *
+ * Walks what a client receives rather than the zod shapes, because the emitted
+ * JSON is what goes on the wire, and asserts across every tool rather than the
+ * one that broke — the next literal will be added somewhere else.
+ */
+describe('tool schemas as a provider receives them', () => {
+  const listTools = async () => {
+    const srv = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([srv.connect(serverTransport), client.connect(clientTransport)]);
+    const { tools } = await client.listTools();
+    await client.close();
+    return tools;
+  };
+
+  /** Paths of every `enum` entry and `const` in `node` that is not a string. */
+  const nonStringConstants = (node: unknown, path: string): string[] => {
+    if (node === null || typeof node !== 'object') return [];
+    if (Array.isArray(node)) {
+      return node.flatMap((value, index) => nonStringConstants(value, `${path}[${index}]`));
+    }
+    const record = node as Record<string, unknown>;
+    const here: string[] = [];
+    if (Array.isArray(record.enum)) {
+      record.enum.forEach((value, index) => {
+        if (typeof value !== 'string') here.push(`${path}.enum[${index}]`);
+      });
+    }
+    if ('const' in record && typeof record.const !== 'string') here.push(`${path}.const`);
+    return here.concat(
+      Object.entries(record).flatMap(([key, value]) =>
+        key === 'enum' || key === 'const' ? [] : nonStringConstants(value, `${path}.${key}`),
+      ),
+    );
+  };
+
+  it('emits no non-string enum or const, in any tool', async () => {
+    const tools = await listTools();
+
+    const offenders = tools.flatMap((tool) => nonStringConstants(tool.inputSchema, tool.name));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('still requires an explicit confirm on stop_all_apps', async () => {
+    const tools = await listTools();
+    const schema = tools.find((tool) => tool.name === 'stop_all_apps')?.inputSchema as {
+      required?: string[];
+      properties?: Record<string, { type?: string; description?: string }>;
+    };
+
+    // The schema no longer pins the value, so `required` plus the description
+    // is the whole of what it still says: the model must send the parameter,
+    // and it is told which value does anything. The refusal moved to the
+    // handler, which is where it always actually lived.
+    expect(schema.required).toEqual(['confirm']);
+    expect(schema.properties?.confirm.type).toBe('boolean');
+    expect(schema.properties?.confirm.description).toMatch(/true/);
+  });
+});
+
+describe('stop_all_apps confirm gate', () => {
+  const callStopAll = async (args: Record<string, unknown>) => {
+    const srv = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+    const stopAllApps = jest.spyOn(srv['client'], 'stopAllApps').mockResolvedValue({} as never);
+    const listApplications = jest
+      .spyOn(srv['client'], 'listApplications')
+      .mockResolvedValue([] as never);
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([srv.connect(serverTransport), client.connect(clientTransport)]);
+    const result = (await client.callTool({ name: 'stop_all_apps', arguments: args })) as {
+      content: Array<{ text: string }>;
+    };
+    await client.close();
+    return { text: result.content.map((c) => c.text).join('\n'), stopAllApps, listApplications };
+  };
+
+  // With the literal gone from the schema, `false` now reaches the handler
+  // instead of being rejected by the parser, and this check is the only thing
+  // between it and an estate-wide stop. Both spies stay untouched: the refusal
+  // happens before anything is looked up, let alone stopped.
+  it('refuses confirm=false without calling Coolify at all', async () => {
+    const { text, stopAllApps, listApplications } = await callStopAll({ confirm: false });
+
+    expect(text).toBe('Error: confirm=true required');
+    expect(stopAllApps).not.toHaveBeenCalled();
+    expect(listApplications).not.toHaveBeenCalled();
+  });
+
+  // Everything that is not a boolean still never reaches the handler — the
+  // string "true" included, which is the shape a model reaching for the old
+  // literal is most likely to produce.
+  it.each([
+    ['omitted', {}],
+    ['the string "true"', { confirm: 'true' }],
+    ['the number 1', { confirm: 1 }],
+  ] as Array<[string, Record<string, unknown>]>)('rejects confirm %s', async (_label, args) => {
+    const { text, stopAllApps } = await callStopAll(args);
+
+    expect(text).toMatch(/expected boolean/);
+    expect(stopAllApps).not.toHaveBeenCalled();
+  });
+
+  it('runs on an explicit true', async () => {
+    const { stopAllApps } = await callStopAll({ confirm: true });
+
+    expect(stopAllApps).toHaveBeenCalled();
+  });
+});
+
 describe('tags tool (#298)', () => {
   let server: CoolifyMcpServer;
 

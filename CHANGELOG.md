@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.1] - 2026-08-04
+
+### Fixed
+
+- **Every Google Gemini request failed while this server was connected.** `stop_all_apps` declared `confirm: z.literal(true)`, which zod emits as `const: true`; `@ai-sdk/google` rewrites a JSON Schema `const` into `enum: [const]` when it converts the tool list, and Google's `enum` accepts strings only. `generateContent` answered `400 Invalid value at 'tools[0].function_declarations[42].parameters.properties[0].value.enum[0]' (TYPE_STRING), true` — and it rejects the **request**, not the offending declaration, so all 44 tools went down with the one. The symptom is a client that cannot make a single Gemini call until it disables this tool by name, which does not look like a schema problem from the outside. Anthropic and the OpenAI-compatible providers accepted the same list unchanged, which is why it survived from #261 to here.
+
+  `confirm` is now `z.boolean()` and the handler's existing `confirm !== true` check is the gate. **Nothing is loosened**: a literal only ever required the model to type `true`, and a model willing to stop the estate types it either way — the real confirmation is the #261 elicitation prompt, in front of a human, and it is untouched. Anything that is not a boolean (`"true"`, `1`, omitted) is still refused by the parser before the handler runs, and `false` is refused before any Coolify call is made.
+
+  A test now walks every tool's schema over a real `tools/list` round trip and fails on any non-string `enum` or `const`, so the next literal is caught at the tool that adds it rather than by a provider six models away.
+
+### Security
+
+- Bumped transitive dependencies past fresh npm advisories (#324).
+
 ## [2.18.0] - 2026-07-31
 
 ### Added

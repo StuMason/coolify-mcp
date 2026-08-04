@@ -1,7 +1,7 @@
 /**
  * Human-in-the-loop confirmation for destructive tools (#261).
  *
- * The problem this solves: `stop_all_apps` is gated on a `confirm: z.literal(true)`
+ * The problem this solves: `stop_all_apps` is gated on a `confirm: true`
  * parameter, and the model fills that parameter in. That is the model confirming
  * with itself before taking every application on the estate down. Elicitation
  * moves the question to the human, rendered by the client, outside the model's
