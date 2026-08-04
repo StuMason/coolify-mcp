@@ -2793,9 +2793,30 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'stop_all_apps',
       'EMERGENCY: Stop all running apps',
-      { confirm: z.literal(true) },
+      // Not `z.literal(true)`, and this is the one schema in the server where
+      // that choice is not cosmetic. Zod emits a literal as `const: true`;
+      // @ai-sdk/google rewrites `const` into `enum: [const]` when it converts
+      // the tool list for `generateContent`, and Google's `enum` is
+      // string-only — so the request comes back `400 Invalid value at
+      // 'tools[0].function_declarations[N].parameters.properties[0].value.enum[0]'
+      // (TYPE_STRING), true`. The whole request is rejected, not this tool, so
+      // one parameter here decides whether the other 43 tools work at all on
+      // Gemini. Anthropic and the OpenAI-compatible providers accept it, which
+      // is why it survived this long.
+      //
+      // Nothing is loosened. A literal only ever required the model to type
+      // `true`, and a model willing to stop the estate types it either way;
+      // the guard below is where the refusal actually lives, and it stops
+      // being dead code behind the parser. It compares against `true` by
+      // identity rather than testing truthiness, so widening this schema later
+      // cannot quietly turn the string `"false"` into consent.
+      {
+        confirm: z
+          .boolean()
+          .describe('Must be true, and only when the user has asked to stop everything.'),
+      },
       async ({ confirm }, extra) => {
-        if (!confirm)
+        if (confirm !== true)
           return { content: [{ type: 'text' as const, text: 'Error: confirm=true required' }] };
         // `confirm` above is filled in by the model, which is why #261 exists.
         // On an elicitation-capable client the real gate is below, in front of
