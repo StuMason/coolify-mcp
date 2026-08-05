@@ -24,6 +24,10 @@ on:
     # a PR that touches neither src/** nor evals/**, and sits pending forever.
     # The job is fast, and the LLM job skips itself without a key.
 
+# Least privilege: these jobs only read the checkout.
+permissions:
+  contents: read
+
 jobs:
   contract:
     name: Tool contract snapshots (hard gate)
@@ -94,4 +98,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.EVALS_ANTHROPIC_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.EVALS_GOOGLE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.EVALS_OPENAI_API_KEY }}
+          # Pin the strongest baseline when the Anthropic key is present, so CI
+          # runs Haiku (0.9 gate) rather than whichever provider key happens to
+          # be first. Override by setting EVALS_MODEL as a repo/workflow var.
+          EVALS_MODEL: ${{ vars.EVALS_MODEL || (secrets.EVALS_ANTHROPIC_API_KEY && 'anthropic:claude-haiku-4-5') || '' }}
         run: npm run evals

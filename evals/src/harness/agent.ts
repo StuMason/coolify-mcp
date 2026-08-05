@@ -50,16 +50,18 @@ const PROVIDERS = [
   { prefix: 'openai', key: 'OPENAI_API_KEY', factory: openai, agent: 'gpt-5-mini', judge: 'gpt-5' },
 ] as const;
 
+const providerOf = (spec: string): (typeof PROVIDERS)[number] | undefined =>
+  PROVIDERS.find((p) => p.prefix === spec.slice(0, spec.indexOf(':')));
+
+// First provider with a key — used ONLY to pick the DEFAULT model when
+// EVALS_MODEL is unset.
 const available = PROVIDERS.find((p) => process.env[p.key]);
 
-export const hasModelKey = available !== undefined;
-
 export function resolveModel(spec: string): LanguageModel {
-  const idx = spec.indexOf(':');
-  if (idx === -1) throw new Error(`model spec "${spec}" must be "provider:model"`);
-  const provider = PROVIDERS.find((p) => p.prefix === spec.slice(0, idx));
+  if (!spec.includes(':')) throw new Error(`model spec "${spec}" must be "provider:model"`);
+  const provider = providerOf(spec);
   if (!provider) throw new Error(`unknown provider in "${spec}" (anthropic|google|openai)`);
-  return provider.factory(spec.slice(idx + 1));
+  return provider.factory(spec.slice(spec.indexOf(':') + 1));
 }
 
 export const EVAL_MODEL =
@@ -69,6 +71,14 @@ export const JUDGE_MODEL =
   process.env.EVALS_JUDGE_MODEL ??
   (available ? `${available.prefix}:${available.judge}` : 'anthropic:claude-sonnet-4-5');
 
+// The provider actually SELECTED (via EVALS_MODEL or the default above), not
+// merely the first one with a key. hasModelKey and pacing must key off this —
+// otherwise `EVALS_MODEL=google:…` with an ANTHROPIC key in the env would run
+// (or throttle) against the wrong provider's assumptions.
+const selected = providerOf(EVAL_MODEL);
+
+export const hasModelKey = Boolean(selected && process.env[selected.key]);
+
 /**
  * Pause between eval cases. Gemini's free tier allows ~10 requests/min; an
  * unpaced suite burns triple that and throttled requests come back as
@@ -77,7 +87,7 @@ export const JUDGE_MODEL =
  */
 export const CASE_DELAY_MS = process.env.EVALS_CASE_DELAY_MS
   ? Number(process.env.EVALS_CASE_DELAY_MS)
-  : available?.prefix === 'google'
+  : selected?.prefix === 'google'
     ? 7000
     : 0;
 

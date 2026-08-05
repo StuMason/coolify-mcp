@@ -8,6 +8,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { jsonSchema, tool, type ToolSet } from 'ai';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { FIXTURE_TOKEN } from '../fixture/data.js';
 import { startFixture, type FixtureHandle } from '../fixture/server.js';
@@ -35,6 +36,14 @@ export interface EvalContext {
 }
 
 export async function createEvalContext(): Promise<EvalContext> {
+  // First command a contributor hits after editing a tool description; a clear
+  // message beats an opaque stdio transport error if the build is stale.
+  if (!existsSync(SERVER_ENTRY)) {
+    throw new Error(
+      `Server build not found at ${SERVER_ENTRY}. Run \`npm run build\` in the repo root first.`,
+    );
+  }
+
   const fixture = await startFixture();
 
   const transport = new StdioClientTransport({

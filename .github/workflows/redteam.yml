@@ -12,6 +12,10 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch: {}
 
+# Least privilege — scheduled, unattended, and holds a model key.
+permissions:
+  contents: read
+
 jobs:
   redteam:
     name: Adversarial red team
