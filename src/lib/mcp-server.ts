@@ -1534,7 +1534,7 @@ export class CoolifyMcpServer extends McpServer {
               });
             if (args.force_domain_override) {
               return this.guardDestructive(
-                extra.signal,
+                extra.mcpReq.signal,
                 'Override domain for service sub-application, potentially taking the domain from another resource.',
                 () =>
                   `Update sub-application ${appUuid} in service ${uuid} with force_domain_override=true. This may pull a live domain off another resource.`,
