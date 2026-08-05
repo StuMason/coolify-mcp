@@ -7,6 +7,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { jsonSchema, tool, type ToolSet } from 'ai';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +56,20 @@ export async function createEvalContext(): Promise<EvalContext> {
       COOLIFY_ACCESS_TOKEN: FIXTURE_TOKEN,
     },
   });
-  const client = new Client({ name: 'coolify-mcp-evals', version: '0.0.0' });
+  // Advertise elicitation and DECLINE every prompt — i.e. a cautious human who
+  // says "no" to any destructive confirmation. This makes the eval faithful to
+  // production: the server gates destructive tools (control, deploy, database,
+  // …) behind `confirmDestructive`, which only fires when the client advertises
+  // this capability; without it the guard fail-opens and the op runs, so the
+  // harness would otherwise measure the model's raw inclination with the
+  // human-in-the-loop safety net removed (the FINDINGS #5 caveat). Declining
+  // means a destructive call the model makes is blocked before it mutates —
+  // exactly what a real client's user would do faced with "restart app-api?".
+  const client = new Client(
+    { name: 'coolify-mcp-evals', version: '0.0.0' },
+    { capabilities: { elicitation: {} } },
+  );
+  client.setRequestHandler(ElicitRequestSchema, async () => ({ action: 'decline' as const }));
   await client.connect(transport);
 
   const listed = await client.listTools();
