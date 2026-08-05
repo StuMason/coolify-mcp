@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.1] - 2026-08-05
+
+### Fixed
+
+- **`search_docs` returned no results for any query, on every published version.** Coolify changed the format of `llms-full.txt`; the parser produced zero chunks, the empty index looked like a working one, and every search answered "no matches" instead of erroring. The tool now indexes `llms.txt` (the ~46KB page index with per-page descriptions) instead of parsing the ~40MB full dump, returns ranked pages (title, url, description) rather than snippets, and treats a zero-entry parse as a hard error. A live-format canary in the integration suite fetches the real file, so the next upstream format change fails CI instead of failing users silently.
+- **`list_containers` on a pre-4.2 instance showed the generic uuid-mismatch hint instead of the v4.2 upgrade hint.** The tool calls the `/applications` and `/databases` endpoints in parallel and the `/databases` 404 usually wins the race; the hint now covers both routes. Found running the tool against a live 4.1.2 instance.
+
 ## [2.19.0] - 2026-08-05
 
 ### Added

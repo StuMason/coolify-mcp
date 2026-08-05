@@ -1,32 +1,39 @@
 import MiniSearch from 'minisearch';
 
-const DOCS_FULL_URL = 'https://coolify.io/docs/llms-full.txt';
-const DOCS_BASE_URL = 'https://coolify.io';
+const DOCS_INDEX_URL = 'https://coolify.io/docs/llms.txt';
+const DOCS_BASE_URL = 'https://coolify.io/docs';
 
-interface DocChunk {
+interface DocEntry {
   id: number;
   title: string;
   url: string;
   description: string;
-  content: string;
+  section: string;
 }
 
 export interface DocSearchResult {
   title: string;
   url: string;
   description: string;
-  snippet: string;
+  section: string;
   score: number;
 }
 
 /**
- * Lightweight full-text search over Coolify documentation.
- * Fetches llms-full.txt on first search, parses into chunks, indexes with MiniSearch (BM25).
- * The LLM calling this tool handles semantic understanding — we just need good ranking.
+ * Search over the official Coolify docs index (llms.txt).
+ *
+ * This used to fetch llms-full.txt — the ~40MB full-content dump — and run a
+ * bespoke frontmatter parser over it. Coolify changed that file's format and
+ * the parser silently produced zero chunks: the index "loaded", every search
+ * returned an empty result, and nothing errored. llms.txt is the better
+ * corpus anyway: ~46KB, a stable spec'd shape (a markdown link list), and
+ * every page comes with a human-written one-line description. The tool's job
+ * is routing the model to the right page, not serving snippets — the caller
+ * can fetch the page itself for depth.
  */
 export class DocsSearchEngine {
-  private index: MiniSearch<DocChunk> | null = null;
-  private chunks: DocChunk[] = [];
+  private index: MiniSearch<DocEntry> | null = null;
+  private entries: DocEntry[] = [];
   private loading: Promise<void> | null = null;
 
   async ensureLoaded(): Promise<void> {
@@ -42,31 +49,41 @@ export class DocsSearchEngine {
       const timeout = setTimeout(() => controller.abort(), 15_000);
       let response: Response;
       try {
-        response = await fetch(DOCS_FULL_URL, { signal: controller.signal });
+        response = await fetch(DOCS_INDEX_URL, { signal: controller.signal });
       } finally {
         clearTimeout(timeout);
       }
       if (!response.ok) {
-        throw new Error(`Failed to fetch Coolify docs: HTTP ${response.status}`);
+        throw new Error(`Failed to fetch Coolify docs index: HTTP ${response.status}`);
       }
       const text = await response.text();
 
-      this.chunks = parseDocs(text);
+      this.entries = parseDocsIndex(text);
 
-      this.index = new MiniSearch<DocChunk>({
-        fields: ['title', 'description', 'content'],
-        storeFields: ['title', 'url', 'description'],
+      // Zero entries from a 200 response means the format changed, not that
+      // the docs are empty. Fail loudly — a silently empty index is exactly
+      // the failure mode that let the previous implementation stay broken in
+      // production unnoticed.
+      if (this.entries.length === 0) {
+        throw new Error(
+          'Parsed zero entries from the Coolify docs index — llms.txt format may have changed',
+        );
+      }
+
+      this.index = new MiniSearch<DocEntry>({
+        fields: ['title', 'description', 'section'],
+        storeFields: ['title', 'url', 'description', 'section'],
         searchOptions: {
-          boost: { title: 3, description: 2, content: 1 },
+          boost: { title: 3, description: 1, section: 1 },
           prefix: true,
           fuzzy: 0.2,
         },
       });
-      this.index.addAll(this.chunks);
+      this.index.addAll(this.entries);
     } catch (error) {
       this.loading = null;
       this.index = null;
-      this.chunks = [];
+      this.entries = [];
       throw error;
     }
   }
@@ -81,110 +98,58 @@ export class DocsSearchEngine {
       title: r.title,
       url: r.url,
       description: r.description,
-      snippet: this.getSnippet(r.id, query),
+      section: r.section,
       score: Math.round(r.score * 100) / 100,
     }));
   }
 
-  private getSnippet(id: number, query: string): string {
-    const chunk = this.chunks[id];
-    if (!chunk) return '';
-    const content = chunk.content;
-    const queryTerms = query.toLowerCase().split(/\s+/);
-
-    // Find best position — where query terms appear
-    let bestPos = 0;
-    let bestScore = -1;
-    const lower = content.toLowerCase();
-    for (let i = 0; i < lower.length - 100; i += 50) {
-      const window = lower.slice(i, i + 300);
-      const score = queryTerms.reduce((s, t) => s + (window.includes(t) ? 1 : 0), 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestPos = i;
-      }
-    }
-
-    const start = Math.max(0, bestPos);
-    const end = Math.min(content.length, start + 300);
-    let snippet = content.slice(start, end).trim();
-    if (start > 0) snippet = '...' + snippet;
-    if (end < content.length) snippet = snippet + '...';
-    return snippet;
-  }
-
-  getChunkCount(): number {
-    return this.chunks.length;
+  getEntryCount(): number {
+    return this.entries.length;
   }
 }
 
-/** Parse llms-full.txt into doc chunks. Exported for testing. */
-export function parseDocs(text: string): DocChunk[] {
-  const chunks: DocChunk[] = [];
+/**
+ * Parse llms.txt — a markdown link list — into doc entries.
+ * Exported for testing.
+ *
+ * The shape, per the llms.txt convention:
+ *   - Plain list items and bold items ("- Get Started", "  - **Setup**") are
+ *     section labels for the links nested under them.
+ *   - Link items carry the page: "- [Title](/path): one-line description".
+ *     The description after the colon is optional; paths are relative to the
+ *     docs root (the site serves them under /docs), and absolute URLs pass
+ *     through untouched.
+ */
+export function parseDocsIndex(text: string): DocEntry[] {
+  const entries: DocEntry[] = [];
+  let section = '';
 
-  // Split on page boundaries: ---\n\n--- or end of frontmatter pairs
-  // Each page starts with ---\nurl: ...\ndescription: ...\n---\n then markdown
-  const pages = text.split(/\n---\n\n---\n/);
-
-  for (const page of pages) {
-    const parsed = parsePage(page);
-    if (!parsed) continue;
-
-    // Split large pages into sub-chunks at ## headers
-    const sections = parsed.content.split(/\n(?=## )/);
-
-    for (const section of sections) {
-      const trimmed = section.trim();
-      if (!trimmed || trimmed.length < 20) continue;
-
-      // Extract section title if present
-      const sectionTitle = trimmed.match(/^## (.+)/)?.[1];
-      const title = sectionTitle ? `${parsed.title} > ${sectionTitle}` : parsed.title;
-
-      chunks.push({
-        id: chunks.length,
-        title,
-        url: parsed.url,
-        description: parsed.description,
-        content: trimmed.replace(/^## .+\n/, '').trim(),
+  for (const line of text.split('\n')) {
+    const link = line.match(/^\s*-\s*\[([^\]]+)\]\(([^)\s]+)\)(?::\s*(.*))?\s*$/);
+    if (link) {
+      const [, title, path, description] = link;
+      entries.push({
+        id: entries.length,
+        title: title.trim(),
+        url: buildUrl(path.trim()),
+        description: (description ?? '').trim(),
+        section,
       });
+      continue;
     }
+    // A list item that is not a link is a section label; so is a heading.
+    const label =
+      line.match(/^\s*-\s*\*\*(.+?)\*\*\s*$/) ??
+      line.match(/^\s*-\s+([^[\s].*?)\s*$/) ??
+      line.match(/^#+\s+(.+?)\s*$/);
+    if (label) section = label[1];
   }
 
-  return chunks;
+  return entries;
 }
 
-interface ParsedPage {
-  url: string;
-  description: string;
-  title: string;
-  content: string;
-}
-
-function parsePage(raw: string): ParsedPage | null {
-  // Handle frontmatter — may start with --- or just url:
-  const frontmatterMatch = raw.match(
-    /(?:---\n)?url:\s*(.+)\ndescription:\s*>?-?\n?([\s\S]*?)\n---\n([\s\S]*)/,
-  );
-
-  if (!frontmatterMatch) return null;
-
-  const urlPath = frontmatterMatch[1].trim();
-  const description = frontmatterMatch[2]
-    .split('\n')
-    .map((l) => l.trim())
-    .join(' ')
-    .trim();
-  const content = frontmatterMatch[3].trim();
-
-  // Extract H1 title from content
-  const titleMatch = content.match(/^#\s+(.+)/m);
-  const title = titleMatch?.[1] || urlPath;
-
-  // Build full URL
-  const url = urlPath.endsWith('.md')
-    ? DOCS_BASE_URL + urlPath.replace(/\.md$/, '')
-    : DOCS_BASE_URL + urlPath;
-
-  return { url, description, title, content };
+function buildUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) return path;
+  if (path.startsWith('/docs/') || path === '/docs') return `https://coolify.io${path}`;
+  return `${DOCS_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
 }

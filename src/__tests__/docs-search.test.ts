@@ -1,123 +1,74 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { DocsSearchEngine, parseDocs } from '../lib/docs-search.js';
+import { DocsSearchEngine, parseDocsIndex } from '../lib/docs-search.js';
 
-// Sample llms-full.txt content for testing
-const SAMPLE_DOCS = `---
-url: /docs/get-started/installation.md
-description: >-
-  Install Coolify self-hosted PaaS on Linux servers with automated Docker setup
-  script and SSH access.
----
+// Sample llms.txt content: a markdown link list with section labels, exactly
+// the shape coolify.io/docs/llms.txt serves.
+const SAMPLE_INDEX = `# Docs
 
-# Installation
+- [Coolify](/): Coolify is an open-source Platform as a Service.
+- Get Started
 
-Coolify can be installed on any Linux server.
+  - **Setup**
+  - [Introduction](/get-started/introduction): Coolify is an open-source self-hosted PaaS alternative.
+  - [Installation](/get-started/installation): Install Coolify on Linux servers with the automated setup script.
+  - [Upgrading](/get-started/upgrade): Upgrade self-hosted Coolify automatically or manually.
 
-## Requirements
+  - **Learn**
+  - [Concepts](/get-started/concepts): Learn core Coolify concepts including servers and projects.
+- Applications
+  - [Applications](/applications): Deploy web applications with build packs and environment variables.
+  - [Docker Compose](/applications/docker-compose): Deploy Docker Compose applications with custom domains.
+- [External link](https://example.com/page): A fully-qualified URL passes through untouched.
+- [No description](/bare-link)
+`;
 
-You need a server with at least 2GB RAM and 2 CPU cores.
-SSH access is required for the installation process.
+describe('parseDocsIndex', () => {
+  it('parses link items with titles, urls and descriptions', () => {
+    const entries = parseDocsIndex(SAMPLE_INDEX);
 
-## Quick Install
-
-Run the following command to install Coolify:
-
-\`\`\`bash
-curl -fsSL https://cdn.coolify.io/install.sh | bash
-\`\`\`
-
----
-
----
-url: /docs/applications/docker-compose.md
-description: >-
-  Deploy Docker Compose applications on Coolify with environment variables,
-  build packs, and custom domains.
----
-
-# Docker Compose
-
-You can deploy any Docker Compose based application with Coolify.
-
-## Environment Variables
-
-Define environment variables in your docker-compose.yml or through the Coolify UI.
-Variables defined in the UI take precedence over those in the compose file.
-
-## Custom Domains
-
-Set custom domains for your Docker Compose services through the Coolify dashboard.
-Each service can have its own domain configuration.
-
----
-
----
-url: /docs/troubleshoot/applications/502-error.md
-description: >-
-  Fix 502 Bad Gateway errors in Coolify applications caused by health check
-  failures, port mismatches, and proxy configuration issues.
----
-
-# 502 Bad Gateway Error
-
-A 502 error usually means your application is not responding to the reverse proxy.
-
-## Common Causes
-
-Check the following:
-- Your application is listening on the correct port
-- Health checks are configured properly
-- The container is actually running
-
-## Port Configuration
-
-Make sure your application listens on the port specified in the Coolify settings.
-The default exposed port is 3000 for most build packs.`;
-
-describe('parseDocs', () => {
-  it('should parse pages from llms-full.txt format', () => {
-    const chunks = parseDocs(SAMPLE_DOCS);
-    expect(chunks.length).toBeGreaterThan(0);
+    const install = entries.find((e) => e.title === 'Installation');
+    expect(install).toBeDefined();
+    expect(install!.url).toBe('https://coolify.io/docs/get-started/installation');
+    expect(install!.description).toContain('automated setup script');
   });
 
-  it('should extract title, url, and description from frontmatter', () => {
-    const chunks = parseDocs(SAMPLE_DOCS);
-    const installChunk = chunks.find((c) => c.title === 'Installation');
-    expect(installChunk).toBeDefined();
-    expect(installChunk!.url).toBe('https://coolify.io/docs/get-started/installation');
-    expect(installChunk!.description).toContain('Install Coolify');
+  it('tracks the nearest section label for each entry', () => {
+    const entries = parseDocsIndex(SAMPLE_INDEX);
+
+    expect(entries.find((e) => e.title === 'Installation')!.section).toBe('Setup');
+    expect(entries.find((e) => e.title === 'Concepts')!.section).toBe('Learn');
+    expect(entries.find((e) => e.title === 'Docker Compose')!.section).toBe('Applications');
   });
 
-  it('should split pages into sub-chunks at ## headers', () => {
-    const chunks = parseDocs(SAMPLE_DOCS);
-    const subChunks = chunks.filter((c) => c.title.includes('>'));
-    expect(subChunks.length).toBeGreaterThan(0);
-    expect(subChunks.some((c) => c.title.includes('Requirements'))).toBe(true);
+  it('passes absolute URLs through untouched', () => {
+    const entries = parseDocsIndex(SAMPLE_INDEX);
+    expect(entries.find((e) => e.title === 'External link')!.url).toBe('https://example.com/page');
   });
 
-  it('should strip .md extension from URLs', () => {
-    const chunks = parseDocs(SAMPLE_DOCS);
-    chunks.forEach((c) => {
-      expect(c.url).not.toContain('.md');
-    });
+  it('accepts link items with no description', () => {
+    const entries = parseDocsIndex(SAMPLE_INDEX);
+    const bare = entries.find((e) => e.title === 'No description');
+    expect(bare).toBeDefined();
+    expect(bare!.description).toBe('');
   });
 
-  it('should handle empty input', () => {
-    const chunks = parseDocs('');
-    expect(chunks).toEqual([]);
+  it('does not double-prefix paths that already carry /docs', () => {
+    const entries = parseDocsIndex(
+      '- [Authorization](/docs/api-reference/authorization): Bearer tokens.',
+    );
+    expect(entries[0].url).toBe('https://coolify.io/docs/api-reference/authorization');
   });
 
-  it('should assign sequential IDs', () => {
-    const chunks = parseDocs(SAMPLE_DOCS);
-    chunks.forEach((chunk, index) => {
-      expect(chunk.id).toBe(index);
-    });
+  it('returns zero entries for content with no link items', () => {
+    // The old llms-full.txt frontmatter format is exactly this case — the
+    // engine must treat it as a hard error, which the engine tests pin.
+    expect(parseDocsIndex('---\nurl: /docs/x.md\ndescription: y\n---\n\n# X\n\nBody.')).toEqual([]);
   });
 });
 
 describe('DocsSearchEngine', () => {
-  let engine: DocsSearchEngine;
   let mockFetch: jest.Spied<typeof fetch>;
+  let engine: DocsSearchEngine;
 
   beforeEach(() => {
     engine = new DocsSearchEngine();
@@ -128,126 +79,57 @@ describe('DocsSearchEngine', () => {
     mockFetch.mockRestore();
   });
 
-  it('should fetch and index docs on first search', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
+  const okResponse = (body: string) =>
+    ({ ok: true, text: async () => body }) as unknown as Response;
+
+  it('fetches and indexes the docs index on first search only', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
+
+    await engine.search('install');
+    await engine.search('compose');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(engine.getEntryCount()).toBeGreaterThan(5);
+  });
+
+  it('ranks the obviously right page first', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
 
     const results = await engine.search('installation');
-    expect(results.length).toBeGreaterThan(0);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    expect(results[0].title).toBe('Installation');
+    expect(results[0].url).toBe('https://coolify.io/docs/get-started/installation');
+    expect(results[0].score).toBeGreaterThan(0);
   });
 
-  it('should deduplicate concurrent loading', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    const [results1, results2] = await Promise.all([
-      engine.search('installation'),
-      engine.search('docker'),
-    ]);
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(results1.length).toBeGreaterThan(0);
-    expect(results2.length).toBeGreaterThan(0);
-  });
-
-  it('should only fetch once across multiple searches', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    await engine.search('installation');
-    await engine.search('docker compose');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('should return results with title, url, description, snippet, score', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    const results = await engine.search('502 error');
-    expect(results.length).toBeGreaterThan(0);
-    const r = results[0];
-    expect(r).toHaveProperty('title');
-    expect(r).toHaveProperty('url');
-    expect(r).toHaveProperty('description');
-    expect(r).toHaveProperty('snippet');
-    expect(r).toHaveProperty('score');
-    expect(typeof r.score).toBe('number');
-  });
-
-  it('should rank relevant results higher', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    const results = await engine.search('docker compose environment variables');
-    expect(results[0].url).toContain('docker-compose');
-  });
-
-  it('should return empty array for no matches', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    const results = await engine.search('xyznonexistent12345');
-    expect(results).toEqual([]);
-  });
-
-  it('should respect limit parameter', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
+  it('respects the limit parameter', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
 
     const results = await engine.search('coolify', 2);
+
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
-  it('should throw on fetch failure', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    } as Response);
+  it('throws when the fetch fails, and recovers on the next call', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('network down'));
+    await expect(engine.search('install')).rejects.toThrow('network down');
 
-    await expect(engine.search('test')).rejects.toThrow('Failed to fetch Coolify docs');
-  });
-
-  it('should retry after fetch failure', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    } as Response);
-
-    await expect(engine.search('test')).rejects.toThrow();
-
-    // Second attempt should try fetching again (loading was reset)
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
-
-    const results = await engine.search('installation');
+    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
+    const results = await engine.search('install');
     expect(results.length).toBeGreaterThan(0);
   });
 
-  it('should report chunk count after loading', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: async () => SAMPLE_DOCS,
-    } as Response);
+  it('throws on a non-OK response', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
+    await expect(engine.search('install')).rejects.toThrow('HTTP 404');
+  });
 
-    expect(engine.getChunkCount()).toBe(0);
-    await engine.search('test');
-    expect(engine.getChunkCount()).toBeGreaterThan(0);
+  it('treats an index that parses to zero entries as an error, not an empty result', async () => {
+    // This is the regression test for the silent failure: the previous
+    // implementation indexed zero chunks from a changed upstream format and
+    // returned [] for every query, indefinitely, with no error.
+    mockFetch.mockResolvedValueOnce(okResponse('---\nurl: /docs/x.md\n---\n\n# Old format\n'));
+
+    await expect(engine.search('anything')).rejects.toThrow(/zero entries/);
   });
 });
