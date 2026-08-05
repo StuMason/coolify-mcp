@@ -38,6 +38,10 @@ jobs:
         with:
           node-version: 22.x
           cache: npm
+          # Include the evals lockfile so an evals-only dep change busts the cache.
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
       - name: Build server
         run: |
           npm ci
@@ -69,6 +73,10 @@ jobs:
         with:
           node-version: 22.x
           cache: npm
+          # Include the evals lockfile so an evals-only dep change busts the cache.
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
       - name: Check for a model key
         id: key
         env:

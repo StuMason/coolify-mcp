@@ -20,7 +20,8 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
-import { aiSdkHarness, aiSdkJudgeHarness } from '@vitest-evals/harness-ai-sdk';
+import { aiSdkHarness } from '@vitest-evals/harness-ai-sdk';
+import type { Harness } from 'vitest-evals';
 import type { EvalContext } from './mcp.js';
 
 // The AI SDK's Google provider reads GOOGLE_GENERATIVE_AI_API_KEY; accept the
@@ -33,21 +34,14 @@ if (process.env.GOOGLE_AI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) 
 }
 
 const PROVIDERS = [
-  {
-    prefix: 'anthropic',
-    key: 'ANTHROPIC_API_KEY',
-    factory: anthropic,
-    agent: 'claude-haiku-4-5',
-    judge: 'claude-sonnet-4-5',
-  },
+  { prefix: 'anthropic', key: 'ANTHROPIC_API_KEY', factory: anthropic, agent: 'claude-haiku-4-5' },
   {
     prefix: 'google',
     key: 'GOOGLE_GENERATIVE_AI_API_KEY',
     factory: google,
     agent: 'gemini-2.5-flash',
-    judge: 'gemini-2.5-pro',
   },
-  { prefix: 'openai', key: 'OPENAI_API_KEY', factory: openai, agent: 'gpt-5-mini', judge: 'gpt-5' },
+  { prefix: 'openai', key: 'OPENAI_API_KEY', factory: openai, agent: 'gpt-5-mini' },
 ] as const;
 
 const providerOf = (spec: string): (typeof PROVIDERS)[number] | undefined =>
@@ -64,12 +58,14 @@ export function resolveModel(spec: string): LanguageModel {
   return provider.factory(spec.slice(spec.indexOf(':') + 1));
 }
 
+// `||` not `??`: GitHub Actions exports an unset expression as an EMPTY STRING,
+// not undefined, so `EVALS_MODEL=''` must fall through to the default rather than
+// win it — otherwise the suite runs against "" (no provider), hasModelKey goes
+// false, and every case skips while the job reports green. Same trap as the
+// GOOGLE_AI_API_KEY note above.
 export const EVAL_MODEL =
-  process.env.EVALS_MODEL ??
+  process.env.EVALS_MODEL ||
   (available ? `${available.prefix}:${available.agent}` : 'anthropic:claude-haiku-4-5');
-export const JUDGE_MODEL =
-  process.env.EVALS_JUDGE_MODEL ??
-  (available ? `${available.prefix}:${available.judge}` : 'anthropic:claude-sonnet-4-5');
 
 // The provider actually SELECTED (via EVALS_MODEL or the default above), not
 // merely the first one with a key. hasModelKey and pacing must key off this —
@@ -78,6 +74,16 @@ export const JUDGE_MODEL =
 const selected = providerOf(EVAL_MODEL);
 
 export const hasModelKey = Boolean(selected && process.env[selected.key]);
+
+// "Skipped because misconfigured" must not look like "skipped because no key".
+// If a model was explicitly named but its provider's key is absent, say so
+// loudly — otherwise a typo'd EVALS_MODEL silently runs zero evals green.
+if (process.env.EVALS_MODEL && !hasModelKey) {
+  console.warn(
+    `[evals] EVALS_MODEL=${process.env.EVALS_MODEL} but its provider key is not set — ` +
+      `the model-in-the-loop suites will SKIP. This is a misconfiguration, not "no key".`,
+  );
+}
 
 /**
  * Pause between eval cases. Gemini's free tier allows ~10 requests/min; an
@@ -118,7 +124,7 @@ export const SYSTEM_PROMPT = [
 export function makeAgentHarness(
   ctx: EvalContext,
   { model = EVAL_MODEL, system = SYSTEM_PROMPT, maxSteps = 8 } = {},
-) {
+): Harness<unknown, string> {
   return aiSdkHarness({
     tools: ctx.toolSet,
     run: ({ input, runtime }) =>
@@ -132,12 +138,5 @@ export function makeAgentHarness(
         temperature: temperatureFor(model),
       }),
     output: ({ result }) => result.text,
-  });
-}
-
-export function makeJudgeHarness() {
-  return aiSdkJudgeHarness({
-    model: resolveModel(JUDGE_MODEL),
-    temperature: temperatureFor(JUDGE_MODEL),
   });
 }

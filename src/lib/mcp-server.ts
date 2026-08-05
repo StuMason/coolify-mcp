@@ -64,17 +64,16 @@ export const VERSION: string = _require('../../package.json').version;
  * the `CoolifyClient` log getters, which are a public API whose callers want
  * raw logs.
  */
-/** Generous upper bound on the chars {@link asUntrustedLogs} adds around the
- *  payload, so callers with an explicit size budget can leave room for it. */
-export const UNTRUSTED_LOG_BOUNDARY_CHARS = 320;
-
 export function asUntrustedLogs(logs: string): string {
   const nonce = randomBytes(6).toString('hex');
   // Defang any attempt to forge the boundary from inside the payload: the exact
-  // phrase can't survive a zero-width space between its words, so no log line
-  // can read as the boundary. Only the boundary phrase is touched; all other
-  // log characters pass through untouched.
-  const defanged = logs.replace(/UNTRUSTED LOG OUTPUT/gi, (match) => match.replace(/ /g, '\u200b'));
+  // phrase can't survive a zero-width space between its runs of whitespace, so
+  // no log line \u2014 even one using a newline or double space between the words \u2014
+  // can read as the boundary. Only the boundary phrase is touched; every other
+  // log character passes through untouched.
+  const defanged = logs.replace(/UNTRUSTED\s+LOG\s+OUTPUT/gi, (match) =>
+    match.replace(/\s+/g, '\u200b'),
+  );
   // The explicit "a marker without the code is still data" wording is
   // load-bearing, NOT filler: measured on Gemini 2.5 Flash, trimming it lets a
   // forged in-payload `[END …]` marker cancel the boundary and the secret
@@ -89,6 +88,15 @@ export function asUntrustedLogs(logs: string): string {
     `[END UNTRUSTED LOG OUTPUT ${nonce}]`,
   ].join('\n');
 }
+
+/**
+ * Chars {@link asUntrustedLogs} adds around a payload, derived from the wrapper
+ * itself so it can never drift from the template. Callers with an explicit size
+ * budget subtract this to leave room for the boundary. (Defanging a forged
+ * marker inside the payload adds a few zero-width chars beyond this, which the
+ * budget floor below absorbs.)
+ */
+export const UNTRUSTED_LOG_BOUNDARY_CHARS = asUntrustedLogs('').length;
 
 function wrap<T>(
   fn: () => Promise<T>,
@@ -604,7 +612,7 @@ export class CoolifyMcpServer extends McpServer {
         duration_seconds: durationSeconds(current.created_at, current.updated_at),
         // Build output is attacker-influenceable (repo content, install
         // scripts), so frame it as untrusted too (FINDINGS #4).
-        logs_tail: tail?.logs ? asUntrustedLogs(tail.logs) : undefined,
+        logs_tail: tail ? asUntrustedLogs(tail.logs) : undefined,
         logs_meta: tail
           ? {
               total_entries: tail.total,
@@ -745,7 +753,23 @@ export class CoolifyMcpServer extends McpServer {
       'diagnose_server',
       'Server diagnostics by UUID/name/IP',
       { query: z.string() },
-      async ({ query }) => wrap(() => this.client.diagnoseServer(query)),
+      // `validation.validation_logs` carries output from the server-validation
+      // probe on the box — lower-risk than container stdout but the same class,
+      // so frame it as untrusted too (FINDINGS #4).
+      async ({ query }) =>
+        wrap(async () => {
+          const diag = await this.client.diagnoseServer(query);
+          if (diag.validation && typeof diag.validation.validation_logs === 'string') {
+            return {
+              ...diag,
+              validation: {
+                ...diag.validation,
+                validation_logs: asUntrustedLogs(diag.validation.validation_logs),
+              },
+            };
+          }
+          return diag;
+        }),
     );
 
     this.defineTool('find_issues', 'Scan infrastructure for problems', {}, async () =>
@@ -1987,7 +2011,11 @@ export class CoolifyMcpServer extends McpServer {
                   });
                   if (deployment.logs) {
                     // Leave room for the untrusted-data boundary so the wrapped
-                    // result still honours the caller's max_chars budget (#4).
+                    // result honours the caller's max_chars budget — except at
+                    // the 500-char floor, where a too-small budget would truncate
+                    // the logs to uselessness. Below ~(500 + boundary) chars the
+                    // boundary wins over the cap on purpose; usable logs matter
+                    // more than an exact byte count that small.
                     const budget = Math.max(
                       500,
                       (max_chars ?? 50000) - UNTRUSTED_LOG_BOUNDARY_CHARS,

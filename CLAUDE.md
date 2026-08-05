@@ -30,8 +30,9 @@ team. All runs use a fixture backend that refuses to start if `COOLIFY_URL`
 looks real. See `evals/README.md`; findings in `evals/FINDINGS.md` — note **#4**
 (secret-exfiltration-via-log-injection on weak models, **fixed**: `asUntrustedLogs`
 frames every model-facing log surface — `logs`, `application_logs`, `diagnose_app`,
-and all `deployment`/`deploy` build output (`logs_tail`, get, `list_for_app`) —
-as untrusted data, with a per-call nonce so the boundary can't be forged;
+`diagnose_server` validation output, and all `deployment`/`deploy` build output
+(`logs_tail`, get, `list_for_app`) — as untrusted data, with a per-call nonce so
+the boundary can't be forged;
 5/5→0/5 leaks on Gemini) and
 **#5** (frontier models act on vague requests, validating the elicitation guard).
 
