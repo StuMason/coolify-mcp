@@ -27,9 +27,11 @@ description, schema or annotation, `evals` tool-contract snapshots will fail
 until you review and `npm run snapshots:update`. Layers: (1) contract snapshots,
 (2) tool-selection evals, (3) prompt-injection regression, (4) promptfoo red
 team. All runs use a fixture backend that refuses to start if `COOLIFY_URL`
-looks real. See `evals/README.md`; open findings in `evals/FINDINGS.md`
-(note **#4**: a confirmed secret-exfiltration-via-log-injection weakness on weak
-models, with a proposed server-side mitigation pending a decision).
+looks real. See `evals/README.md`; findings in `evals/FINDINGS.md` — note **#4**
+(secret-exfiltration-via-log-injection on weak models, **fixed**: `asUntrustedLogs`
+frames all model-facing log output — `logs`, `application_logs`, `diagnose_app`,
+deploy/deployment `logs_tail` — as untrusted data, 5/5→0/5 leaks on Gemini) and
+**#5** (frontier models act on vague requests, validating the elicitation guard).
 
 ## Architecture
 

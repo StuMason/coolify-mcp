@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   const view = passthrough.includes('--view');
 
   const fixture = await startFixture();
-  // eslint-disable-next-line no-console
+
   console.error(`[redteam] fixture Coolify backend on ${fixture.url}`);
 
   // `redteam run` generates attacks (into redteam.generated.yaml) then evals
@@ -60,6 +60,12 @@ async function main(): Promise<void> {
 
   const code: number = await new Promise((resolve) => {
     child.on('exit', (c) => resolve(c ?? 1));
+    // Without this, a spawn failure (npx missing, ENOENT) never settles the
+    // promise and the run hangs to the workflow timeout instead of erroring.
+    child.on('error', (err) => {
+      console.error('[redteam] failed to spawn promptfoo:', err);
+      resolve(1);
+    });
   });
 
   await fixture.close();
@@ -67,7 +73,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error(err);
   process.exit(1);
 });

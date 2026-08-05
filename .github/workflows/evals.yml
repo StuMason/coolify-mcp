@@ -19,10 +19,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'evals/**'
-      - '.github/workflows/evals.yml'
+    # No `paths:` filter on purpose. The contract job is the hard gate, so it
+    # must run on every PR — a paths-filtered required check never triggers on
+    # a PR that touches neither src/** nor evals/**, and sits pending forever.
+    # The job is fast, and the LLM job skips itself without a key.
 
 jobs:
   contract:
@@ -44,6 +44,12 @@ jobs:
       - name: Typecheck evals
         working-directory: evals
         run: npm run typecheck
+      - name: Format check evals
+        working-directory: evals
+        run: npm run format:check
+      - name: Lint evals
+        working-directory: evals
+        run: npm run lint
       - name: Verify tool snapshots
         working-directory: evals
         run: npm run snapshots

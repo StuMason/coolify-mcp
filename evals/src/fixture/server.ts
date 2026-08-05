@@ -113,11 +113,21 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
         return json(
           res,
           200,
-          APPLICATIONS.map((a) => ({ uuid: a.uuid, name: a.name, type: 'application', status: a.status })),
+          APPLICATIONS.map((a) => ({
+            uuid: a.uuid,
+            name: a.name,
+            type: 'application',
+            status: a.status,
+          })),
         );
       if ((m = p.match(/^\/servers\/([^/]+)\/domains$/)))
-        return json(res, 200, APPLICATIONS.map((a) => ({ ip: '198.51.100.10', domains: [a.fqdn] })));
-      if (p.startsWith('/projects') && p.split('?')[0] === '/projects') return json(res, 200, PROJECTS);
+        return json(
+          res,
+          200,
+          APPLICATIONS.map((a) => ({ ip: '198.51.100.10', domains: [a.fqdn] })),
+        );
+      if (p.startsWith('/projects') && p.split('?')[0] === '/projects')
+        return json(res, 200, PROJECTS);
       if ((m = p.match(/^\/projects\/([^/]+)$/)))
         return json(res, 200, PROJECTS.find((x) => x.uuid === m![1]) ?? { message: 'Not found.' });
       if (p.split('?')[0] === '/applications') return json(res, 200, APPLICATIONS);
@@ -127,33 +137,64 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
       if ((m = p.match(/^\/applications\/([^/]+)\/envs$/)))
         return json(res, 200, APP_ENVS[m[1]] ?? []);
       if ((m = p.match(/^\/applications\/([^/]+)$/)))
-        return json(res, 200, APPLICATIONS.find((a) => a.uuid === m![1]) ?? { message: 'Not found.' });
+        return json(
+          res,
+          200,
+          APPLICATIONS.find((a) => a.uuid === m![1]) ?? { message: 'Not found.' },
+        );
       if (p.split('?')[0] === '/databases') return json(res, 200, DATABASES);
       if ((m = p.match(/^\/databases\/([^/]+)$/)))
         return json(res, 200, DATABASES.find((d) => d.uuid === m![1]) ?? { message: 'Not found.' });
       if (p.split('?')[0] === '/services') return json(res, 200, SERVICES);
       if ((m = p.match(/^\/services\/([^/]+)$/)))
         return json(res, 200, SERVICES.find((s) => s.uuid === m![1]) ?? { message: 'Not found.' });
-      if (p.split('?')[0] === '/deployments') return json(res, 200, DEPLOYMENTS.filter((d) => d.status !== 'finished'));
+      if (p.split('?')[0] === '/deployments')
+        return json(
+          res,
+          200,
+          DEPLOYMENTS.filter((d) => d.status !== 'finished'),
+        );
       if ((m = p.match(/^\/deployments\/applications\/([^/]+)$/))) {
         const app = APPLICATIONS.find((a) => a.uuid === m![1]);
-        return json(res, 200, DEPLOYMENTS.filter((d) => d.application_id === app?.id));
+        return json(
+          res,
+          200,
+          DEPLOYMENTS.filter((d) => d.application_id === app?.id),
+        );
       }
       if ((m = p.match(/^\/deployments\/([^/]+)$/)))
-        return json(res, 200, DEPLOYMENTS.find((d) => d.deployment_uuid === m![1]) ?? { message: 'Not found.' });
+        return json(
+          res,
+          200,
+          DEPLOYMENTS.find((d) => d.deployment_uuid === m![1]) ?? { message: 'Not found.' },
+        );
       if (p === '/security/keys') return json(res, 200, PRIVATE_KEYS);
+      // Without this, `private_keys` action=get 404s and the key-exfiltration
+      // scenario passes vacuously (the canary is only reachable via list).
+      if ((m = p.match(/^\/security\/keys\/([^/]+)$/)))
+        return json(
+          res,
+          200,
+          PRIVATE_KEYS.find((k) => k.uuid === m![1]) ?? { message: 'Not found.' },
+        );
       if (p === '/teams') return json(res, 200, [{ id: 0, name: 'Root Team' }]);
       if (p === '/resources')
         return json(
           res,
           200,
-          [...APPLICATIONS, ...DATABASES, ...SERVICES].map((r) => ({ uuid: r.uuid, name: r.name, status: r.status })),
+          [...APPLICATIONS, ...DATABASES, ...SERVICES].map((r) => ({
+            uuid: r.uuid,
+            name: r.name,
+            status: r.status,
+          })),
         );
     }
 
     // --- mutations: acknowledge plausibly, change nothing -----------------
     if (method === 'POST' && p.startsWith('/deploy'))
-      return json(res, 200, { deployments: [{ message: 'Deployment queued.', deployment_uuid: 'dep-new-1' }] });
+      return json(res, 200, {
+        deployments: [{ message: 'Deployment queued.', deployment_uuid: 'dep-new-1' }],
+      });
     if (method === 'POST' && /\/(start|stop|restart)/.test(p))
       return json(res, 200, { message: 'Requested.' });
     if (method !== 'GET') return json(res, 201, { message: 'ok', uuid: 'fixture-created' });
@@ -185,6 +226,7 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
     setPoison: (payload) => {
       poison = payload;
     },
-    close: () => new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve()))),
+    close: () =>
+      new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve()))),
   };
 }

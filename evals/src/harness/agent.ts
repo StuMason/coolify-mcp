@@ -24,12 +24,29 @@ import { aiSdkHarness, aiSdkJudgeHarness } from '@vitest-evals/harness-ai-sdk';
 import type { EvalContext } from './mcp.js';
 
 // The AI SDK's Google provider reads GOOGLE_GENERATIVE_AI_API_KEY; accept the
-// shorter common spelling too.
-process.env.GOOGLE_GENERATIVE_AI_API_KEY ??= process.env.GOOGLE_AI_API_KEY;
+// shorter common spelling too. NOT `??=`: assigning `process.env.X` coerces to
+// a string, so `X ??= undefined` leaves the literal "undefined" (truthy) when
+// neither var is set — which would make provider detection think a key exists
+// and stop the suite skipping loudly. Only copy when there is something to copy.
+if (process.env.GOOGLE_AI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
+}
 
 const PROVIDERS = [
-  { prefix: 'anthropic', key: 'ANTHROPIC_API_KEY', factory: anthropic, agent: 'claude-haiku-4-5', judge: 'claude-sonnet-4-5' },
-  { prefix: 'google', key: 'GOOGLE_GENERATIVE_AI_API_KEY', factory: google, agent: 'gemini-2.5-flash', judge: 'gemini-2.5-pro' },
+  {
+    prefix: 'anthropic',
+    key: 'ANTHROPIC_API_KEY',
+    factory: anthropic,
+    agent: 'claude-haiku-4-5',
+    judge: 'claude-sonnet-4-5',
+  },
+  {
+    prefix: 'google',
+    key: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    factory: google,
+    agent: 'gemini-2.5-flash',
+    judge: 'gemini-2.5-pro',
+  },
   { prefix: 'openai', key: 'OPENAI_API_KEY', factory: openai, agent: 'gpt-5-mini', judge: 'gpt-5' },
 ] as const;
 
@@ -46,9 +63,11 @@ export function resolveModel(spec: string): LanguageModel {
 }
 
 export const EVAL_MODEL =
-  process.env.EVALS_MODEL ?? (available ? `${available.prefix}:${available.agent}` : 'anthropic:claude-haiku-4-5');
+  process.env.EVALS_MODEL ??
+  (available ? `${available.prefix}:${available.agent}` : 'anthropic:claude-haiku-4-5');
 export const JUDGE_MODEL =
-  process.env.EVALS_JUDGE_MODEL ?? (available ? `${available.prefix}:${available.judge}` : 'anthropic:claude-sonnet-4-5');
+  process.env.EVALS_JUDGE_MODEL ??
+  (available ? `${available.prefix}:${available.judge}` : 'anthropic:claude-sonnet-4-5');
 
 /**
  * Pause between eval cases. Gemini's free tier allows ~10 requests/min; an
@@ -65,14 +84,18 @@ export const CASE_DELAY_MS = process.env.EVALS_CASE_DELAY_MS
 export const paceCase = (): Promise<void> => new Promise((r) => setTimeout(r, CASE_DELAY_MS));
 
 /**
- * `temperature` was a nice-to-have for run-to-run stability, but the Claude 5
- * family (opus-5, sonnet-5, fable-5) deprecated the parameter and the API now
- * hard-rejects any request that carries it. So it's opt-in per model rather
- * than always-on: passed for models that still accept it, omitted for those
- * that don't. Returns undefined (→ omit the field) for the Claude 5 family.
+ * `temperature` was a nice-to-have for run-to-run stability, but some models
+ * now hard-reject a non-default value: the Claude 5 family (opus-5, sonnet-5,
+ * fable-5, haiku-5) deprecated the parameter, and OpenAI's GPT-5 reasoning
+ * models (gpt-5, gpt-5-mini, …) only accept the default. So it's opt-in per
+ * model — passed for models that still take it, omitted (→ field dropped) for
+ * those that don't. Matches on the bare model id, so `provider:model` specs
+ * work either way.
  */
 export function temperatureFor(model: string): number | undefined {
-  if (/(opus|sonnet|fable|haiku)-5\b/.test(model)) return undefined;
+  const id = model.includes(':') ? model.slice(model.indexOf(':') + 1) : model;
+  if (/(opus|sonnet|fable|haiku)-5\b/.test(id)) return undefined;
+  if (/^(?:o\d|gpt-5)/.test(id)) return undefined;
   return 0;
 }
 
