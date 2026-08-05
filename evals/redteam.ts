@@ -24,72 +24,65 @@ import { startFixture } from './src/fixture/server.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
+/** Run promptfoo, resolving its exit code. An 'error' handler is essential: a
+ *  spawn failure (npx missing, ENOENT) otherwise never settles and the run
+ *  hangs to the workflow timeout instead of erroring. */
+function runPromptfoo(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn('npx', ['promptfoo', ...args], { cwd: here, stdio: 'inherit', env });
+    child.on('exit', (c) => resolve(c ?? 1));
+    child.on('error', (err) => {
+      console.error('[redteam] failed to spawn promptfoo:', err);
+      resolve(1);
+    });
+  });
+}
+
 async function main(): Promise<void> {
   const passthrough = process.argv.slice(2);
-  const view = passthrough.includes('--view');
+
+  // `--view` only opens the last report — no target is spawned, so no fixture.
+  if (passthrough.includes('--view')) {
+    process.exit(await runPromptfoo(['redteam', 'report'], process.env));
+  }
 
   const fixture = await startFixture();
-
   console.error(`[redteam] fixture Coolify backend on ${fixture.url}`);
+  const env = {
+    ...process.env,
+    COOLIFY_BASE_URL: fixture.url,
+    COOLIFY_ACCESS_TOKEN: FIXTURE_TOKEN,
+  };
 
-  // `redteam run` generates attacks (into redteam.generated.yaml) then evals
-  // them; results land in promptfoo's local store, read back by `report` /
-  // `view`. `-o` here is the *generated tests* file, not the results file.
-  const args = view
-    ? ['promptfoo', 'redteam', 'report']
-    : [
-        'promptfoo',
+  let code: number;
+  try {
+    // `redteam run` generates attacks (into redteam.generated.yaml) then evals
+    // them; `--output` here is the *generated tests* file, not the results.
+    code = await runPromptfoo(
+      [
         'redteam',
         'run',
         '--config',
         'redteam.yaml',
         '--output',
         'redteam.generated.yaml',
-        ...passthrough.filter((a) => a !== '--view'),
-      ];
+        ...passthrough,
+      ],
+      env,
+    );
 
-  const child = spawn('npx', args, {
-    cwd: here,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      COOLIFY_BASE_URL: fixture.url,
-      COOLIFY_ACCESS_TOKEN: FIXTURE_TOKEN,
-    },
-  });
-
-  const code: number = await new Promise((resolve) => {
-    child.on('exit', (c) => resolve(c ?? 1));
-    // Without this, a spawn failure (npx missing, ENOENT) never settles the
-    // promise and the run hangs to the workflow timeout instead of erroring.
-    child.on('error', (err) => {
-      console.error('[redteam] failed to spawn promptfoo:', err);
-      resolve(1);
-    });
-  });
-
-  // Export the graded RESULTS (not just the generated attacks) so the scheduled
-  // job uploads something a human can triage into FINDINGS.md — `redteam run`
-  // otherwise leaves results only in promptfoo's local store, and exits 0
-  // whether or not probes failed. Best-effort: a failed export must not fail the
-  // run. NOTE: not exercised in this sandbox (needs network for generation) —
-  // verify against the first live scheduled run.
-  if (!view && code === 0) {
-    await new Promise<void>((resolve) => {
-      const exporter = spawn(
-        'npx',
-        ['promptfoo', 'export', 'eval', 'latest', '--output', 'redteam-results.json'],
-        { cwd: here, stdio: 'inherit' },
-      );
-      exporter.on('exit', () => resolve());
-      exporter.on('error', (err) => {
-        console.error('[redteam] results export failed (non-fatal):', err);
-        resolve();
-      });
-    });
+    // Export the graded RESULTS so the scheduled job uploads something a human
+    // can triage — `redteam run` otherwise leaves results only in promptfoo's
+    // local store and exits 0 whether or not probes failed. Best-effort.
+    // NOTE: not exercised in this sandbox (needs network for generation) —
+    // verify against the first live scheduled run.
+    if (code === 0) {
+      await runPromptfoo(['export', 'eval', 'latest', '--output', 'redteam-results.json'], env);
+    }
+  } finally {
+    // Close the fixture BEFORE exiting — process.exit would skip this.
+    await fixture.close();
   }
-
-  await fixture.close();
   process.exit(code);
 }
 

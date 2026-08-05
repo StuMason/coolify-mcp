@@ -205,8 +205,11 @@ afterAll(async () => {
   await ctx.close();
 });
 
-const selectionMisses: string[] = [];
-let observed = 0;
+// Keyed by case name (not a running counter) so a retried, sharded, or `.only`
+// run can't double-count: a case just overwrites its own verdict, and the
+// aggregate checks `size === CASES.length`. Value is the miss reason, or null
+// if the case selected a boundary-correct tool.
+const selectionResults = new Map<string, string | null>();
 
 describe.skipIf(!hasModelKey)('tool selection', () => {
   describeEval(
@@ -224,18 +227,18 @@ describe.skipIf(!hasModelKey)('tool selection', () => {
           const called = toolCalls(result).map((t) => t.name);
 
           // --- scored: did the model pick the boundary-correct tool? ---
-          // Count the observation FIRST, before any invariant can throw, and
-          // before `run()` above can throw — a case that errors (rate limit,
-          // transport hiccup, a throttled text-only response) never reaches here,
-          // so it is neither a pass nor a silent miss: `observed` stays below
-          // CASES.length and the aggregate below fails loudly rather than
-          // inflating the ratchet with an un-run case.
-          observed++;
-          if (!called.some((n) => c.expectTool.includes(n))) {
-            selectionMisses.push(
-              `${c.name}: expected one of [${c.expectTool.join(', ')}], called [${called.join(', ') || 'none'}]`,
-            );
-          }
+          // Record the verdict FIRST, before any invariant can throw, and before
+          // `run()` above can throw — a case that errors (rate limit, transport
+          // hiccup, a throttled text-only response) never reaches here, so it's
+          // neither a pass nor a silent miss: it stays absent from the Map and
+          // the aggregate below fails loudly rather than inflating the ratchet.
+          const hit = called.some((n) => c.expectTool.includes(n));
+          selectionResults.set(
+            c.name,
+            hit
+              ? null
+              : `${c.name}: expected one of [${c.expectTool.join(', ')}], called [${called.join(', ') || 'none'}]`,
+          );
 
           // --- invariants: hard-fail regardless of model ---
           for (const never of c.neverTool ?? []) {
@@ -256,19 +259,20 @@ describe.skipIf(!hasModelKey)('tool selection', () => {
         });
       }
 
-      // The scored aggregate depends on `observed` / `selectionMisses`, module-
-      // level state mutated by the per-case tests above. Correct only while those
-      // run sequentially and before this — `fileParallelism: false` keeps files
-      // apart, and vitest runs a file's tests in source order, so this trails the
-      // loop. Keep it last in the block.
+      // Reads `selectionResults`, filled by the per-case tests above. Correct
+      // while those run before this — `fileParallelism: false` keeps files apart
+      // and vitest runs a file's tests in source order, so this trails the loop.
+      // Keep it last in the block.
       it(`selection pass rate meets the ${EVAL_MODEL} baseline (${threshold})`, () => {
-        expect(observed, 'every selection case must produce a verdict (none errored out)').toBe(
-          CASES.length,
-        );
-        const passRate = (observed - selectionMisses.length) / observed;
+        expect(
+          selectionResults.size,
+          'every selection case must produce a verdict (none errored out; check for a shard/.only)',
+        ).toBe(CASES.length);
+        const misses = [...selectionResults.values()].filter((v): v is string => v !== null);
+        const passRate = (selectionResults.size - misses.length) / selectionResults.size;
         expect(
           passRate,
-          `selection pass rate ${passRate.toFixed(2)} below baseline ${threshold} for ${EVAL_MODEL}.\nMisses:\n  ${selectionMisses.join('\n  ')}`,
+          `selection pass rate ${passRate.toFixed(2)} below baseline ${threshold} for ${EVAL_MODEL}.\nMisses:\n  ${misses.join('\n  ')}`,
         ).toBeGreaterThanOrEqual(threshold);
       });
     },

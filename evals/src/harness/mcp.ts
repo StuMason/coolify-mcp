@@ -46,7 +46,18 @@ export async function createEvalContext(): Promise<EvalContext> {
   }
 
   const fixture = await startFixture();
+  try {
+    return await connectHarness(fixture);
+  } catch (err) {
+    // The fixture HTTP server is already listening; if the client fails to
+    // connect (stale build, transport mismatch) leaving it open makes vitest
+    // hang on the handle instead of reporting the real error. Close it, rethrow.
+    await fixture.close().catch(() => {});
+    throw err;
+  }
+}
 
+async function connectHarness(fixture: FixtureHandle): Promise<EvalContext> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER_ENTRY],
@@ -86,6 +97,9 @@ export async function createEvalContext(): Promise<EvalContext> {
             name: t.name,
             arguments: args as Record<string, unknown>,
           });
+          // `result.isError` isn't special-cased: a tool error round-trips to
+          // the model as an ordinary result, which is exactly what a real AI
+          // SDK client sees, so the eval measures the same behaviour.
           return JSON.stringify(result.content);
         },
       }),

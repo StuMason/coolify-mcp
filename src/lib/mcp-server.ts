@@ -104,15 +104,29 @@ export function asUntrustedLogs(logs: string): string {
 export const UNTRUSTED_LOG_BOUNDARY_CHARS = asUntrustedLogs('').length;
 
 /**
- * Frame the `message` field of task/backup execution rows as untrusted data.
- * Execution `message` is the command's raw stdout from inside a container — a
- * strictly stronger version of the container-log channel FINDINGS #4 covers, so
- * it gets the same boundary. Rows without a message pass through untouched.
+ * Frame a whole tool result as untrusted data in a SINGLE boundary. Used for
+ * execution histories, whose rows carry attacker-influenceable `message` stdout
+ * (a stronger version of the container-log channel — FINDINGS #4). One boundary
+ * around N rows is exactly as unforgeable as N (the model can't produce the
+ * nonce either way), and it costs one ~90-token boundary per call instead of
+ * one per row — which matters on a token-optimized server with 50-row histories.
+ * Mirrors {@link wrap}'s error handling.
  */
-export function frameExecutionMessages<T extends { message?: string }>(execs: T[]): T[] {
-  return execs.map((e) =>
-    typeof e.message === 'string' ? { ...e, message: asUntrustedLogs(e.message) } : e,
-  );
+function wrapUntrusted<T>(
+  fn: () => Promise<T>,
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  return fn()
+    .then((result) => ({
+      content: [{ type: 'text' as const, text: asUntrustedLogs(JSON.stringify(result, null, 2)) }],
+    }))
+    .catch((error) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+    }));
 }
 
 function wrap<T>(
@@ -618,7 +632,11 @@ export class CoolifyMcpServer extends McpServer {
       const withLogs = (await this.client.getDeployment(uuid, {
         includeLogs: true,
       })) as Deployment;
-      const tail = withLogs.logs ? truncateLogs(withLogs.logs, 30, 10_000) : undefined;
+      // Leave room for the untrusted-data boundary added below, matching the
+      // deployment `get` path (FINDINGS #4).
+      const tail = withLogs.logs
+        ? truncateLogs(withLogs.logs, 30, 10_000 - UNTRUSTED_LOG_BOUNDARY_CHARS)
+        : undefined;
       return {
         status: current.status,
         deployment_uuid: uuid,
@@ -2381,11 +2399,10 @@ export class CoolifyMcpServer extends McpServer {
           case 'list_executions':
             if (!backup_uuid)
               return { content: [{ type: 'text' as const, text: 'Error: backup_uuid required' }] };
-            // Backup execution `message` is command output on the box (FINDINGS #4).
-            return wrap(async () =>
-              frameExecutionMessages(
-                await this.client.listBackupExecutions(database_uuid, backup_uuid),
-              ),
+            // Backup execution `message` is command output on the box (FINDINGS #4);
+            // one untrusted boundary around the whole history, not one per row.
+            return wrapUntrusted(() =>
+              this.client.listBackupExecutions(database_uuid, backup_uuid),
             );
           case 'get_execution':
             if (!backup_uuid || !execution_uuid)
@@ -2729,12 +2746,12 @@ export class CoolifyMcpServer extends McpServer {
           case 'list_executions':
             if (!task_uuid)
               return { content: [{ type: 'text' as const, text: 'Error: task_uuid required' }] };
-            return wrap(async () =>
-              frameExecutionMessages(
-                isApp
-                  ? await this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
-                  : await this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
-              ),
+            // Rows carry command stdout in `message` — one untrusted boundary
+            // around the whole history (FINDINGS #4), not one per row.
+            return wrapUntrusted(() =>
+              isApp
+                ? this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
+                : this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
             );
           case 'run_once':
             if (!args.command || !args.container)

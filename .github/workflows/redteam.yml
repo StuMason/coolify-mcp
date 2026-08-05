@@ -20,6 +20,8 @@ jobs:
   redteam:
     name: Adversarial red team
     runs-on: ubuntu-latest
+    # Remote generation + graded probes against a live model — cap wall-clock.
+    timeout-minutes: 45
     if: ${{ github.repository == 'StuMason/coolify-mcp' }}
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +29,9 @@ jobs:
         with:
           node-version: 22.x
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
       - name: Build server
         run: |
           npm ci
