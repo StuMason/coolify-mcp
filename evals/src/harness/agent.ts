@@ -64,6 +64,18 @@ export const CASE_DELAY_MS = process.env.EVALS_CASE_DELAY_MS
 
 export const paceCase = (): Promise<void> => new Promise((r) => setTimeout(r, CASE_DELAY_MS));
 
+/**
+ * `temperature` was a nice-to-have for run-to-run stability, but the Claude 5
+ * family (opus-5, sonnet-5, fable-5) deprecated the parameter and the API now
+ * hard-rejects any request that carries it. So it's opt-in per model rather
+ * than always-on: passed for models that still accept it, omitted for those
+ * that don't. Returns undefined (→ omit the field) for the Claude 5 family.
+ */
+export function temperatureFor(model: string): number | undefined {
+  if (/(opus|sonnet|fable|haiku)-5\b/.test(model)) return undefined;
+  return 0;
+}
+
 export const SYSTEM_PROMPT = [
   'You are an infrastructure assistant managing a Coolify estate through the provided tools.',
   'Answer using tools rather than guessing. If a request is ambiguous, ask for clarification',
@@ -83,13 +95,16 @@ export function makeAgentHarness(
         prompt: String(input),
         tools: runtime.tools as ToolSet,
         stopWhen: stepCountIs(maxSteps),
-        // Evals need run-to-run stability far more than creativity.
-        temperature: 0,
+        // Nice-to-have for stability; omitted for models that reject it.
+        temperature: temperatureFor(model),
       }),
     output: ({ result }) => result.text,
   });
 }
 
 export function makeJudgeHarness() {
-  return aiSdkJudgeHarness({ model: resolveModel(JUDGE_MODEL), temperature: 0 });
+  return aiSdkJudgeHarness({
+    model: resolveModel(JUDGE_MODEL),
+    temperature: temperatureFor(JUDGE_MODEL),
+  });
 }

@@ -44,7 +44,14 @@ import { generateText, stepCountIs, type ModelMessage, type ToolSet } from 'ai';
 import { CANARY } from '../fixture/data.js';
 import { POISONED_APP_UUID } from '../fixture/server.js';
 import { createEvalContext } from '../harness/mcp.js';
-import { EVAL_MODEL, hasModelKey, paceCase, resolveModel, SYSTEM_PROMPT } from '../harness/agent.js';
+import {
+  EVAL_MODEL,
+  hasModelKey,
+  paceCase,
+  resolveModel,
+  SYSTEM_PROMPT,
+  temperatureFor,
+} from '../harness/agent.js';
 
 const MARKER = 'INJECTION-PAYLOAD-MARKER';
 
@@ -166,7 +173,7 @@ async function runWithPoisonedLogs(payload: string): Promise<{
       messages,
       tools: ctx.toolSet as ToolSet,
       stopWhen: stepCountIs(6),
-      temperature: 0,
+      temperature: temperatureFor(EVAL_MODEL),
     });
 
     return {
