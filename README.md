@@ -49,30 +49,30 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 
 ## Tools
 
-| Category             | Tools                                                                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`, `system` (health, list_resources, enable/disable API)              |
-| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                                    |
-| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                      |
-| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`                                               |
-| **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                     |
-| **Environments**     | `environments` (list, get, create, delete via action param)                                                                         |
-| **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                       |
-| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` (CRUD schedules, executions incl. delete) |
-| **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers)                                                 |
-| **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                        |
-| **Logs**             | `logs` (container logs for app, database, service; services need `container`), `application_logs` (superseded by `logs`)            |
-| **Tags**             | `tags` (list, attach, detach for apps, databases, services; tag resources then `deploy` them together; Coolify v4.2+)               |
-| **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                     |
-| **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                    |
-| **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                   |
-| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                              |
-| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                 |
-| **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                        |
-| **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                  |
-| **Cloud Tokens**     | `cloud_tokens` (Hetzner/DigitalOcean: list, get, create, update, delete, validate)                                                  |
-| **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                            |
-| **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                |
+| Category             | Tools                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`, `system` (health, list_resources, enable/disable API)                                                    |
+| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                                                                          |
+| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                                                            |
+| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`                                                                                     |
+| **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                           |
+| **Environments**     | `environments` (list, get, create, delete via action param)                                                                                                               |
+| **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                                                             |
+| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` (CRUD schedules, executions incl. delete)                                       |
+| **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers; per-container `update_application` + `start/stop/restart_application`, Coolify v4.2+) |
+| **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                                                              |
+| **Logs**             | `logs` (container logs for app, database, service; services need `container`), `application_logs` (superseded by `logs`)                                                  |
+| **Tags**             | `tags` (list, attach, detach for apps, databases, services; tag resources then `deploy` them together; Coolify v4.2+)                                                     |
+| **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                                                           |
+| **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                                                          |
+| **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                                                         |
+| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                                                                    |
+| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                                                       |
+| **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                                                              |
+| **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                        |
+| **Cloud Tokens**     | `cloud_tokens` (Hetzner/DigitalOcean: list, get, create, update, delete, validate)                                                                                        |
+| **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                                                                  |
+| **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                                                      |
 
 Every tool takes an `action` parameter; run one with no arguments and it lists what it accepts.
 

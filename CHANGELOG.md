@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-08-05
+
+### Added
+
+- **Manage the containers inside a service individually** (#322, closes #301; thanks @fedesenmartin). The `service` tool gains four actions. `update_application` changes one sub-application's FQDN (`url`), Docker image, display name or per-container flags without touching the rest of the stack's compose file. `start_application`, `stop_application` and `restart_application` control one container's lifecycle. Requires Coolify v4.2+; on older instances the call returns 404 and the error message now names the upgrade that fixes it. Passing `force_domain_override: true` can pull a live domain off another resource, so that path asks a human first, like the other destructive operations.
+
 ## [2.18.2] - 2026-08-05
 
 No runtime changes. Safe to skip; nothing to upgrade for.
