@@ -68,6 +68,27 @@ async function main(): Promise<void> {
     });
   });
 
+  // Export the graded RESULTS (not just the generated attacks) so the scheduled
+  // job uploads something a human can triage into FINDINGS.md — `redteam run`
+  // otherwise leaves results only in promptfoo's local store, and exits 0
+  // whether or not probes failed. Best-effort: a failed export must not fail the
+  // run. NOTE: not exercised in this sandbox (needs network for generation) —
+  // verify against the first live scheduled run.
+  if (!view && code === 0) {
+    await new Promise<void>((resolve) => {
+      const exporter = spawn(
+        'npx',
+        ['promptfoo', 'export', 'eval', 'latest', '--output', 'redteam-results.json'],
+        { cwd: here, stdio: 'inherit' },
+      );
+      exporter.on('exit', () => resolve());
+      exporter.on('error', (err) => {
+        console.error('[redteam] results export failed (non-fatal):', err);
+        resolve();
+      });
+    });
+  }
+
   await fixture.close();
   process.exit(code);
 }

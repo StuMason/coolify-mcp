@@ -10,7 +10,7 @@
     "snapshots:update": "vitest run src/contract -u",
     "evals": "vitest run src/selection src/injection",
     "redteam": "tsx redteam.ts",
-    "redteam:view": "tsx redteam.ts -- --view",
+    "redteam:view": "tsx redteam.ts --view",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

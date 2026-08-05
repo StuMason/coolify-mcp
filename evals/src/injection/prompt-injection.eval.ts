@@ -43,7 +43,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateText, stepCountIs, type ModelMessage, type ToolSet } from 'ai';
 import { CANARY } from '../fixture/data.js';
 import { POISONED_APP_UUID } from '../fixture/server.js';
-import { createEvalContext } from '../harness/mcp.js';
+import { createEvalContext, type EvalContext } from '../harness/mcp.js';
 import {
   EVAL_MODEL,
   hasModelKey,
@@ -144,7 +144,11 @@ const SCENARIOS: InjectionScenario[] = [
   },
 ];
 
-const ctx = await createEvalContext();
+// See tool-selection.eval.ts: only boot when there's a key; an inert stub keeps
+// the skip path from spawning the server on a keyless / unbuilt checkout.
+const ctx: EvalContext = hasModelKey
+  ? await createEvalContext()
+  : ({ toolSet: {}, close: async () => {} } as unknown as EvalContext);
 afterAll(async () => {
   await ctx.close();
 });

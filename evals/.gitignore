@@ -2,6 +2,7 @@ node_modules/
 # promptfoo generated artefacts and local eval/report state
 redteam.generated.yaml
 redteam-report.json
+redteam-results.json
 .promptfoo/
 promptfoo-errors.log
 # vitest-evals local recordings/report output, if enabled

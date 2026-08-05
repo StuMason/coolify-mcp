@@ -29,7 +29,7 @@
 
 import { afterAll, beforeEach, describe, expect } from 'vitest';
 import { describeEval, toolCalls } from 'vitest-evals';
-import { createEvalContext } from '../harness/mcp.js';
+import { createEvalContext, type EvalContext } from '../harness/mcp.js';
 import { EVAL_MODEL, hasModelKey, makeAgentHarness, paceCase } from '../harness/agent.js';
 
 interface SelectionCase {
@@ -192,7 +192,15 @@ const TOLERATED_MUTATION = /\/validate$/;
 const genuinelyDestructive = (called: string[]): string[] =>
   called.filter((n) => ctx.destructiveTools.includes(n) && !READ_SAFE_UNDER_DESTRUCTIVE.has(n));
 
-const ctx = await createEvalContext();
+// Only boot the server + fixture when there's a key to run against. With no
+// key the whole suite skips (below), but `describe.skipIf` still runs its body
+// at collection to build the harness, so `ctx` must be non-throwing — an inert
+// stub (empty toolset, no-op close) does that without spawning dist/index.js.
+// Booting unconditionally would throw "build not found" on a fresh checkout
+// instead of skipping, contradicting the header's promise.
+const ctx: EvalContext = hasModelKey
+  ? await createEvalContext()
+  : ({ toolSet: {}, close: async () => {} } as unknown as EvalContext);
 afterAll(async () => {
   await ctx.close();
 });

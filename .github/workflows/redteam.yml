@@ -47,5 +47,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: redteam-report
-          path: evals/redteam.generated.yaml
+          # The graded RESULTS (triageable), plus the generated attacks for
+          # reference. redteam.ts exports the results after the run.
+          path: |
+            evals/redteam-results.json
+            evals/redteam.generated.yaml
           if-no-files-found: ignore

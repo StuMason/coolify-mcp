@@ -63,6 +63,11 @@ export const VERSION: string = _require('../../package.json').version;
  * handful of tokens. Applied at the tool boundary (model-facing) rather than in
  * the `CoolifyClient` log getters, which are a public API whose callers want
  * raw logs.
+ *
+ * Note: the defang inserts a zero-width space (U+200B) into any log line that
+ * contains the literal boundary phrase, so a human who copies such a line out
+ * of the model's answer gets invisible characters in it. Deliberate — a forged
+ * boundary must not survive — but worth knowing before it surprises someone.
  */
 export function asUntrustedLogs(logs: string): string {
   const nonce = randomBytes(6).toString('hex');
@@ -97,6 +102,18 @@ export function asUntrustedLogs(logs: string): string {
  * budget floor below absorbs.)
  */
 export const UNTRUSTED_LOG_BOUNDARY_CHARS = asUntrustedLogs('').length;
+
+/**
+ * Frame the `message` field of task/backup execution rows as untrusted data.
+ * Execution `message` is the command's raw stdout from inside a container — a
+ * strictly stronger version of the container-log channel FINDINGS #4 covers, so
+ * it gets the same boundary. Rows without a message pass through untouched.
+ */
+export function frameExecutionMessages<T extends { message?: string }>(execs: T[]): T[] {
+  return execs.map((e) =>
+    typeof e.message === 'string' ? { ...e, message: asUntrustedLogs(e.message) } : e,
+  );
+}
 
 function wrap<T>(
   fn: () => Promise<T>,
@@ -2364,7 +2381,12 @@ export class CoolifyMcpServer extends McpServer {
           case 'list_executions':
             if (!backup_uuid)
               return { content: [{ type: 'text' as const, text: 'Error: backup_uuid required' }] };
-            return wrap(() => this.client.listBackupExecutions(database_uuid, backup_uuid));
+            // Backup execution `message` is command output on the box (FINDINGS #4).
+            return wrap(async () =>
+              frameExecutionMessages(
+                await this.client.listBackupExecutions(database_uuid, backup_uuid),
+              ),
+            );
           case 'get_execution':
             if (!backup_uuid || !execution_uuid)
               return {
@@ -2372,9 +2394,16 @@ export class CoolifyMcpServer extends McpServer {
                   { type: 'text' as const, text: 'Error: backup_uuid, execution_uuid required' },
                 ],
               };
-            return wrap(() =>
-              this.client.getBackupExecution(database_uuid, backup_uuid, execution_uuid),
-            );
+            return wrap(async () => {
+              const exec = await this.client.getBackupExecution(
+                database_uuid,
+                backup_uuid,
+                execution_uuid,
+              );
+              return typeof exec.message === 'string'
+                ? { ...exec, message: asUntrustedLogs(exec.message) }
+                : exec;
+            });
           case 'create':
             if (!args.frequency)
               return { content: [{ type: 'text' as const, text: 'Error: frequency required' }] };
@@ -2700,10 +2729,12 @@ export class CoolifyMcpServer extends McpServer {
           case 'list_executions':
             if (!task_uuid)
               return { content: [{ type: 'text' as const, text: 'Error: task_uuid required' }] };
-            return wrap(() =>
-              isApp
-                ? this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
-                : this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
+            return wrap(async () =>
+              frameExecutionMessages(
+                isApp
+                  ? await this.client.listApplicationScheduledTaskExecutions(uuid, task_uuid)
+                  : await this.client.listServiceScheduledTaskExecutions(uuid, task_uuid),
+              ),
             );
           case 'run_once':
             if (!args.command || !args.container)
@@ -3269,7 +3300,11 @@ export class CoolifyMcpServer extends McpServer {
           text: JSON.stringify(
             {
               status: execution.status,
-              message: execution.message,
+              // Raw command stdout from inside the container (FINDINGS #4).
+              message:
+                typeof execution.message === 'string'
+                  ? asUntrustedLogs(execution.message)
+                  : execution.message,
               task_uuid: taskUuid,
               cleanup: cleanupNote,
             },

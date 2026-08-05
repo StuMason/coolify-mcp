@@ -24,6 +24,13 @@ afterAll(async () => {
   await ctx.close();
 });
 
+// Codepoint compare, NOT localeCompare: ICU collation is locale/environment
+// dependent and at primary strength treats `_` as ignorable, so tool names like
+// get_server / github_apps can sort differently on a contributor's machine than
+// on the CI runner — a phantom `_roster.json` diff on the check that gates
+// merge. This is deterministic everywhere.
+const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 describe('tool contract', () => {
   // The per-tool snapshots below catch a CHANGED tool, but not a REMOVED one:
   // deleting a tool just leaves an orphan `__toolsnaps__/*.json` and the loop
@@ -31,11 +38,7 @@ describe('tool contract', () => {
   // itself is snapshotted — a deletion (or addition) shows up as a diff here.
   it('the tool roster matches its snapshot (catches add/remove)', async () => {
     await expect(
-      JSON.stringify(
-        ctx.toolInfo.map((t) => t.name).sort((a, b) => a.localeCompare(b)),
-        null,
-        2,
-      ) + '\n',
+      JSON.stringify(ctx.toolInfo.map((t) => t.name).sort(byName), null, 2) + '\n',
     ).toMatchFileSnapshot('__toolsnaps__/_roster.json');
   });
 
@@ -43,7 +46,7 @@ describe('tool contract', () => {
     // Collect all mismatches instead of short-circuiting on the first, so a PR
     // that touches several descriptions surfaces every diff in one run.
     const failures: string[] = [];
-    for (const t of [...ctx.toolInfo].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const t of [...ctx.toolInfo].sort((a, b) => byName(a.name, b.name))) {
       try {
         await expect(
           JSON.stringify(

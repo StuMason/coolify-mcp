@@ -1113,6 +1113,40 @@ describe('CoolifyMcpServer v2', () => {
 
       expect(text.length).toBeLessThan(20_000);
     });
+
+    // The untrusted-data boundary is added AFTER truncation, so the truncation
+    // budget leaves room for it (evals/FINDINGS.md #4 / review). These lock in
+    // the intent of the `Math.max(500, max_chars - UNTRUSTED_LOG_BOUNDARY_CHARS)`
+    // arithmetic.
+    it('keeps the wrapped logs within an ordinary max_chars budget', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(rawDeploymentWithSecrets(300)));
+      const result = await callDeployment(server, {
+        action: 'get',
+        uuid: 'dep-uuid',
+        lines: 300,
+        max_chars: 2000,
+      });
+      const logs = (JSON.parse(result.content[0].text) as { data: { logs: string } }).data.logs;
+      expect(logs).toContain('BEGIN UNTRUSTED LOG OUTPUT');
+      // Boundary included, the wrapped logs still fit the caller's budget.
+      expect(logs.length).toBeLessThanOrEqual(2000);
+    });
+
+    it('keeps logs usable at a tiny max_chars (floor wins over the cap)', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(rawDeploymentWithSecrets(300)));
+      const result = await callDeployment(server, {
+        action: 'get',
+        uuid: 'dep-uuid',
+        lines: 300,
+        max_chars: 100,
+      });
+      const logs = (JSON.parse(result.content[0].text) as { data: { logs: string } }).data.logs;
+      // A 100-char cap can't hold the boundary; the 500-char floor keeps the
+      // logs usable (real content survives) even though it exceeds the cap.
+      expect(logs.length).toBeGreaterThan(100);
+      expect(logs).toContain('log line');
+      expect(logs).toContain('BEGIN UNTRUSTED LOG OUTPUT');
+    });
   });
 
   describe('deployment list_for_app log framing (evals/FINDINGS.md #4)', () => {
@@ -1317,7 +1351,10 @@ describe('CoolifyMcpServer v2', () => {
         cleanup: string;
       };
       expect(parsed.status).toBe('success');
-      expect(parsed.message).toBe('Migrated: 2026_01_01_000000_add_col');
+      // Command stdout is attacker-influenceable — framed as untrusted data
+      // (evals/FINDINGS.md #4), so the original output rides inside the boundary.
+      expect(parsed.message).toContain('Migrated: 2026_01_01_000000_add_col');
+      expect(parsed.message).toContain('BEGIN UNTRUSTED LOG OUTPUT');
       expect(parsed.task_uuid).toBe('task-uuid');
       expect(parsed.cleanup).toContain('deleted');
     });
