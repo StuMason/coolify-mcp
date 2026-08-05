@@ -1,0 +1,62 @@
+{
+  "name": "hetzner",
+  "description": "Hetzner cloud: list_locations/list_server_types/list_images/list_ssh_keys/create_server",
+  "annotations": {
+    "destructiveHint": false
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list_locations",
+          "list_server_types",
+          "list_images",
+          "list_ssh_keys",
+          "create_server"
+        ]
+      },
+      "cloud_provider_token_uuid": {
+        "type": "string"
+      },
+      "location": {
+        "type": "string"
+      },
+      "server_type": {
+        "type": "string"
+      },
+      "image": {
+        "type": "number"
+      },
+      "name": {
+        "type": "string"
+      },
+      "private_key_uuid": {
+        "type": "string"
+      },
+      "enable_ipv4": {
+        "type": "boolean"
+      },
+      "enable_ipv6": {
+        "type": "boolean"
+      },
+      "hetzner_ssh_key_ids": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "cloud_init_script": {
+        "type": "string"
+      },
+      "instant_validate": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

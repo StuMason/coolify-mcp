@@ -1,0 +1,48 @@
+{
+  "name": "tags",
+  "description": "Manage tags on applications, databases and services. Tags group resources across projects, and `deploy` accepts a tag name — so tag several resources, then deploy them together with one `deploy` call. action=list with no resource/uuid returns every tag on the CURRENT TEAM (tokens are team-scoped, so a tag on another team will not appear); with resource+uuid it returns that resource's tags. attach is ADDITIVE — it adds the named tags and leaves existing ones in place, creating any that do not exist yet — and returns the resource's full tag set afterwards. detach unlinks one tag, and Coolify deletes the tag itself once no resources carry it, so misspelled names do not accumulate. Requires Coolify v4.2+.",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "attach",
+          "detach"
+        ]
+      },
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "database",
+          "service"
+        ]
+      },
+      "uuid": {
+        "description": "Resource uuid. Omit with action=list to list every tag on the instance.",
+        "type": "string"
+      },
+      "tag_names": {
+        "description": "Tag names to attach (each min 2 characters). Required for attach.",
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 2
+        }
+      },
+      "tag_uuid": {
+        "description": "Tag uuid to detach. Get it from action=list on the resource.",
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

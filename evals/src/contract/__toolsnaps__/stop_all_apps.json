@@ -1,0 +1,20 @@
+{
+  "name": "stop_all_apps",
+  "description": "EMERGENCY: Stop all running apps",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "confirm": {
+        "type": "boolean",
+        "description": "Must be true, and only when the user has asked to stop everything."
+      }
+    },
+    "required": [
+      "confirm"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

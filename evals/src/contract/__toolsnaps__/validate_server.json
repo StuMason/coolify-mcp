@@ -1,0 +1,20 @@
+{
+  "name": "validate_server",
+  "description": "Validate server connection",
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

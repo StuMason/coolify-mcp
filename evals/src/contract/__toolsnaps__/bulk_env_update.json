@@ -1,0 +1,36 @@
+{
+  "name": "bulk_env_update",
+  "description": "Update env var across multiple apps",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "app_uuids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "key": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      },
+      "is_buildtime": {
+        "type": "boolean"
+      },
+      "is_runtime": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "app_uuids",
+      "key",
+      "value"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

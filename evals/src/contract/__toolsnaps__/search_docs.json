@@ -1,0 +1,24 @@
+{
+  "name": "search_docs",
+  "description": "Search Coolify documentation for how-to guides, configuration, troubleshooting",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query"
+      },
+      "limit": {
+        "description": "Max results (default 5)",
+        "type": "number"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

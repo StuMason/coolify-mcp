@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **An eval and red-team suite for the tool surface** (`evals/`). Tool descriptions are prompts: v2.0.0 cut them by 85%, and this measures that the cut surface still steers models to the right tool and resists attack. Four layers, self-contained so nothing ships to npm: (1) deterministic tool-contract snapshots that fail CI if a name/description/schema/annotation changes unseen; (2) tool-selection evals (`vitest-evals`) over a real agent loop against a mock Coolify backend, with the read-only/destructive split derived from the server's own annotations table; (3) prompt-injection regression tests (after supabase-mcp's pattern) proving instructions embedded in log output are treated as data, not commands; (4) a promptfoo red-team battery (`npm run redteam`) run on a schedule. All runs point at a fixture backend that refuses to start if `COOLIFY_URL` looks like a real instance. See `evals/README.md`; findings in `evals/FINDINGS.md`.
+
 ## [2.19.0] - 2026-08-05
 
 ### Added

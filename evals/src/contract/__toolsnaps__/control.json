@@ -1,0 +1,41 @@
+{
+  "name": "control",
+  "description": "Start/stop/restart app, database, or service",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "database",
+          "service"
+        ]
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "start",
+          "stop",
+          "restart"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "pull_latest": {
+        "description": "Pull latest images before restarting (services only)",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "resource",
+      "action",
+      "uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}
