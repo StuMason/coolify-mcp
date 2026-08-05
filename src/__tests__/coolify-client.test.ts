@@ -2665,6 +2665,90 @@ describe('CoolifyClient', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
+
+    it('should update a service sub-application', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      const result = await client.updateServiceApplication('svc-uuid', 'app-uuid', {
+        url: 'https://example.com',
+        human_name: 'My App',
+      });
+
+      expect(result).toEqual(mockApplication);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(callBody.url).toBe('https://example.com');
+      expect(callBody.human_name).toBe('My App');
+    });
+
+    it('should update a service sub-application with force_domain_override', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
+
+      await client.updateServiceApplication(
+        'svc-uuid',
+        'app-uuid',
+        { url: 'https://example.com' },
+        { forceDomainOverride: true },
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid?force_domain_override=true',
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+
+    it('should start a service sub-application', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Started' }));
+
+      const result = await client.startServiceApplication('svc-uuid', 'app-uuid');
+
+      expect(result).toEqual({ message: 'Started' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid/start',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should start a service sub-application with force and latest', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Started' }));
+
+      await client.startServiceApplication('svc-uuid', 'app-uuid', {
+        force: true,
+        latest: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid/start?force=true&latest=true',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should stop a service sub-application', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Stopped' }));
+
+      const result = await client.stopServiceApplication('svc-uuid', 'app-uuid');
+
+      expect(result).toEqual({ message: 'Stopped' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid/stop',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('should restart a service sub-application', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Restarted' }));
+
+      const result = await client.restartServiceApplication('svc-uuid', 'app-uuid');
+
+      expect(result).toEqual({ message: 'Restarted' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/services/svc-uuid/applications/app-uuid/restart',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
   });
 
   // =========================================================================
@@ -6015,6 +6099,18 @@ describe('errorHint', () => {
     // Both causes produce an identical 404, so the hint must name both rather
     // than confidently pointing at the wrong one.
     expect(errorHint(404, '/applications/app-uuid/tags')).toMatch(/different resource type/);
+  });
+
+  it('hints at the v4.2 requirement for a 404 on a service application route', () => {
+    // Sub-application management (PATCH /services/{uuid}/applications/{app_uuid})
+    // was added in v4.2.0. Without this hint, the generic uuid mismatch fires.
+    expect(errorHint(404, '/services/svc-uuid/applications/app-uuid')).toMatch(/v4\.2/);
+    expect(
+      errorHint(404, '/services/svc-uuid/applications/app-uuid?force_domain_override=true'),
+    ).toMatch(/v4\.2/);
+    expect(errorHint(404, '/services/svc-uuid/applications/app-uuid')).toMatch(
+      /update_application/,
+    );
   });
 
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {

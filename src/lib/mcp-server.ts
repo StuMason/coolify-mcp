@@ -28,6 +28,7 @@ import type {
   Deployment,
   DeploymentEssential,
   DeployTriggerResponse,
+  UpdateServiceApplicationRequest,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
@@ -1400,10 +1401,25 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'service',
-      'Manage service: create/update/delete/list_containers. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`.',
+      "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle.",
       {
-        action: z.enum(['create', 'update', 'delete', 'list_containers']),
+        action: z.enum([
+          'create',
+          'update',
+          'delete',
+          'list_containers',
+          'update_application',
+          'start_application',
+          'stop_application',
+          'restart_application',
+        ]),
         uuid: z.string().optional(),
+        app_uuid: z
+          .string()
+          .optional()
+          .describe(
+            'Sub-application UUID, required for update_application, start_application, stop_application, restart_application. Get from list_containers.',
+          ),
         type: z.string().optional(),
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
@@ -1416,6 +1432,27 @@ export class CoolifyMcpServer extends McpServer {
           .optional()
           .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
         delete_volumes: z.boolean().optional(),
+        url: z
+          .string()
+          .optional()
+          .describe(
+            'FQDN for the sub-application (update_application only). Comma-separated for multiple.',
+          ),
+        force_domain_override: z
+          .boolean()
+          .optional()
+          .describe('Force the domain override even if validation fails (update_application only)'),
+        human_name: z.string().optional(),
+        image: z.string().optional(),
+        exclude_from_status: z.boolean().optional(),
+        is_log_drain_enabled: z.boolean().optional(),
+        is_gzip_enabled: z.boolean().optional(),
+        is_stripprefix_enabled: z.boolean().optional(),
+        force: z.boolean().optional().describe('Force redeploy on start (start_application only)'),
+        latest: z
+          .boolean()
+          .optional()
+          .describe('Pull latest image on start (start_application only)'),
       },
       async (args, extra) => {
         const { action, uuid, delete_volumes } = args;
@@ -1470,6 +1507,86 @@ export class CoolifyMcpServer extends McpServer {
               },
               () => this.client.deleteService(uuid, { deleteVolumes: delete_volumes }),
             );
+          case 'update_application': {
+            if (!uuid || !args.app_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid (service) and app_uuid required',
+                  },
+                ],
+              };
+            const appUuid = args.app_uuid;
+            const appData: UpdateServiceApplicationRequest = {
+              url: args.url,
+              human_name: args.human_name,
+              description: args.description,
+              image: args.image,
+              exclude_from_status: args.exclude_from_status,
+              is_log_drain_enabled: args.is_log_drain_enabled,
+              is_gzip_enabled: args.is_gzip_enabled,
+              is_stripprefix_enabled: args.is_stripprefix_enabled,
+            };
+            const doUpdate = () =>
+              this.client.updateServiceApplication(uuid, appUuid, appData, {
+                forceDomainOverride: args.force_domain_override,
+              });
+            if (args.force_domain_override) {
+              return this.guardDestructive(
+                extra.signal,
+                'Override domain for service sub-application, potentially taking the domain from another resource.',
+                () =>
+                  `Update sub-application ${appUuid} in service ${uuid} with force_domain_override=true. This may pull a live domain off another resource.`,
+                doUpdate,
+              );
+            }
+            return wrap(doUpdate);
+          }
+          case 'start_application': {
+            if (!uuid || !args.app_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid (service) and app_uuid required',
+                  },
+                ],
+              };
+            const appUuid = args.app_uuid;
+            return wrap(() =>
+              this.client.startServiceApplication(uuid, appUuid, {
+                force: args.force,
+                latest: args.latest,
+              }),
+            );
+          }
+          case 'stop_application': {
+            if (!uuid || !args.app_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid (service) and app_uuid required',
+                  },
+                ],
+              };
+            const appUuid = args.app_uuid;
+            return wrap(() => this.client.stopServiceApplication(uuid, appUuid));
+          }
+          case 'restart_application': {
+            if (!uuid || !args.app_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid (service) and app_uuid required',
+                  },
+                ],
+              };
+            const appUuid = args.app_uuid;
+            return wrap(() => this.client.restartServiceApplication(uuid, appUuid));
+          }
         }
       },
     );
