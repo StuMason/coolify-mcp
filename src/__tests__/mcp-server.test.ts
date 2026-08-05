@@ -120,6 +120,10 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.createService).toBe('function');
       expect(typeof client.updateService).toBe('function');
       expect(typeof client.deleteService).toBe('function');
+      expect(typeof client.updateServiceApplication).toBe('function');
+      expect(typeof client.startServiceApplication).toBe('function');
+      expect(typeof client.stopServiceApplication).toBe('function');
+      expect(typeof client.restartServiceApplication).toBe('function');
 
       // Environment variable operations
       expect(typeof client.listApplicationEnvVars).toBe('function');
@@ -2187,6 +2191,144 @@ describe('service list_containers action (#300)', () => {
       content: Array<{ text: string }>;
     };
     expect(result.content[0].text).toContain('uuid required');
+  });
+});
+
+describe('service sub-application actions (#322)', () => {
+  let server: CoolifyMcpServer;
+
+  beforeEach(() => {
+    server = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+  });
+
+  const callService = async (args: Record<string, unknown>) => {
+    const tool = (
+      server as unknown as {
+        _registeredTools: Record<
+          string,
+          { handler: (a: unknown, b: unknown) => Promise<{ content: Array<{ text: string }> }> }
+        >;
+      }
+    )._registeredTools['service'];
+    return tool.handler(args, {});
+  };
+
+  describe('update_application', () => {
+    it('requires uuid and app_uuid', async () => {
+      const result = (await callService({ action: 'update_application' })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(result.content[0].text).toContain('uuid (service) and app_uuid required');
+    });
+
+    it('calls updateServiceApplication with correct args', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateServiceApplication')
+        .mockResolvedValue({ uuid: 'app-uuid', name: 'updated' } as any);
+
+      await callService({
+        action: 'update_application',
+        uuid: 'svc-uuid',
+        app_uuid: 'app-uuid',
+        url: 'https://example.com',
+        human_name: 'My App',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'svc-uuid',
+        'app-uuid',
+        expect.objectContaining({ url: 'https://example.com', human_name: 'My App' }),
+        { forceDomainOverride: undefined },
+      );
+    });
+  });
+
+  describe('start_application', () => {
+    it('requires uuid and app_uuid', async () => {
+      const result = (await callService({ action: 'start_application' })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(result.content[0].text).toContain('uuid (service) and app_uuid required');
+    });
+
+    it('calls startServiceApplication with correct args', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'startServiceApplication')
+        .mockResolvedValue({ message: 'Started' });
+
+      await callService({
+        action: 'start_application',
+        uuid: 'svc-uuid',
+        app_uuid: 'app-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-uuid', 'app-uuid', {
+        force: undefined,
+        latest: undefined,
+      });
+    });
+
+    it('forwards force and latest params', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'startServiceApplication')
+        .mockResolvedValue({ message: 'Started' });
+
+      await callService({
+        action: 'start_application',
+        uuid: 'svc-uuid',
+        app_uuid: 'app-uuid',
+        force: true,
+        latest: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-uuid', 'app-uuid', { force: true, latest: true });
+    });
+  });
+
+  describe('stop_application', () => {
+    it('requires uuid and app_uuid', async () => {
+      const result = (await callService({ action: 'stop_application' })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(result.content[0].text).toContain('uuid (service) and app_uuid required');
+    });
+
+    it('calls stopServiceApplication with correct args', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'stopServiceApplication')
+        .mockResolvedValue({ message: 'Stopped' });
+
+      await callService({
+        action: 'stop_application',
+        uuid: 'svc-uuid',
+        app_uuid: 'app-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-uuid', 'app-uuid');
+    });
+  });
+
+  describe('restart_application', () => {
+    it('requires uuid and app_uuid', async () => {
+      const result = (await callService({ action: 'restart_application' })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(result.content[0].text).toContain('uuid (service) and app_uuid required');
+    });
+
+    it('calls restartServiceApplication with correct args', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'restartServiceApplication')
+        .mockResolvedValue({ message: 'Restarted' });
+
+      await callService({
+        action: 'restart_application',
+        uuid: 'svc-uuid',
+        app_uuid: 'app-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-uuid', 'app-uuid');
+    });
   });
 });
 

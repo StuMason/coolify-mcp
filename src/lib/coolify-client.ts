@@ -59,6 +59,7 @@ import type {
   Service,
   CreateServiceRequest,
   UpdateServiceRequest,
+  UpdateServiceApplicationRequest,
   ServiceCreateResponse,
   // Deployment types
   Deployment,
@@ -335,6 +336,9 @@ export function errorHint(status: number, path: string): string | undefined {
   }
   if (status === 401 || status === 403) {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
+  }
+  if (status === 404 && /\/services\/[\w-]+\/applications/.test(path)) {
+    return 'Sub-application management (update_application) requires Coolify v4.2+. Check version with `get_version`. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/tags(\/|$)/.test(path)) {
     // Both causes look identical from the status, so name both rather than
@@ -1477,6 +1481,53 @@ export class CoolifyClient {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
+  }
+
+  async updateServiceApplication(
+    serviceUuid: string,
+    appUuid: string,
+    data: UpdateServiceApplicationRequest,
+    options?: { forceDomainOverride?: boolean },
+  ): Promise<Application> {
+    const query = this.buildQueryString({
+      force_domain_override: options?.forceDomainOverride,
+    });
+    return this.request<Application>(`/services/${serviceUuid}/applications/${appUuid}${query}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async startServiceApplication(
+    serviceUuid: string,
+    appUuid: string,
+    options?: { force?: boolean; latest?: boolean },
+  ): Promise<MessageResponse> {
+    const query = this.buildQueryString({
+      force: options?.force,
+      latest: options?.latest,
+    });
+    return this.request<MessageResponse>(
+      `/services/${serviceUuid}/applications/${appUuid}/start${query}`,
+      {
+        method: 'POST',
+      },
+    );
+  }
+
+  async stopServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${serviceUuid}/applications/${appUuid}/stop`, {
+      method: 'POST',
+    });
+  }
+
+  async restartServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/services/${serviceUuid}/applications/${appUuid}/restart`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   async deleteService(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
