@@ -5,15 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.2] - 2026-08-05
+
+No runtime changes. Safe to skip; nothing to upgrade for.
+
+### Changed
+
+- README, changelog and site copy rewritten for skimmability: outcomes stated first, entries shortened, em-dashes removed per house style. Entries older than 2.18.0 keep their original wording.
+- Bumped devDependency lint-staged from 17.2.0 to 17.3.0 (#323).
+
 ## [2.18.1] - 2026-08-04
 
 ### Fixed
 
-- **Every Google Gemini request failed while this server was connected.** `stop_all_apps` declared `confirm: z.literal(true)`, which zod emits as `const: true`; `@ai-sdk/google` rewrites a JSON Schema `const` into `enum: [const]` when it converts the tool list, and Google's `enum` accepts strings only. `generateContent` answered `400 Invalid value at 'tools[0].function_declarations[42].parameters.properties[0].value.enum[0]' (TYPE_STRING), true` — and it rejects the **request**, not the offending declaration, so all 44 tools went down with the one. The symptom is a client that cannot make a single Gemini call until it disables this tool by name, which does not look like a schema problem from the outside. Anthropic and the OpenAI-compatible providers accepted the same list unchanged, which is why it survived from #261 to here.
+- **Google Gemini rejected every request while this server was connected** (#325). Upgrade to this version and Gemini works again; no config changes needed.
 
-  `confirm` is now `z.boolean()` and the handler's existing `confirm !== true` check is the gate. **Nothing is loosened**: a literal only ever required the model to type `true`, and a model willing to stop the estate types it either way — the real confirmation is the #261 elicitation prompt, in front of a human, and it is untouched. Anything that is not a boolean (`"true"`, `1`, omitted) is still refused by the parser before the handler runs, and `false` is refused before any Coolify call is made.
+  The cause: `stop_all_apps` declared its `confirm` parameter as `z.literal(true)`. Zod emits that as `const: true`, `@ai-sdk/google` converts `const` into `enum: [true]`, and Google's API only accepts string enum values. Google rejects the whole request, not the one bad declaration, so all 44 tools went down and the 400 error named none of them. Anthropic and the OpenAI-compatible providers accept the same schema, which is how it shipped unnoticed.
 
-  A test now walks every tool's schema over a real `tools/list` round trip and fails on any non-string `enum` or `const`, so the next literal is caught at the tool that adds it rather than by a provider six models away.
+  `confirm` is now a plain boolean. The handler still refuses anything but an explicit `true` before any Coolify call, and the human confirmation prompt is unchanged. A new test walks every tool schema exactly as a client receives it and fails on any non-string `enum` or `const`, so the next one gets caught in CI instead of by a provider.
 
 ### Security
 
@@ -23,17 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Confirmation for the credential deletes** (#315) — `private_keys delete`, `cloud_tokens delete` and `github_apps delete` now elicit like the other destructive operations. The boundary drawn, recorded here so it is a decision rather than an accident: a delete gets a prompt when the loss is **irrecoverable** (key material and token values are write-only in Coolify — once deleted, they only come back if you still hold the original) or **estate-wide** (deleting a GitHub app breaks every application sourced from it, and the prompt counts them: "2 applications (api, worker) sourced from it will lose their deploy source"). Routine deletes — storages, scheduled tasks, individual env vars, backup schedules, `deployment cancel` — deliberately stay unprompted, and a test pins that so growing a guard is a revisit of the boundary, not a side effect. Prompt fatigue is the failure mode: a dialog on every delete is how dialogs stop being read.
+- **Confirmation for the credential deletes** (#315). `private_keys delete`, `cloud_tokens delete` and `github_apps delete` now elicit like the other destructive operations. The boundary is deliberate: a delete gets a prompt when the loss is **irrecoverable** (key material and token values are write-only in Coolify, so once deleted they only come back if you still hold the original) or **estate-wide** (deleting a GitHub app breaks every application sourced from it, and the prompt counts them: "2 applications (api, worker) sourced from it will lose their deploy source"). Routine deletes (storages, scheduled tasks, individual env vars, backup schedules, `deployment cancel`) deliberately stay unprompted, and a test pins that so growing a guard is a revisit of the boundary, not a side effect. A dialog on every delete is how dialogs stop being read.
 
   The GitHub-app blast radius filters by `source_type` as well as `source_id`, because the numeric id can collide with a GitLab source. Verified live: `source_type` is the Laravel class name (`App\Models\GithubApp`), null for public-repo applications.
 
-- **`private_keys update` with new key material is guarded like the delete** (#315 review) — overwriting key material IS deleting the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
+- **`private_keys update` with new key material is guarded like the delete** (#315 review). Overwriting key material deletes the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
 
-- **Test suite and type checking for the docs site's contact endpoint** (#319) — the site had no test runner while `/api/contact` feeds unauthenticated form fields into SES subject and reply-to headers. 33 vitest cases now drive the real handler (header injection, origin checks, rate-limiter branches including the global ceiling, failure honesty), and `astro check` enforces the strict tsconfig in CI. Site-only; nothing in the npm package changes.
+- **Test suite and type checking for the docs site's contact endpoint** (#319). The site had no test runner while `/api/contact` feeds unauthenticated form fields into SES subject and reply-to headers. 33 vitest cases now drive the real handler (header injection, origin checks, rate-limiter branches including the global ceiling, failure honesty), and `astro check` enforces the strict tsconfig in CI. Site-only; nothing in the npm package changes.
 
 ### Fixed
 
-- **Multi-paragraph enquiries through the site contact form arrived as one line** — the CRLF flattening that protects the SES headers also ran over the message body, where newlines are content, not an injection vector. The body now keeps its paragraphs (CRLF normalised to LF).
+- **Multi-paragraph enquiries through the site contact form arrived as one line.** The CRLF flattening that protects the SES headers also ran over the message body, where newlines are content, not an injection vector. The body now keeps its paragraphs (CRLF normalised to LF).
 
 ## [2.17.0] - 2026-07-30
 

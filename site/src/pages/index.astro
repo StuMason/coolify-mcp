@@ -4,9 +4,9 @@ import { CAPABILITIES, TOOL_COUNT } from '../data/tools.ts';
 
 export const prerender = true;
 
-const title = 'coolify-mcp — let an AI run your infrastructure, safely';
+const title = 'coolify-mcp: let an AI run your infrastructure, safely';
 const description =
-  'An open-source MCP server that gives Claude, Cursor and any AI client a deliberate, safe way to operate a live Coolify platform — deploy, diagnose, restart and roll back. Free and MIT.';
+  'An open-source MCP server that gives Claude, Cursor and any AI client a deliberate, safe way to operate a live Coolify platform: deploy, diagnose, restart and roll back. Free and MIT.';
 
 const CONFIG = `{
   "mcpServers": {
@@ -43,7 +43,7 @@ const PRINCIPLES = [
 const OFFERS = [
   {
     t: 'An MCP server for your product',
-    d: 'Give Claude, Cursor and every other AI client a proper way into your API — like this one.',
+    d: 'Give Claude, Cursor and every other AI client a proper way into your API, like this one.',
   },
   {
     t: 'Answers from your own stuff',
@@ -77,7 +77,7 @@ const OFFERS = [
           <h1 class="h1">Your AI can read your infrastructure. It should be able to run it.</h1>
           <p class="lede">
             coolify-mcp gives Claude, Cursor and any other MCP client a deliberate way to operate a
-            live Coolify platform — deploy, diagnose, restart, roll back — and hands it only what it
+            live Coolify platform (deploy, diagnose, restart, roll back) and hands it only what it
             can take in.
           </p>
         </div>
@@ -183,9 +183,8 @@ const OFFERS = [
           <h2 class="h2">Your clients want AI. You need someone who actually ships it.</h2>
           <p class="lede">
             I work out what is possible, what it costs to keep running, and where the data has to
-            live. Then I build it — under your name, if you are an agency. And when the honest
-            answer is that a job does not need AI, I will say so before anyone has paid for
-            anything.
+            live. Then I build it, under your name if you are an agency. And when the honest answer
+            is that a job does not need AI, I will say so before anyone has paid for anything.
           </p>
         </div>
         <div class="cards cards-3">
@@ -212,7 +211,7 @@ const OFFERS = [
             <h2 class="h2 h2-sm">Tell me what you are trying to build.</h2>
             <p class="lede lede-wide">
               A rough paragraph is enough to start. You will get a straight answer from a person,
-              usually the same day — including if I think you do not need me.
+              usually the same day, including if I think you do not need me.
             </p>
             <p class="foot-note">
               Or email <a class="ul" href="mailto:hey@stumason.dev">hey@stumason.dev</a>
@@ -299,7 +298,7 @@ const OFFERS = [
       } catch {
         status.className = 'status is-bad';
         status.textContent =
-          'That did not send — you may be offline. Email hey@stumason.dev instead.';
+          'That did not send (you may be offline). Email hey@stumason.dev instead.';
       } finally {
         if (button) button.disabled = false;
       }

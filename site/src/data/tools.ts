@@ -20,7 +20,7 @@ export const CAPABILITIES: { t: string; d: string }[] = [
   },
   {
     t: 'Create and destroy',
-    d: 'Applications, databases, services, projects and environments — created, changed and removed.',
+    d: 'Applications, databases, services, projects and environments: created, changed and removed.',
   },
   {
     t: 'Handle the configuration',
@@ -28,6 +28,6 @@ export const CAPABILITIES: { t: string; d: string }[] = [
   },
   {
     t: 'Move across the whole estate',
-    d: 'One key across many apps, a project redeployed, or everything stopped at once — each behind a human confirmation.',
+    d: 'One key across many apps, a project redeployed, or everything stopped at once, each behind a human confirmation.',
   },
 ];
