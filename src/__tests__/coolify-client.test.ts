@@ -6113,6 +6113,15 @@ describe('errorHint', () => {
     );
   });
 
+  it('hints at the v4.2 requirement for a 404 on a service databases route', () => {
+    // list_containers calls /applications and /databases in parallel and
+    // surfaces whichever 404 loses the race. On a 4.1.2 instance that was
+    // routinely /databases, which fell through to the generic uuid-mismatch
+    // hint — so the one route users actually hit gave the least useful answer.
+    expect(errorHint(404, '/services/svc-uuid/databases')).toMatch(/v4\.2/);
+    expect(errorHint(404, '/services/svc-uuid/databases')).toMatch(/list_containers/);
+  });
+
   it('hints at a possible resource-type mismatch for a 404 on a uuid route', () => {
     expect(errorHint(404, '/applications/app-uuid')).toMatch(/different resource type/);
   });

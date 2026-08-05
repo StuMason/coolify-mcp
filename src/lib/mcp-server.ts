@@ -2842,7 +2842,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'search_docs',
-      'Search Coolify documentation for how-to guides, configuration, troubleshooting',
+      'Search the official Coolify docs index. Returns matching pages (title, url, one-line description) ranked by relevance — fetch the url for full detail.',
       {
         query: z.string().describe('Search query'),
         limit: z.number().optional().describe('Max results (default 5)'),

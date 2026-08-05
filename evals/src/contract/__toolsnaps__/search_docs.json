@@ -1,6 +1,6 @@
 {
   "name": "search_docs",
-  "description": "Search Coolify documentation for how-to guides, configuration, troubleshooting",
+  "description": "Search the official Coolify docs index. Returns matching pages (title, url, one-line description) ranked by relevance — fetch the url for full detail.",
   "annotations": {
     "readOnlyHint": true
   },

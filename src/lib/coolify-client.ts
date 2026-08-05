@@ -337,8 +337,12 @@ export function errorHint(status: number, path: string): string | undefined {
   if (status === 401 || status === 403) {
     return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
   }
-  if (status === 404 && /\/services\/[\w-]+\/applications/.test(path)) {
-    return 'Sub-application management (update_application) requires Coolify v4.2+. Check version with `get_version`. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
+  // Covers /applications AND /databases: `list_containers` calls both in
+  // parallel, and whichever 404 loses the race is the one the user sees — on
+  // a pre-4.2 instance the /databases rejection routinely won and surfaced
+  // the generic uuid-mismatch hint instead of this one (seen live on 4.1.2).
+  if (status === 404 && /\/services\/[\w-]+\/(applications|databases)/.test(path)) {
+    return 'Service sub-resource endpoints (list_containers, update_application) require Coolify v4.2+. Check version with `get_version`. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/tags(\/|$)/.test(path)) {
     // Both causes look identical from the status, so name both rather than
