@@ -351,6 +351,17 @@ describe('CoolifyClient', () => {
       expect(result.manual_webhook_secret_github).toBe('***');
       expect(JSON.stringify(result)).not.toContain('sentinel-secret');
     });
+
+    it('passes malformed upstream payloads through untouched instead of crashing', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.getApplication('app-uuid')).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.updateApplication('app-uuid', { name: 'x' })).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.listApplications()).toBeNull();
+    });
   });
 
   describe('credential masking on detail endpoints (#327/#328)', () => {
