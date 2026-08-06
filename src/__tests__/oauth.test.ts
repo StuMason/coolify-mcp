@@ -4,12 +4,13 @@
 
 import { jest } from '@jest/globals';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OAuthProvider, OAuthErrorResponse, canonicalResource } from '../lib/oauth.js';
 import {
   createHttpApp,
+  normalizePublicUrl,
   validateCoolifyToken,
   RateLimiter,
   type HttpServerConfig,
@@ -654,6 +655,180 @@ describe('HTTP app routes', () => {
     // stop absent.
     expect(listText).toContain('get_infrastructure_overview');
     expect(listText).not.toContain('stop_all_apps');
+  });
+});
+
+describe('normalizePublicUrl', () => {
+  it('accepts every shape SERVICE_FQDN and humans produce', () => {
+    expect(normalizePublicUrl('https://mcp.example.com')).toBe('https://mcp.example.com');
+    expect(normalizePublicUrl('mcp.example.com')).toBe('https://mcp.example.com');
+    expect(normalizePublicUrl('  mcp.example.com/  ')).toBe('https://mcp.example.com');
+    expect(normalizePublicUrl('https://mcp.example.com///')).toBe('https://mcp.example.com');
+    expect(normalizePublicUrl('http://localhost:8080')).toBe('http://localhost:8080');
+    expect(normalizePublicUrl('https://mcp.example.com/base/')).toBe(
+      'https://mcp.example.com/base',
+    );
+    expect(normalizePublicUrl('https://mcp.example.com?utm=x#frag')).toBe(
+      'https://mcp.example.com',
+    );
+  });
+
+  it('rejects garbage and non-http protocols', () => {
+    expect(() => normalizePublicUrl('')).toThrow();
+    expect(() => normalizePublicUrl('   ')).toThrow();
+    expect(() => normalizePublicUrl('ftp://mcp.example.com')).toThrow('unsupported protocol');
+    expect(() => normalizePublicUrl('http://')).toThrow();
+  });
+});
+
+describe('adversarial (#303 hardening)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  function makeApp(): ReturnType<typeof createHttpApp> {
+    return createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+  }
+
+  it('a tampered redirect_uri at the form POST renders an error, never a redirect', async () => {
+    global.fetch = jest.fn(
+      async () => new Response(JSON.stringify({ name: 'Root Team' }), { status: 200 }),
+    ) as typeof fetch;
+    const app = makeApp();
+    const clientId = registerTestClient(app.provider);
+    const { challenge } = pkcePair();
+    const response = await app.fetch(
+      new Request(`${ISSUER}/authorize`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: 'https://attacker.example.com/steal',
+          response_type: 'code',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+          coolify_token: 'anything',
+        }).toString(),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(response.headers.get('location')).toBeNull();
+    // The proof-of-access call must never have been made for a request that
+    // could not legitimately complete.
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('a hostile client_name registered via DCR cannot script the authorize page', async () => {
+    const app = makeApp();
+    const registered = app.provider.registerClient({
+      client_name: '</title><script>steal()</script>',
+      redirect_uris: ['https://client.example.com/cb'],
+    });
+    const { challenge } = pkcePair();
+    const query = new URLSearchParams({
+      client_id: registered.client_id as string,
+      redirect_uri: 'https://client.example.com/cb',
+      response_type: 'code',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    });
+    const page = await (await app.fetch(new Request(`${ISSUER}/authorize?${query}`))).text();
+    expect(page).not.toContain('<script>steal()');
+  });
+
+  it('advertises RFC 9207 and echoes iss on the redirect', async () => {
+    global.fetch = jest.fn(
+      async () => new Response(JSON.stringify({ name: 'Root Team' }), { status: 200 }),
+    ) as typeof fetch;
+    const app = makeApp();
+    const metadata = (await (
+      await app.fetch(new Request(`${ISSUER}/.well-known/oauth-authorization-server`))
+    ).json()) as Record<string, unknown>;
+    expect(metadata.authorization_response_iss_parameter_supported).toBe(true);
+
+    const clientId = registerTestClient(app.provider);
+    const { challenge } = pkcePair();
+    const response = await app.fetch(
+      new Request(`${ISSUER}/authorize`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: 'https://client.example.com/callback',
+          response_type: 'code',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+          coolify_token: 'valid',
+        }).toString(),
+      }),
+    );
+    expect(new URL(response.headers.get('location')!).searchParams.get('iss')).toBe(ISSUER);
+  });
+
+  it('serves both well-known path forms clients derive from the /mcp resource', async () => {
+    const app = makeApp();
+    for (const path of [
+      '/.well-known/oauth-authorization-server/mcp',
+      '/.well-known/oauth-protected-resource/mcp',
+    ]) {
+      const response = await app.fetch(new Request(`${ISSUER}${path}`));
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it('rate limits registration hammering', async () => {
+    const app = makeApp();
+    let lastStatus = 0;
+    for (let i = 0; i < 25; i += 1) {
+      const response = await app.fetch(
+        new Request(`${ISSUER}/register`, {
+          method: 'POST',
+          headers: { 'x-forwarded-for': '203.0.113.9' },
+          body: JSON.stringify({ redirect_uris: ['https://client.example.com/cb'] }),
+        }),
+      );
+      lastStatus = response.status;
+    }
+    expect(lastStatus).toBe(429);
+  });
+
+  it('answers garbage token requests with OAuth errors, not stack traces', async () => {
+    const app = makeApp();
+    const unknownGrant = await app.fetch(
+      new Request(`${ISSUER}/token`, { method: 'POST', body: 'grant_type=password&user=admin' }),
+    );
+    // RFC 6749: unsupported_grant_type is a 400-class error.
+    expect(unknownGrant.status).toBe(400);
+    expect(((await unknownGrant.json()) as { error: string }).error).toBe('unsupported_grant_type');
+    const unknownClient = await app.fetch(
+      new Request(`${ISSUER}/token`, {
+        method: 'POST',
+        body: 'grant_type=authorization_code&client_id=forged&code=x',
+      }),
+    );
+    expect(unknownClient.status).toBe(401);
+    const emptyBody = await app.fetch(new Request(`${ISSUER}/token`, { method: 'POST' }));
+    expect([400, 401]).toContain(emptyBody.status);
+  });
+
+  it('writes the state file owner-read-only (0600)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-perm-'));
+    const stateFile = join(dir, 'state.json');
+    try {
+      const provider = makeProvider(stateFile);
+      registerTestClient(provider);
+      provider.flush();
+      const mode = statSync(stateFile).mode & 0o777;
+      expect(mode).toBe(0o600);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

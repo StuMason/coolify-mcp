@@ -151,6 +151,9 @@ export class OAuthProvider {
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
       scopes_supported: ['coolify'],
+      // RFC 9207: the redirect carries `iss`, so clients can detect
+      // authorization-server mix-up. Advertising it obliges them to check.
+      authorization_response_iss_parameter_supported: true,
     };
   }
 
@@ -312,6 +315,7 @@ export class OAuthProvider {
 
     const url = new URL(request.redirectUri);
     url.searchParams.set('code', code);
+    url.searchParams.set('iss', this.options.issuer);
     if (request.state !== null) url.searchParams.set('state', request.state);
     return { redirectTo: url.href };
   }

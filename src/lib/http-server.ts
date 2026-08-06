@@ -30,6 +30,33 @@ export interface HttpServerConfig {
 }
 
 /**
+ * Accept the shapes MCP_PUBLIC_URL actually arrives in and produce one
+ * canonical origin. Coolify's SERVICE_FQDN magic variable has carried both
+ * bare domains and full URLs across versions, and a human typing the value
+ * will produce trailing slashes and stray whitespace — none of which should
+ * be a boot failure. A bare domain is assumed https (the TLS-terminating
+ * proxy is the deployment model); anything unparseable throws.
+ */
+export function normalizePublicUrl(raw: string): string {
+  // Parse before any slash-stripping: pre-mangling turns scheme-only garbage
+  // like "http://" into something that survives the https-prefix fallback.
+  let value = raw.trim();
+  if (value === '') throw new Error('empty URL');
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+    value = `https://${value}`;
+  }
+  const url = new URL(value);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`unsupported protocol: ${url.protocol}`);
+  }
+  if (!url.hostname) {
+    throw new Error('no hostname');
+  }
+  // Origin + path (no trailing slash), dropping query/fragment noise.
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
+/**
  * Tier-2 proof of access: does this Coolify API token belong to someone with
  * access to the instance this container manages? `GET /teams/current` 401s on
  * a bad token and returns the token's team on a good one. The token is used
@@ -152,6 +179,9 @@ function authorizePage(params: URLSearchParams, clientName: string, error?: stri
       <p class="note">Used once to prove you have access to this Coolify instance, then discarded.
       It is never stored and never sent to the client. Create one under
       Keys &amp; Tokens &rarr; API tokens in your Coolify dashboard.</p>
+      <p class="note"><strong>Before you paste anything:</strong> check the address bar. It should
+      show the domain <em>you</em> deployed this MCP server on. Only your own server should ever
+      ask for a Coolify token.</p>
       <button type="submit">Authorize</button>
   </form>
 </body>
@@ -222,7 +252,12 @@ export function createHttpApp(config: HttpServerConfig): {
     ) {
       return json(provider.protectedResourceMetadata());
     }
-    if (path === '/.well-known/oauth-authorization-server') {
+    // The path-suffix form is what a client derives from the resource URL's
+    // /mcp path per RFC 8414 §3.1; both forms must answer.
+    if (
+      path === '/.well-known/oauth-authorization-server' ||
+      path === '/.well-known/oauth-authorization-server/mcp'
+    ) {
       return json(provider.authorizationServerMetadata());
     }
 
