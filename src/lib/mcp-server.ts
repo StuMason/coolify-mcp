@@ -991,11 +991,15 @@ export class CoolifyMcpServer extends McpServer {
         ),
     );
 
-    this.defineTool('get_application', 'App details', { uuid: z.string() }, async ({ uuid }) =>
-      wrapWithActions(
-        () => this.client.getApplication(uuid),
-        (app) => getApplicationActions(app.uuid, app.status),
-      ),
+    this.defineTool(
+      'get_application',
+      'App details. Credentials (webhook secrets, basic-auth password, compose bodies, labels) are masked by default; pass reveal: true when you explicitly need them.',
+      { uuid: z.string(), reveal: z.boolean().optional() },
+      async ({ uuid, reveal }) =>
+        wrapWithActions(
+          () => this.client.getApplication(uuid, { reveal }),
+          (app) => getApplicationActions(app.uuid, app.status),
+        ),
     );
 
     this.defineTool(

@@ -1,6 +1,6 @@
 {
   "name": "get_application",
-  "description": "App details",
+  "description": "App details. Credentials (webhook secrets, basic-auth password, compose bodies, labels) are masked by default; pass reveal: true when you explicitly need them.",
   "annotations": {
     "readOnlyHint": true
   },
@@ -9,6 +9,9 @@
     "properties": {
       "uuid": {
         "type": "string"
+      },
+      "reveal": {
+        "type": "boolean"
       }
     },
     "required": [

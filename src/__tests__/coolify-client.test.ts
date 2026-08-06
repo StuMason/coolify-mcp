@@ -275,6 +275,95 @@ describe('CoolifyClient', () => {
     });
   });
 
+  describe('get_application credential masking (#332)', () => {
+    const leakyApplication = {
+      ...mockApplication,
+      manual_webhook_secret_github: 'gh-hmac-secret',
+      manual_webhook_secret_gitlab: 'gl-hmac-secret',
+      http_basic_auth_password: 'basic-secret',
+      custom_labels: 'dHJhZWZpay5odHBhc3N3ZA==',
+      destination: {
+        id: 0,
+        network: 'coolify',
+        server: {
+          id: 0,
+          uuid: 'srv-0',
+          name: 'localhost',
+          ip: 'host.docker.internal',
+          status: 'running',
+          settings: {
+            sentinel_token: 'sentinel-secret',
+            logdrain_custom_config: 'Header Authorization Bearer drain-secret',
+          },
+        },
+      },
+    };
+
+    it('masks webhook secrets and projects the embedded server by default', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyApplication));
+
+      const result = (await client.getApplication('app-uuid')) as unknown as Record<string, any>;
+
+      expect(result.manual_webhook_secret_github).toBe('***');
+      expect(result.manual_webhook_secret_gitlab).toBe('***');
+      expect(result.http_basic_auth_password).toBe('***');
+      expect(result.custom_labels).toBe('***');
+      expect(result.destination.server).toEqual({
+        uuid: 'srv-0',
+        name: 'localhost',
+        ip: 'host.docker.internal',
+        status: 'running',
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain('hmac-secret');
+      expect(serialized).not.toContain('sentinel-secret');
+      expect(serialized).not.toContain('drain-secret');
+    });
+
+    it('reveal: true returns the app credentials but still projects the server', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyApplication));
+
+      const result = (await client.getApplication('app-uuid', {
+        reveal: true,
+      })) as unknown as Record<string, any>;
+
+      expect(result.manual_webhook_secret_github).toBe('gh-hmac-secret');
+      expect(result.custom_labels).toBe('dHJhZWZpay5odHBhc3N3ZA==');
+      expect(JSON.stringify(result)).not.toContain('sentinel-secret');
+    });
+
+    it('updateApplication response is masked', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyApplication));
+
+      const result = (await client.updateApplication('app-uuid', {
+        name: 'test-app',
+      })) as unknown as Record<string, any>;
+
+      expect(result.manual_webhook_secret_github).toBe('***');
+      expect(JSON.stringify(result)).not.toContain('drain-secret');
+    });
+
+    it('listApplications full (non-summary) is masked too', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([leakyApplication]));
+
+      const [result] = (await client.listApplications()) as unknown as Array<Record<string, any>>;
+
+      expect(result.manual_webhook_secret_github).toBe('***');
+      expect(JSON.stringify(result)).not.toContain('sentinel-secret');
+    });
+
+    it('passes malformed upstream payloads through untouched instead of crashing', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.getApplication('app-uuid')).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.updateApplication('app-uuid', { name: 'x' })).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.listApplications()).toBeNull();
+    });
+  });
+
   describe('credential masking on detail endpoints (#327/#328)', () => {
     // A pre-4.2 server row as Coolify actually serializes it: sentinel token
     // and log-drain credentials in the clear on the settings blob.

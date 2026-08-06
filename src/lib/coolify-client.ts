@@ -1159,11 +1159,13 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const apps = await this.request<Application[]>(`/applications${query}`);
-    return options?.summary && Array.isArray(apps) ? apps.map(toApplicationSummary) : apps;
+    if (options?.summary && Array.isArray(apps)) return apps.map(toApplicationSummary);
+    return Array.isArray(apps) ? apps.map((app) => sanitizeResourceDetail(app)) : apps;
   }
 
-  async getApplication(uuid: string): Promise<Application> {
-    return this.request<Application>(`/applications/${uuid}`);
+  async getApplication(uuid: string, options?: { reveal?: boolean }): Promise<Application> {
+    const app = await this.request<Application>(`/applications/${uuid}`);
+    return sanitizeResourceDetail(app, options?.reveal);
   }
 
   async createApplicationPublic(data: CreateApplicationPublicRequest): Promise<UuidResponse> {
@@ -1233,10 +1235,11 @@ export class CoolifyClient {
     if (mapped.docker_compose_raw) {
       (payload as Record<string, unknown>).docker_compose_raw = toBase64(mapped.docker_compose_raw);
     }
-    return this.request<Application>(`/applications/${uuid}`, {
+    const app = await this.request<Application>(`/applications/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
+    return sanitizeResourceDetail(app);
   }
 
   async deleteApplication(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
