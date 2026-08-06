@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **SDK v2 (`@modelcontextprotocol/server`)** (#259): the stateless split-package core replaces `@modelcontextprotocol/sdk`. Tool surface is unchanged; the only wire-visible difference is the declared JSON Schema draft on `tools/list` (draft-07 → 2020-12).
 
+## [2.19.3] - 2026-08-06
+
+A security release, and the one that ends the leak class instead of patching another instance of it. Update from any earlier version.
+
+### Security
+
+- **Credential masking now runs centrally, on every response, at every depth** (#334; found by an external field test of the remote server, and exactly the failure they diagnosed). Three earlier fixes each masked one endpoint, and `environments get` then leaked database passwords, connection strings, the server's sentinel token and the full log-drain configuration through nested paths none of them walked. One sanitizer now sits at the client's response boundary: infrastructure secrets (SSH key material, sentinel token, log-drain credentials, GitHub App secrets) are masked unconditionally; any embedded server row is projected down to uuid/name/ip; resource credentials and nested env-var values are masked unless the tool's `reveal: true` is passed. Endpoints added in future are covered the day they land. Every masking test from the three per-endpoint fixes passes unchanged.
+- **`get_application` no longer returns webhook secrets or the full server row** (#332). The raw payload carried the manual webhook HMAC secrets (enough to forge deploys), the basic-auth password, `custom_labels` (htpasswd hashes), and the entire nested server row. Masked with `reveal: true` opt-in, matching `get_database`; the server row is projected unconditionally.
+
 ## [2.19.2] - 2026-08-06
 
 A security release. Update if your Coolify is older than v4.2: until now, four read tools handed an LLM client plaintext credentials that upstream serves decrypted on those versions.
