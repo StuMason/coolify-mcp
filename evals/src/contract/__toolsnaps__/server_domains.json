@@ -1,0 +1,19 @@
+{
+  "name": "server_domains",
+  "description": "Domains on server",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

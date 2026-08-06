@@ -1,0 +1,19 @@
+{
+  "name": "diagnose_app",
+  "description": "App diagnostics by UUID/name/domain",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

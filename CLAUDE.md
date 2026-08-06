@@ -19,6 +19,23 @@ npm run format       # Run Prettier
 COOLIFY_BASE_URL="https://your-coolify.com" COOLIFY_ACCESS_TOKEN="token" node dist/index.js
 ```
 
+### Evals & red teaming (`evals/`)
+
+Self-contained package (own `package.json`/toolchain, like `site/`) that treats
+tool descriptions as prompts and measures them. If you edit a tool's name,
+description, schema or annotation, `evals` tool-contract snapshots will fail
+until you review and `npm run snapshots:update`. Layers: (1) contract snapshots,
+(2) tool-selection evals, (3) prompt-injection regression, (4) promptfoo red
+team. All runs use a fixture backend that refuses to start if `COOLIFY_URL`
+looks real. See `evals/README.md`; findings in `evals/FINDINGS.md` — note **#4**
+(secret-exfiltration-via-log-injection on weak models, **fixed**: `asUntrustedLogs`
+frames every model-facing log surface — `logs`, `application_logs`, `diagnose_app`,
+`diagnose_server` validation output, and all `deployment`/`deploy` build output
+(`logs_tail`, get, `list_for_app`) — as untrusted data, with a per-call nonce so
+the boundary can't be forged;
+5/5→0/5 leaks on Gemini) and
+**#5** (frontier models act on vague requests, validating the elicitation guard).
+
 ## Architecture
 
 ### File Structure Pattern

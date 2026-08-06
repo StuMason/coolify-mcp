@@ -1,0 +1,65 @@
+{
+  "name": "scheduled_tasks",
+  "description": "Manage scheduled tasks for app or service: list/create/update/delete/list_executions/run_once. list_executions: the command's stdout comes back in the execution's message field. run_once: composite that creates a throwaway \"* * * * *\" task, polls list_executions every ~5s for the first terminal execution (or until wait_seconds elapses, default 90), deletes the task, and returns status+message. WARNING: the underlying cron may fire more than once before cleanup completes — make the command idempotent (e.g. `where not exists`) or tolerate re-execution. Coolify stores `command` in a varchar(255) column and rejects longer commands with a bodyless HTTP 500 — keep commands to 255 chars or fewer (#234).",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "service"
+        ]
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "create",
+          "update",
+          "delete",
+          "list_executions",
+          "run_once"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "task_uuid": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "command": {
+        "type": "string",
+        "maxLength": 255
+      },
+      "frequency": {
+        "type": "string"
+      },
+      "container": {
+        "type": "string"
+      },
+      "timeout": {
+        "type": "number"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "wait_seconds": {
+        "description": "run_once only: poll budget in seconds before giving up (default 90)",
+        "type": "number"
+      }
+    },
+    "required": [
+      "resource",
+      "action",
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

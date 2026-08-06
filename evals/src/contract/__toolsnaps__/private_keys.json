@@ -1,0 +1,38 @@
+{
+  "name": "private_keys",
+  "description": "Manage SSH keys: list/get/create/update/delete. Key material is never returned; identify keys by name, fingerprint and public key.",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "private_key": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

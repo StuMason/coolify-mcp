@@ -1,0 +1,98 @@
+{
+  "name": "service",
+  "description": "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle.",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "create",
+          "update",
+          "delete",
+          "list_containers",
+          "update_application",
+          "start_application",
+          "stop_application",
+          "restart_application"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "app_uuid": {
+        "description": "Sub-application UUID, required for update_application, start_application, stop_application, restart_application. Get from list_containers.",
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      },
+      "server_uuid": {
+        "type": "string"
+      },
+      "project_uuid": {
+        "type": "string"
+      },
+      "environment_name": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "instant_deploy": {
+        "type": "boolean"
+      },
+      "docker_compose_raw": {
+        "description": "Raw docker-compose YAML for custom services (auto base64-encoded)",
+        "type": "string"
+      },
+      "delete_volumes": {
+        "type": "boolean"
+      },
+      "url": {
+        "description": "FQDN for the sub-application (update_application only). Comma-separated for multiple.",
+        "type": "string"
+      },
+      "force_domain_override": {
+        "description": "Force the domain override even if validation fails (update_application only)",
+        "type": "boolean"
+      },
+      "human_name": {
+        "type": "string"
+      },
+      "image": {
+        "type": "string"
+      },
+      "exclude_from_status": {
+        "type": "boolean"
+      },
+      "is_log_drain_enabled": {
+        "type": "boolean"
+      },
+      "is_gzip_enabled": {
+        "type": "boolean"
+      },
+      "is_stripprefix_enabled": {
+        "type": "boolean"
+      },
+      "force": {
+        "description": "Force redeploy on start (start_application only)",
+        "type": "boolean"
+      },
+      "latest": {
+        "description": "Pull latest image on start (start_application only)",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

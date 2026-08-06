@@ -1,0 +1,19 @@
+{
+  "name": "list_databases",
+  "description": "List databases (summary)",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number"
+      },
+      "per_page": {
+        "type": "number"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

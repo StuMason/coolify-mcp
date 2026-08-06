@@ -1,0 +1,35 @@
+{
+  "name": "environments",
+  "description": "Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API)",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "delete"
+        ]
+      },
+      "project_uuid": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "action",
+      "project_uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

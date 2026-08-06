@@ -1,0 +1,96 @@
+{
+  "name": "env_vars",
+  "description": "Manage env vars for app, service, or database. Values are masked by default (returned as '***') to avoid leaking secrets to MCP clients; pass reveal=true on the list action when the caller explicitly needs the plaintext (e.g. 'what is FOO set to?'). On list, pass key to return only that variable — always combine reveal with key so only the requested value (not every secret on the resource) is exposed. Set is_buildtime=false (and/or is_runtime=true) for runtime-only vars to avoid Dockerfile ARG issues with multiline values like PEM keys. Preview vs production: is_preview marks a variable as applying to preview (pull-request) deployments rather than production. These are SEPARATE scopes — the same key can legitimately exist in both with different values, and that is normal configuration, not a mistake to reconcile. Check is_preview on each entry before concluding a variable is set wrong, and pass is_preview on create/update to target the preview scope (omit it to target production).",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "service",
+          "database"
+        ]
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "create",
+          "update",
+          "delete",
+          "bulk_update"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "key": {
+        "type": "string"
+      },
+      "value": {
+        "type": "string"
+      },
+      "env_uuid": {
+        "type": "string"
+      },
+      "is_buildtime": {
+        "type": "boolean"
+      },
+      "is_runtime": {
+        "type": "boolean"
+      },
+      "is_preview": {
+        "type": "boolean"
+      },
+      "reveal": {
+        "type": "boolean"
+      },
+      "data": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "is_preview": {
+              "type": "boolean"
+            },
+            "is_buildtime": {
+              "type": "boolean"
+            },
+            "is_runtime": {
+              "type": "boolean"
+            },
+            "is_literal": {
+              "type": "boolean"
+            },
+            "is_multiline": {
+              "type": "boolean"
+            },
+            "is_shown_once": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ]
+        }
+      }
+    },
+    "required": [
+      "resource",
+      "action",
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

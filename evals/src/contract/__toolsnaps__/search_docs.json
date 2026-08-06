@@ -1,0 +1,24 @@
+{
+  "name": "search_docs",
+  "description": "Search the official Coolify docs index. Returns matching pages (title, url, one-line description) ranked by relevance — fetch the url for full detail.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query"
+      },
+      "limit": {
+        "description": "Max results (default 5)",
+        "type": "number"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

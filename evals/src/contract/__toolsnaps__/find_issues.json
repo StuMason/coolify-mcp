@@ -1,0 +1,12 @@
+{
+  "name": "find_issues",
+  "description": "Scan infrastructure for problems",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

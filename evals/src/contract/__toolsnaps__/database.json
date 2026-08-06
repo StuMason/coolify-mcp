@@ -1,0 +1,130 @@
+{
+  "name": "database",
+  "description": "Manage database: create/delete",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "create",
+          "delete"
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "postgresql",
+          "mysql",
+          "mariadb",
+          "mongodb",
+          "redis",
+          "keydb",
+          "clickhouse",
+          "dragonfly"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "server_uuid": {
+        "type": "string"
+      },
+      "project_uuid": {
+        "type": "string"
+      },
+      "environment_name": {
+        "type": "string"
+      },
+      "destination_uuid": {
+        "description": "Destination UUID. Required if server has multiple destinations.",
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "image": {
+        "type": "string"
+      },
+      "is_public": {
+        "type": "boolean"
+      },
+      "public_port": {
+        "type": "number"
+      },
+      "instant_deploy": {
+        "type": "boolean"
+      },
+      "delete_volumes": {
+        "type": "boolean"
+      },
+      "postgres_user": {
+        "type": "string"
+      },
+      "postgres_password": {
+        "type": "string"
+      },
+      "postgres_db": {
+        "type": "string"
+      },
+      "mysql_root_password": {
+        "type": "string"
+      },
+      "mysql_user": {
+        "type": "string"
+      },
+      "mysql_password": {
+        "type": "string"
+      },
+      "mysql_database": {
+        "type": "string"
+      },
+      "mariadb_root_password": {
+        "type": "string"
+      },
+      "mariadb_user": {
+        "type": "string"
+      },
+      "mariadb_password": {
+        "type": "string"
+      },
+      "mariadb_database": {
+        "type": "string"
+      },
+      "mongo_initdb_root_username": {
+        "type": "string"
+      },
+      "mongo_initdb_root_password": {
+        "type": "string"
+      },
+      "mongo_initdb_database": {
+        "type": "string"
+      },
+      "redis_password": {
+        "type": "string"
+      },
+      "keydb_password": {
+        "type": "string"
+      },
+      "clickhouse_admin_user": {
+        "type": "string"
+      },
+      "clickhouse_admin_password": {
+        "type": "string"
+      },
+      "dragonfly_password": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

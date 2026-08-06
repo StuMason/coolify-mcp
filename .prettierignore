@@ -19,3 +19,8 @@ coverage/
 # site/ can never fail the MCP server's build — which is exactly what happened
 # once already. It is formatted by site/'s own `format:check` script.
 site/
+
+# The eval + red-team harness is likewise a self-contained mini-project with
+# its own toolchain and CI job. Kept out of the root prettier run for the same
+# reason as site/.
+evals/

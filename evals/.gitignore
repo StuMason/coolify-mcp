@@ -1,0 +1,12 @@
+node_modules/
+# never commit model/provider keys — this package's whole job is holding them
+.env
+.env.*
+# promptfoo generated artefacts and local eval/report state
+redteam.generated.yaml
+redteam-report.json
+redteam-results.json
+.promptfoo/
+promptfoo-errors.log
+# vitest-evals local recordings/report output, if enabled
+.vitest-evals/

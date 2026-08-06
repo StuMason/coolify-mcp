@@ -1,0 +1,22 @@
+{
+  "name": "get_service",
+  "description": "Service details. Credentials (compose bodies with resolved passwords, webhook secrets) are masked by default; pass reveal: true when you explicitly need them.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      },
+      "reveal": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

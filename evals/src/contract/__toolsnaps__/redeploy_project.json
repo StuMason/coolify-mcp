@@ -1,0 +1,22 @@
+{
+  "name": "redeploy_project",
+  "description": "Redeploy all apps in project",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "project_uuid": {
+        "type": "string"
+      },
+      "force": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "project_uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

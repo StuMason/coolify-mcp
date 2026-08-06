@@ -1,0 +1,22 @@
+{
+  "name": "get_database",
+  "description": "Database details. Credentials (passwords, connection URLs) are masked by default; pass reveal: true when you explicitly need them, e.g. to wire an app to the database.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      },
+      "reveal": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

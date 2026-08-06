@@ -1,0 +1,43 @@
+{
+  "name": "cloud_tokens",
+  "description": "Manage cloud provider tokens (Hetzner/DigitalOcean): list/get/create/update/delete/validate",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete",
+          "validate"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "provider": {
+        "type": "string",
+        "enum": [
+          "hetzner",
+          "digitalocean"
+        ]
+      },
+      "token": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

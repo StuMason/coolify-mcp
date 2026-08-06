@@ -1,0 +1,22 @@
+{
+  "name": "application_logs",
+  "description": "Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      },
+      "lines": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

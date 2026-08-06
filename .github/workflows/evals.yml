@@ -1,0 +1,123 @@
+name: Evals
+
+# Two tiers, deliberately different in how hard they fail (see evals/README.md):
+#
+#  - Contract snapshots (Layer 1) are deterministic and need no model key, so
+#    they are a HARD GATE on every PR that touches the tool surface or the eval
+#    harness. A description/schema/annotation edit that changes what a model
+#    sees now shows up as a snapshot diff in review.
+#
+#  - Tool-selection + injection evals (Layers 2–3) call a real model, so they
+#    only run when a key secret is present and they NEVER block merge — they
+#    report. This mirrors sentry-mcp's eval workflow: model-in-the-loop results
+#    inform review, they don't gate it (models are nondeterministic and keys
+#    are rate-limited). The redteam battery (Layer 4) is a separate scheduled
+#    workflow, not this one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    # No `paths:` filter on purpose. The contract job is the hard gate, so it
+    # must run on every PR — a paths-filtered required check never triggers on
+    # a PR that touches neither src/** nor evals/**, and sits pending forever.
+    # The job is fast, and the LLM job skips itself without a key.
+
+# Least privilege: these jobs only read the checkout.
+permissions:
+  contents: read
+
+# Don't stack concurrent (paid) runs on rapid pushes to the same PR/branch.
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Tool contract snapshots (hard gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+          # Include the evals lockfile so an evals-only dep change busts the cache.
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
+      - name: Build server
+        run: |
+          npm ci
+          npm run build
+      - name: Install eval deps
+        working-directory: evals
+        run: npm ci
+      - name: Typecheck evals
+        working-directory: evals
+        run: npm run typecheck
+      - name: Format check evals
+        working-directory: evals
+        run: npm run format:check
+      - name: Lint evals
+        working-directory: evals
+        run: npm run lint
+      - name: Verify tool snapshots
+        working-directory: evals
+        run: npm run snapshots
+
+  llm-evals:
+    name: Tool-selection & injection evals (report-only)
+    runs-on: ubuntu-latest
+    # Live provider calls: cap wall-clock so a stalled provider can't pin a
+    # runner (and burn quota) for the default 6 hours. continue-on-error stops
+    # it failing the build; this stops it costing.
+    timeout-minutes: 30
+    # Never fail the build on model-in-the-loop results.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+          # Include the evals lockfile so an evals-only dep change busts the cache.
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
+      - name: Check for a model key
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.EVALS_ANTHROPIC_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.EVALS_GOOGLE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.EVALS_OPENAI_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$GOOGLE_GENERATIVE_AI_API_KEY" ] || [ -n "$OPENAI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No EVALS_* model key secret set — skipping model-in-the-loop evals. Add EVALS_ANTHROPIC_API_KEY (or EVALS_GOOGLE_API_KEY / EVALS_OPENAI_API_KEY) to enable."
+          fi
+      - name: Build server
+        if: steps.key.outputs.present == 'true'
+        run: |
+          npm ci
+          npm run build
+      - name: Install eval deps
+        if: steps.key.outputs.present == 'true'
+        working-directory: evals
+        run: npm ci
+      - name: Run evals
+        if: steps.key.outputs.present == 'true'
+        working-directory: evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.EVALS_ANTHROPIC_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.EVALS_GOOGLE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.EVALS_OPENAI_API_KEY }}
+          # Pin the strongest baseline when the Anthropic key is present, so CI
+          # runs Haiku (0.9 gate) rather than whichever provider key happens to
+          # be first. Override by setting EVALS_MODEL as a repo/workflow var.
+          EVALS_MODEL: ${{ vars.EVALS_MODEL || (secrets.EVALS_ANTHROPIC_API_KEY && 'anthropic:claude-haiku-4-5') || '' }}
+        run: npm run evals
