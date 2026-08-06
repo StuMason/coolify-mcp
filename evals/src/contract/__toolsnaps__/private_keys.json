@@ -1,6 +1,6 @@
 {
   "name": "private_keys",
-  "description": "Manage SSH keys: list/get/create/update/delete",
+  "description": "Manage SSH keys: list/get/create/update/delete. Key material is never returned; identify keys by name, fingerprint and public key.",
   "annotations": {
     "destructiveHint": true
   },

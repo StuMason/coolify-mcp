@@ -275,6 +275,213 @@ describe('CoolifyClient', () => {
     });
   });
 
+  describe('credential masking on detail endpoints (#327/#328)', () => {
+    // A pre-4.2 server row as Coolify actually serializes it: sentinel token
+    // and log-drain credentials in the clear on the settings blob.
+    const leakyServer = {
+      id: 9,
+      uuid: 'srv-1',
+      name: 'prod-1',
+      ip: '10.0.0.5',
+      user: 'root',
+      port: 22,
+      status: 'running',
+      is_reachable: true,
+      created_at: '2024-01-01',
+      updated_at: '2024-01-01',
+      settings: {
+        id: 1,
+        server_id: 9,
+        is_sentinel_enabled: true,
+        sentinel_token: 'sentinel-secret',
+        logdrain_axiom_api_key: 'axiom-secret',
+        logdrain_axiom_dataset_name: 'coolify-logs',
+        logdrain_custom_config: '[OUTPUT] http passwd hunter2',
+        logdrain_newrelic_license_key: 'newrelic-secret',
+      },
+    };
+
+    const projectedServer = {
+      uuid: 'srv-1',
+      name: 'prod-1',
+      ip: '10.0.0.5',
+      status: 'running',
+      is_reachable: true,
+    };
+
+    const leakyDatabase = {
+      ...mockDatabase,
+      postgres_user: 'postgres',
+      postgres_password: 'db-secret',
+      internal_db_url: 'postgres://postgres:db-secret@db:5432/app',
+      external_db_url: 'postgres://postgres:db-secret@1.2.3.4:5432/app',
+      server: leakyServer,
+      destination: { id: 3, network: 'coolify', server: leakyServer },
+    };
+
+    it('getServer masks sentinel and log-drain credentials but keeps non-secret settings', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyServer));
+
+      const result = (await client.getServer('srv-1')) as unknown as Record<string, any>;
+
+      expect(result.settings.sentinel_token).toBe('***');
+      expect(result.settings.logdrain_axiom_api_key).toBe('***');
+      expect(result.settings.logdrain_custom_config).toBe('***');
+      expect(result.settings.logdrain_newrelic_license_key).toBe('***');
+      expect(result.settings.logdrain_axiom_dataset_name).toBe('coolify-logs');
+      expect(result.settings.is_sentinel_enabled).toBe(true);
+      expect(result.ip).toBe('10.0.0.5');
+      expect(JSON.stringify(result)).not.toContain('sentinel-secret');
+    });
+
+    it('listServers full (non-summary) masks the same server secrets', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([leakyServer]));
+
+      const [result] = (await client.listServers()) as unknown as Array<Record<string, any>>;
+
+      expect(result.settings.sentinel_token).toBe('***');
+      expect(JSON.stringify(result)).not.toContain('axiom-secret');
+    });
+
+    it('updateServer response masks server secrets', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyServer));
+
+      const result = (await client.updateServer('srv-1', { name: 'prod-1' })) as unknown as Record<
+        string,
+        any
+      >;
+
+      expect(result.settings.sentinel_token).toBe('***');
+    });
+
+    it('getDatabase masks passwords and connection URLs and projects embedded servers', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyDatabase));
+
+      const result = (await client.getDatabase('db-uuid')) as unknown as Record<string, any>;
+
+      expect(result.postgres_password).toBe('***');
+      expect(result.internal_db_url).toBe('***');
+      expect(result.external_db_url).toBe('***');
+      expect(result.postgres_user).toBe('postgres');
+      expect(result.server).toEqual(projectedServer);
+      expect(result.destination.server).toEqual(projectedServer);
+      expect(result.destination.network).toBe('coolify');
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain('db-secret');
+      expect(serialized).not.toContain('sentinel-secret');
+      expect(serialized).not.toContain('hunter2');
+    });
+
+    it('getDatabase reveal: true returns the database credentials but still projects servers', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyDatabase));
+
+      const result = (await client.getDatabase('db-uuid', { reveal: true })) as unknown as Record<
+        string,
+        any
+      >;
+
+      expect(result.postgres_password).toBe('db-secret');
+      expect(result.internal_db_url).toContain('db-secret');
+      expect(result.server).toEqual(projectedServer);
+      expect(JSON.stringify(result)).not.toContain('sentinel-secret');
+    });
+
+    it('updateDatabase response is masked', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyDatabase));
+
+      const result = (await client.updateDatabase('db-uuid', {
+        name: 'test-db',
+      })) as unknown as Record<string, any>;
+
+      expect(result.postgres_password).toBe('***');
+      expect(result.server).toEqual(projectedServer);
+    });
+
+    it('getService masks compose bodies and projects embedded servers', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({
+          ...mockService,
+          docker_compose_raw: 'services:\n  app:\n    environment:\n      PASSWORD: hunter2',
+          docker_compose: 'services:\n  app:\n    environment:\n      PASSWORD: hunter2',
+          server: leakyServer,
+          destination: { id: 3, network: 'coolify', server: leakyServer },
+        }),
+      );
+
+      const result = (await client.getService('test-uuid')) as unknown as Record<string, any>;
+
+      expect(result.docker_compose_raw).toBe('***');
+      expect(result.docker_compose).toBe('***');
+      expect(result.server).toEqual(projectedServer);
+      expect(result.destination.server).toEqual(projectedServer);
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain('hunter2');
+      expect(serialized).not.toContain('sentinel-secret');
+    });
+
+    it('getService reveal: true returns compose bodies but still projects servers', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({
+          ...mockService,
+          docker_compose_raw: 'services: {}',
+          server: leakyServer,
+        }),
+      );
+
+      const result = (await client.getService('test-uuid', { reveal: true })) as unknown as Record<
+        string,
+        any
+      >;
+
+      expect(result.docker_compose_raw).toBe('services: {}');
+      expect(result.server).toEqual(projectedServer);
+      expect(JSON.stringify(result)).not.toContain('axiom-secret');
+    });
+
+    it('masks private key material on list, get and update; metadata survives (#327)', async () => {
+      const pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nabc123\n-----END OPENSSH PRIVATE KEY-----';
+      const key = {
+        id: 1,
+        uuid: 'key-uuid',
+        name: 'deploy-key',
+        fingerprint: 'SHA256:abcdef',
+        public_key: 'ssh-ed25519 AAAA... deploy',
+        private_key: pem,
+      };
+
+      mockFetch.mockResolvedValueOnce(mockResponse([key]));
+      const [listed] = (await client.listPrivateKeys()) as unknown as Array<Record<string, any>>;
+      expect(listed.private_key).toBe('***');
+      expect(listed.fingerprint).toBe('SHA256:abcdef');
+      expect(listed.public_key).toBe('ssh-ed25519 AAAA... deploy');
+
+      mockFetch.mockResolvedValueOnce(mockResponse(key));
+      const got = (await client.getPrivateKey('key-uuid')) as unknown as Record<string, any>;
+      expect(got.private_key).toBe('***');
+
+      mockFetch.mockResolvedValueOnce(mockResponse(key));
+      const updated = (await client.updatePrivateKey('key-uuid', {
+        name: 'deploy-key',
+      })) as unknown as Record<string, any>;
+      expect(updated.private_key).toBe('***');
+      expect(JSON.stringify([listed, got, updated])).not.toContain('BEGIN OPENSSH');
+    });
+
+    it('masks a PEM echoed back by createPrivateKey', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({ uuid: 'key-uuid', private_key: '-----BEGIN RSA PRIVATE KEY-----' }),
+      );
+
+      const created = (await client.createPrivateKey({
+        private_key: '-----BEGIN RSA PRIVATE KEY-----',
+        name: 'k',
+      })) as unknown as Record<string, any>;
+
+      expect(created.uuid).toBe('key-uuid');
+      expect(created.private_key).toBe('***');
+    });
+  });
+
   describe('getServerResources', () => {
     it('should get server resources', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse(mockServerResources));

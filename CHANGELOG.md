@@ -59,7 +59,7 @@ No runtime changes. Safe to skip; nothing to upgrade for.
 
   The GitHub-app blast radius filters by `source_type` as well as `source_id`, because the numeric id can collide with a GitLab source. Verified live: `source_type` is the Laravel class name (`App\Models\GithubApp`), null for public-repo applications.
 
-- **`private_keys update` with new key material is guarded like the delete** (#315 review). Overwriting key material deletes the old key: Coolify never returns key material, so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
+- **`private_keys update` with new key material is guarded like the delete** (#315 review). Overwriting key material deletes the old key: Coolify does not give key material back (true upstream from v4.2, and enforced by this client on every version since 2.19.2 — see #327), so the previous value is exactly as gone either way, and a model "fixing" a key by overwriting it takes the same servers offline. Renames and description edits pass without a prompt.
 
 - **Test suite and type checking for the docs site's contact endpoint** (#319). The site had no test runner while `/api/contact` feeds unauthenticated form fields into SES subject and reply-to headers. 33 vitest cases now drive the real handler (header injection, origin checks, rate-limiter branches including the global ceiling, failure honesty), and `astro check` enforces the strict tsconfig in CI. Site-only; nothing in the npm package changes.
 
