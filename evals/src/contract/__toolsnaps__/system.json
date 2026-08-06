@@ -1,0 +1,31 @@
+{
+  "name": "system",
+  "description": "System operations: health/list_resources/enable_api/disable_api. `list_resources` defaults to an essential projection (uuid/name/type/status) to keep token budgets sane on instances with many resources; pass `include_full: true` for the raw Coolify payload. When `include_full: true`, credentials are masked unless `reveal: true` is also set (matches the `env_vars` `reveal` ergonomics): webhook HMAC secrets, basic-auth password, database passwords, internal/external_db_url connection strings, compose bodies, custom_labels, and nested env-var values.",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "health",
+          "list_resources",
+          "enable_api",
+          "disable_api"
+        ]
+      },
+      "include_full": {
+        "type": "boolean"
+      },
+      "reveal": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

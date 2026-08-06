@@ -1,0 +1,69 @@
+{
+  "name": "database_backups",
+  "description": "Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete/delete_execution",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list_schedules",
+          "get_schedule",
+          "list_executions",
+          "get_execution",
+          "create",
+          "update",
+          "delete",
+          "delete_execution"
+        ]
+      },
+      "database_uuid": {
+        "type": "string"
+      },
+      "backup_uuid": {
+        "type": "string"
+      },
+      "execution_uuid": {
+        "type": "string"
+      },
+      "frequency": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "save_s3": {
+        "type": "boolean"
+      },
+      "s3_storage_uuid": {
+        "type": "string"
+      },
+      "databases_to_backup": {
+        "type": "string"
+      },
+      "dump_all": {
+        "type": "boolean"
+      },
+      "database_backup_retention_days_locally": {
+        "type": "number"
+      },
+      "database_backup_retention_days_s3": {
+        "type": "number"
+      },
+      "database_backup_retention_amount_locally": {
+        "type": "number"
+      },
+      "database_backup_retention_amount_s3": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "action",
+      "database_uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

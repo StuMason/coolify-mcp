@@ -1,0 +1,42 @@
+{
+  "name": "@masonator/coolify-mcp-evals",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "snapshots": "vitest run src/contract",
+    "snapshots:update": "vitest run src/contract -u",
+    "evals": "vitest run src/selection src/injection",
+    "redteam": "tsx redteam.ts",
+    "redteam:view": "tsx redteam.ts --view",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@ai-sdk/anthropic": "3.0.42",
+    "@ai-sdk/google": "3.0.103",
+    "@ai-sdk/openai": "3.0.90",
+    "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/sdk": "1.23.0",
+    "@types/node": "26.1.2",
+    "@vitest-evals/harness-ai-sdk": "0.15.0",
+    "ai": "6.0.242",
+    "eslint": "10.0.1",
+    "globals": "16.5.0",
+    "prettier": "3.9.6",
+    "promptfoo": "0.122.0",
+    "tsx": "4.23.7",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.66.0",
+    "vitest": "4.1.10",
+    "vitest-evals": "0.15.0"
+  }
+}

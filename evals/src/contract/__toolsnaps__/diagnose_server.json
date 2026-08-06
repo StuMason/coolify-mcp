@@ -1,0 +1,19 @@
+{
+  "name": "diagnose_server",
+  "description": "Server diagnostics by UUID/name/IP",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

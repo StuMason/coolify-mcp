@@ -1,0 +1,19 @@
+{
+  "name": "restart_project_apps",
+  "description": "Restart all apps in project",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "project_uuid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "project_uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "list_deployments",
+  "description": "List deployments (summary)",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number"
+      },
+      "per_page": {
+        "type": "number"
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

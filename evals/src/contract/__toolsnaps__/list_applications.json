@@ -1,0 +1,19 @@
+{
+  "name": "list_applications",
+  "description": "List apps (summary)",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number"
+      },
+      "per_page": {
+        "type": "number"
+      }
+    },
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

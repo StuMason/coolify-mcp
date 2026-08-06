@@ -1,0 +1,38 @@
+{
+  "name": "private_keys",
+  "description": "Manage SSH keys: list/get/create/update/delete",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "private_key": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

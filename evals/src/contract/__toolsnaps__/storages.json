@@ -1,0 +1,69 @@
+{
+  "name": "storages",
+  "description": "Manage persistent/file storages for app, database, or service: list/create/update/delete",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "database",
+          "service"
+        ]
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "create",
+          "update",
+          "delete"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "storage_uuid": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "persistent",
+          "file"
+        ]
+      },
+      "mount_path": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "host_path": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      },
+      "is_directory": {
+        "type": "boolean"
+      },
+      "fs_path": {
+        "type": "string"
+      },
+      "is_preview_suffix_enabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "resource",
+      "action",
+      "uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

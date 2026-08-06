@@ -1,0 +1,40 @@
+{
+  "name": "logs",
+  "description": "Get container logs for an application, database, or service. A service is a multi-container stack, so resource='service' requires `container` — the sub-service name, which you can list with the `service` tool's `list_containers` action. Use `lines` to bound the output and `show_timestamps` when you need to correlate events across resources (not supported on service containers).",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "database",
+          "service"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      },
+      "container": {
+        "description": "Sub-service name, required when resource='service'. Get valid names from `service` action=list_containers.",
+        "type": "string"
+      },
+      "lines": {
+        "description": "Number of log lines to return (default 100)",
+        "type": "number"
+      },
+      "show_timestamps": {
+        "description": "Prefix each line with its timestamp. Not supported for service containers.",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "resource",
+      "uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

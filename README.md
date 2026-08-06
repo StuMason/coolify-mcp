@@ -148,6 +148,10 @@ npm run build && npm test
 COOLIFY_BASE_URL="https://your-coolify.com" COOLIFY_ACCESS_TOKEN="token" node dist/index.js
 ```
 
+### Evals & red teaming
+
+Because tool descriptions are prompts, `evals/` measures whether a model picks the right tool from this surface and whether attacker-controlled tool output can make it misbehave. Deterministic contract snapshots gate every PR; tool-selection and prompt-injection evals run a real model against a mock Coolify backend; a promptfoo red-team battery runs on a schedule. Nothing touches production. See [evals/README.md](evals/README.md).
+
 Contributions welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and the architecture notes in [CLAUDE.md](CLAUDE.md).
 
 ## Work with me

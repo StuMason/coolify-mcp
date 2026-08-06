@@ -1,0 +1,29 @@
+{
+  "name": "teams",
+  "description": "Manage teams: list/get/get_members/get_current/get_current_members",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "get_members",
+          "get_current",
+          "get_current_members"
+        ]
+      },
+      "id": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

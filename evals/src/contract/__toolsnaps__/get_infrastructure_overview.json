@@ -1,0 +1,12 @@
+{
+  "name": "get_infrastructure_overview",
+  "description": "Overview of all resources with counts",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}
