@@ -275,6 +275,97 @@ describe('CoolifyClient', () => {
     });
   });
 
+  describe('central sanitizer closes nested paths (#334)', () => {
+    // The field-test payload shape: an environment embedding full database
+    // rows, each embedding destination.server with the settings blob. The
+    // per-endpoint fixes never covered this path; the central walker must.
+    const leakyEnvironment = {
+      id: 5,
+      uuid: 'env-uuid',
+      name: 'production',
+      postgresqls: [
+        {
+          uuid: 'db-1',
+          name: 'main-postgres',
+          postgres_password: 'nested-db-secret',
+          internal_db_url: 'postgres://postgres:nested-db-secret@db:5432/app',
+          destination: {
+            id: 0,
+            server: {
+              uuid: 'srv-0',
+              name: 'localhost',
+              ip: 'host.docker.internal',
+              settings: {
+                sentinel_token: 'nested-sentinel-secret',
+                logdrain_custom_config: 'Header Authorization Bearer nested-axiom-secret',
+                logdrain_axiom_dataset_name: 'coolify-logs',
+              },
+            },
+          },
+        },
+      ],
+      applications: [
+        {
+          uuid: 'app-1',
+          name: 'web',
+          manual_webhook_secret_github: 'nested-hmac-secret',
+          environment_variables: [{ uuid: 'ev-1', key: 'API_KEY', value: 'nested-env-secret' }],
+        },
+      ],
+    };
+
+    it('masks credentials at every depth of an environment payload', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse(leakyEnvironment));
+
+      const result = (await client.getProjectEnvironment(
+        'proj-uuid',
+        'production',
+      )) as unknown as Record<string, any>;
+
+      const db = result.postgresqls[0];
+      expect(db.postgres_password).toBe('***');
+      expect(db.internal_db_url).toBe('***');
+      expect(db.destination.server).toEqual({
+        uuid: 'srv-0',
+        name: 'localhost',
+        ip: 'host.docker.internal',
+      });
+      expect(result.applications[0].manual_webhook_secret_github).toBe('***');
+      expect(result.applications[0].environment_variables[0].value).toBe('***');
+      expect(result.applications[0].environment_variables[0].key).toBe('API_KEY');
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain('nested-db-secret');
+      expect(serialized).not.toContain('nested-sentinel-secret');
+      expect(serialized).not.toContain('nested-axiom-secret');
+      expect(serialized).not.toContain('nested-hmac-secret');
+      expect(serialized).not.toContain('nested-env-secret');
+    });
+
+    it('masks a project payload the same way', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({ uuid: 'proj-uuid', name: 'prod', environments: [leakyEnvironment] }),
+      );
+
+      const result = (await client.getProject('proj-uuid')) as unknown as Record<string, any>;
+
+      expect(JSON.stringify(result)).not.toContain('nested-db-secret');
+      expect(JSON.stringify(result)).not.toContain('nested-sentinel-secret');
+    });
+
+    it('masks GitHub App secrets wherever they appear', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse([
+          { uuid: 'gh-1', name: 'ci-app', client_secret: 'gh-secret', webhook_secret: 'wh-secret' },
+        ]),
+      );
+
+      const [app] = (await client.listGitHubApps()) as unknown as Array<Record<string, any>>;
+
+      expect(app.client_secret).toBe('***');
+      expect(app.webhook_secret).toBe('***');
+    });
+  });
+
   describe('get_application credential masking (#332)', () => {
     const leakyApplication = {
       ...mockApplication,
