@@ -638,6 +638,106 @@ function maskResourceItemFull(item: ResourceListItemFull): ResourceListItemFull 
 }
 
 /**
+ * Secrets serialized on a server row by pre-4.2 Coolify — on the `settings`
+ * blob in 4.1.2, checked on the top level too in case another version
+ * flattens them. `sentinel_token` authenticates the Sentinel agent to the
+ * Coolify instance; the log-drain fields are destination credentials (Axiom
+ * API key, New Relic license key) plus the custom fluent-bit config block,
+ * which carries whatever credentials were pasted into it. None of them are
+ * needed to answer "what is this server and how is it doing", so they are
+ * masked unconditionally with no reveal (#328).
+ */
+const SENSITIVE_SERVER_FIELDS = [
+  'sentinel_token',
+  'logdrain_axiom_api_key',
+  'logdrain_custom_config',
+  'logdrain_newrelic_license_key',
+] as const;
+
+function maskFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): Record<string, unknown> {
+  const masked = { ...record };
+  for (const field of fields) {
+    if (masked[field] != null) {
+      masked[field] = MASKED_VALUE;
+    }
+  }
+  return masked;
+}
+
+/**
+ * Mask {@link SENSITIVE_SERVER_FIELDS} on a full {@link Server} row, top
+ * level and `settings` blob both. Null/undefined values are preserved, like
+ * every other masker here.
+ */
+function maskServerSecrets(server: Server): Server {
+  const masked = maskFields(server as unknown as Record<string, unknown>, SENSITIVE_SERVER_FIELDS);
+  if (masked.settings !== null && typeof masked.settings === 'object') {
+    masked.settings = maskFields(
+      masked.settings as Record<string, unknown>,
+      SENSITIVE_SERVER_FIELDS,
+    );
+  }
+  return masked as unknown as Server;
+}
+
+/**
+ * Replace any embedded full server row with its {@link ServerSummary}
+ * projection. Pre-4.2 `/databases/{uuid}` and `/services/{uuid}` inline the
+ * complete server — settings blob, sentinel token, log-drain config — none of
+ * which belongs in "database details" (#328). The relation appears at the top
+ * level and under `destination`, so both are walked; the projection is also a
+ * large token-count win on these payloads.
+ */
+function projectNestedServers(item: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...item };
+  if (out.server !== null && typeof out.server === 'object') {
+    out.server = toServerSummary(out.server as Server);
+  }
+  if (out.destination !== null && typeof out.destination === 'object') {
+    const destination = { ...(out.destination as Record<string, unknown>) };
+    if (destination.server !== null && typeof destination.server === 'object') {
+      destination.server = toServerSummary(destination.server as Server);
+    }
+    out.destination = destination;
+  }
+  return out;
+}
+
+/**
+ * Sanitize a database/service detail payload (#328): embedded server rows are
+ * projected down to summaries always, and unless `reveal` is set the same
+ * credential fields the `/resources` pipeline masks (database passwords,
+ * connection URLs, compose bodies, webhook secrets, labels, nested env-var
+ * values) are masked here too — pre-4.2 instances serialize all of them
+ * decrypted. `reveal: true` returns the resource's own credentials for the
+ * legitimate "wire an app to this database" case; it never brings the full
+ * server row back.
+ */
+function sanitizeResourceDetail<T extends object>(item: T, reveal?: boolean): T {
+  if (item === null || typeof item !== 'object' || Array.isArray(item)) return item;
+  let out = projectNestedServers(item as Record<string, unknown>);
+  if (reveal !== true) {
+    out = maskResourceItemFull(out as ResourceListItemFull);
+  }
+  return out as T;
+}
+
+/**
+ * Mask the PEM on a {@link PrivateKey} row (#327). Pre-4.2 Coolify returns
+ * complete private key material on `/security/keys` list and get; name,
+ * fingerprint and public-key fields serve every legitimate read, so the PEM
+ * is masked unconditionally — there is deliberately no `reveal` for key
+ * material.
+ */
+function maskPrivateKey(key: PrivateKey): PrivateKey {
+  if (key === null || typeof key !== 'object' || key.private_key == null) return key;
+  return { ...key, private_key: MASKED_VALUE };
+}
+
+/**
  * HTTP client for the Coolify API
  */
 export class CoolifyClient {
@@ -889,11 +989,12 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const servers = await this.request<Server[]>(`/servers${query}`);
-    return options?.summary && Array.isArray(servers) ? servers.map(toServerSummary) : servers;
+    if (options?.summary && Array.isArray(servers)) return servers.map(toServerSummary);
+    return Array.isArray(servers) ? servers.map(maskServerSecrets) : servers;
   }
 
   async getServer(uuid: string): Promise<Server> {
-    return this.request<Server>(`/servers/${uuid}`);
+    return maskServerSecrets(await this.request<Server>(`/servers/${uuid}`));
   }
 
   async createServer(data: CreateServerRequest): Promise<UuidResponse> {
@@ -904,10 +1005,11 @@ export class CoolifyClient {
   }
 
   async updateServer(uuid: string, data: UpdateServerRequest): Promise<Server> {
-    return this.request<Server>(`/servers/${uuid}`, {
+    const server = await this.request<Server>(`/servers/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+    return server !== null && typeof server === 'object' ? maskServerSecrets(server) : server;
   }
 
   async deleteServer(uuid: string): Promise<MessageResponse> {
@@ -1350,15 +1452,17 @@ export class CoolifyClient {
     return options?.summary && Array.isArray(dbs) ? dbs.map(toDatabaseSummary) : dbs;
   }
 
-  async getDatabase(uuid: string): Promise<Database> {
-    return this.request<Database>(`/databases/${uuid}`);
+  async getDatabase(uuid: string, options?: { reveal?: boolean }): Promise<Database> {
+    const db = await this.request<Database>(`/databases/${uuid}`);
+    return sanitizeResourceDetail(db, options?.reveal);
   }
 
   async updateDatabase(uuid: string, data: UpdateDatabaseRequest): Promise<Database> {
-    return this.request<Database>(`/databases/${uuid}`, {
+    const db = await this.request<Database>(`/databases/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+    return sanitizeResourceDetail(db);
   }
 
   async deleteDatabase(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
@@ -1461,8 +1565,9 @@ export class CoolifyClient {
     return options?.summary && Array.isArray(services) ? services.map(toServiceSummary) : services;
   }
 
-  async getService(uuid: string): Promise<Service> {
-    return this.request<Service>(`/services/${uuid}`);
+  async getService(uuid: string, options?: { reveal?: boolean }): Promise<Service> {
+    const service = await this.request<Service>(`/services/${uuid}`);
+    return sanitizeResourceDetail(service, options?.reveal);
   }
 
   async createService(data: CreateServiceRequest): Promise<ServiceCreateResponse> {
@@ -1481,10 +1586,11 @@ export class CoolifyClient {
     if (payload.docker_compose_raw) {
       payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
     }
-    return this.request<Service>(`/services/${uuid}`, {
+    const service = await this.request<Service>(`/services/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
+    return sanitizeResourceDetail(service);
   }
 
   async updateServiceApplication(
@@ -1713,25 +1819,31 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listPrivateKeys(): Promise<PrivateKey[]> {
-    return this.request<PrivateKey[]>('/security/keys');
+    const keys = await this.request<PrivateKey[]>('/security/keys');
+    return Array.isArray(keys) ? keys.map(maskPrivateKey) : keys;
   }
 
   async getPrivateKey(uuid: string): Promise<PrivateKey> {
-    return this.request<PrivateKey>(`/security/keys/${uuid}`);
+    return maskPrivateKey(await this.request<PrivateKey>(`/security/keys/${uuid}`));
   }
 
   async createPrivateKey(data: CreatePrivateKeyRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>('/security/keys', {
+    const created = await this.request<UuidResponse>('/security/keys', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    // Typed as uuid-only, but don't trust upstream not to echo the PEM back.
+    return created !== null && typeof created === 'object'
+      ? (maskPrivateKey(created as PrivateKey) as UuidResponse)
+      : created;
   }
 
   async updatePrivateKey(uuid: string, data: UpdatePrivateKeyRequest): Promise<PrivateKey> {
-    return this.request<PrivateKey>(`/security/keys/${uuid}`, {
+    const key = await this.request<PrivateKey>(`/security/keys/${uuid}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+    return key !== null && typeof key === 'object' ? maskPrivateKey(key) : key;
   }
 
   async deletePrivateKey(uuid: string): Promise<MessageResponse> {

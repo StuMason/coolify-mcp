@@ -112,7 +112,12 @@ Secrets are masked at the API boundary. A client granted "list" access never see
 
 - **`env_vars`**: variable values return as `***`
 - **`system list_resources` (full mode)**: webhook HMAC secrets, basic-auth and database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env vars
+- **`get_database` / `get_service`**: the same credential fields are masked on the detail endpoints, and any embedded server row is projected down to uuid/name/ip so its sentinel token and log-drain config never leave the client
+- **`get_server`**: sentinel and log-drain credentials are always masked, with no reveal
+- **`private_keys`**: key material is never returned, with no reveal; name, fingerprint and public key identify a key
 - **`deployment get`**: the raw upstream payload (server settings, log-drain tokens, webhook secrets) never leaves the client; responses are projected
+
+Log output (`logs`, `application_logs`, deployment logs) is wrapped in a tamper-evident untrusted-data boundary so a poisoned log line reads as data, not instructions.
 
 Destructive operations also ask a human first; see [Ask before it hurts](#ask-before-it-hurts) above.
 

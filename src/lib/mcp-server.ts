@@ -822,8 +822,11 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listServers({ page, per_page, summary: true })),
     );
 
-    this.defineTool('get_server', 'Server details', { uuid: z.string() }, async ({ uuid }) =>
-      wrap(() => this.client.getServer(uuid)),
+    this.defineTool(
+      'get_server',
+      'Server details. Sentinel and log-drain credentials are always masked.',
+      { uuid: z.string() },
+      async ({ uuid }) => wrap(() => this.client.getServer(uuid)),
     );
 
     this.defineTool(
@@ -1421,8 +1424,11 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listDatabases({ page, per_page, summary: true })),
     );
 
-    this.defineTool('get_database', 'Database details', { uuid: z.string() }, async ({ uuid }) =>
-      wrap(() => this.client.getDatabase(uuid)),
+    this.defineTool(
+      'get_database',
+      'Database details. Credentials (passwords, connection URLs) are masked by default; pass reveal: true when you explicitly need them, e.g. to wire an app to the database.',
+      { uuid: z.string(), reveal: z.boolean().optional() },
+      async ({ uuid, reveal }) => wrap(() => this.client.getDatabase(uuid, { reveal })),
     );
 
     this.defineTool(
@@ -1525,8 +1531,11 @@ export class CoolifyMcpServer extends McpServer {
         wrap(() => this.client.listServices({ page, per_page, summary: true })),
     );
 
-    this.defineTool('get_service', 'Service details', { uuid: z.string() }, async ({ uuid }) =>
-      wrap(() => this.client.getService(uuid)),
+    this.defineTool(
+      'get_service',
+      'Service details. Credentials (compose bodies with resolved passwords, webhook secrets) are masked by default; pass reveal: true when you explicitly need them.',
+      { uuid: z.string(), reveal: z.boolean().optional() },
+      async ({ uuid, reveal }) => wrap(() => this.client.getService(uuid, { reveal })),
     );
 
     this.defineTool(
@@ -2118,7 +2127,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'private_keys',
-      'Manage SSH keys: list/get/create/update/delete',
+      'Manage SSH keys: list/get/create/update/delete. Key material is never returned; identify keys by name, fingerprint and public key.',
       {
         action: z.enum(['list', 'get', 'create', 'update', 'delete']),
         uuid: z.string().optional(),
@@ -2149,8 +2158,9 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             // Renames and descriptions pass freely, but replacing the key
             // material is guarded like the delete, because it IS the delete of
-            // the old key: Coolify never returns key material, so the
-            // overwritten value is exactly as gone as a deleted one, and a
+            // the old key: key material is never readable back through this
+            // client (masked since #327, and stripped upstream from v4.2), so
+            // the overwritten value is exactly as gone as a deleted one, and a
             // model "fixing" a key by overwriting it takes the same servers
             // offline.
             if (private_key === undefined) {
@@ -2173,9 +2183,10 @@ export class CoolifyMcpServer extends McpServer {
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            // #315: guarded because the loss is irrecoverable — Coolify never
-            // returns key material after v4.2 hides secrets, and often not
-            // before, so a deleted key cannot be re-read and re-added. The
+            // #315: guarded because the loss is irrecoverable — key material
+            // is never readable back through this client (masked since #327,
+            // stripped upstream from v4.2), so a deleted key cannot be
+            // re-read and re-added. The
             // routine deletes (storages, scheduled tasks, env vars) stay
             // unguarded on purpose; a prompt on every delete is how prompts
             // stop being read.

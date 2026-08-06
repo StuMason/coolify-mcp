@@ -1,6 +1,6 @@
 {
   "name": "get_server",
-  "description": "Server details",
+  "description": "Server details. Sentinel and log-drain credentials are always masked.",
   "annotations": {
     "readOnlyHint": true
   },
