@@ -480,6 +480,51 @@ describe('CoolifyClient', () => {
       expect(created.uuid).toBe('key-uuid');
       expect(created.private_key).toBe('***');
     });
+
+    it('passes malformed upstream payloads through untouched instead of crashing', async () => {
+      // A misbehaving instance (or an HTML error page parsed as null) must not
+      // turn a masking pass into a TypeError.
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.updateServer('srv-1', { name: 'x' })).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.updatePrivateKey('key-uuid', { name: 'x' })).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.createPrivateKey({ private_key: 'k', name: 'k' })).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.listPrivateKeys()).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.listServers()).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse(null));
+      expect(await client.getDatabase('db-uuid')).toBeNull();
+    });
+
+    it('leaves non-object server and destination fields alone when projecting', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({ ...mockDatabase, server: 'srv-by-name', destination: { id: 3 } }),
+      );
+
+      const result = (await client.getDatabase('db-uuid')) as unknown as Record<string, any>;
+
+      expect(result.server).toBe('srv-by-name');
+      expect(result.destination).toEqual({ id: 3 });
+
+      mockFetch.mockResolvedValueOnce(
+        mockResponse({ ...mockDatabase, server: null, destination: { id: 3, server: null } }),
+      );
+      const withNulls = (await client.getDatabase('db-uuid')) as unknown as Record<string, any>;
+      expect(withNulls.server).toBeNull();
+      expect(withNulls.destination.server).toBeNull();
+
+      mockFetch.mockResolvedValueOnce(mockResponse({ ...leakyServer, settings: null }));
+      const bareServer = (await client.getServer('srv-1')) as unknown as Record<string, any>;
+      expect(bareServer.settings).toBeNull();
+      expect(bareServer.ip).toBe('10.0.0.5');
+    });
   });
 
   describe('getServerResources', () => {
