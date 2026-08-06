@@ -38,6 +38,10 @@ const PRINCIPLES = [
     k: 'Tested against a real server',
     v: 'Every release runs against a live Coolify, not a mock. That is how the API quirks got found.',
   },
+  {
+    k: 'The tool choice is measured',
+    v: 'A model reads these tools and has to pick the right one. An eval suite measures that it does — and red-teams whether a poisoned log can talk it into deleting anything or leaking a secret.',
+  },
 ];
 
 const OFFERS = [

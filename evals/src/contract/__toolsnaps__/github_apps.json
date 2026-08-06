@@ -1,0 +1,76 @@
+{
+  "name": "github_apps",
+  "description": "Manage GitHub Apps: list/get/create/update/delete/list_repos/list_branches",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete",
+          "list_repos",
+          "list_branches"
+        ]
+      },
+      "id": {
+        "type": "number"
+      },
+      "owner": {
+        "type": "string"
+      },
+      "repo": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "organization": {
+        "type": "string"
+      },
+      "api_url": {
+        "type": "string"
+      },
+      "html_url": {
+        "type": "string"
+      },
+      "custom_user": {
+        "type": "string"
+      },
+      "custom_port": {
+        "type": "number"
+      },
+      "app_id": {
+        "type": "number"
+      },
+      "installation_id": {
+        "type": "number"
+      },
+      "client_id": {
+        "type": "string"
+      },
+      "client_secret": {
+        "type": "string"
+      },
+      "webhook_secret": {
+        "type": "string"
+      },
+      "private_key_uuid": {
+        "type": "string"
+      },
+      "is_system_wide": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

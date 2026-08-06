@@ -1,0 +1,30 @@
+{
+  "name": "deploy",
+  "description": "Deploy by tag/UUID",
+  "annotations": {
+    "destructiveHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tag_or_uuid": {
+        "type": "string"
+      },
+      "force": {
+        "type": "boolean"
+      },
+      "wait": {
+        "description": "Wait for the deployment to reach a terminal status (finished/failed/cancelled) instead of returning immediately, polling every ~5s. If tag_or_uuid matches multiple applications (a tag can trigger several deployments), only the first is watched — the rest are returned under additional_deployment_uuids for you to check separately via `deployment get`. On failure the response includes a bounded log tail. Default false (fire-and-forget, unchanged response).",
+        "type": "boolean"
+      },
+      "timeout_seconds": {
+        "description": "Max seconds to poll when wait is true before giving up and returning the current status plus a next-action hint (default 300). Ignored when wait is false.",
+        "type": "number"
+      }
+    },
+    "required": [
+      "tag_or_uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

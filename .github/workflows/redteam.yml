@@ -1,0 +1,60 @@
+name: Red team
+
+# Layer 4 — the promptfoo adversarial battery. Kept OUT of the PR path on
+# purpose: generation is nondeterministic and calls a remote service, so it is
+# a scheduled / on-demand sweep, not a merge gate. Findings get triaged into
+# evals/FINDINGS.md and, where they need a code change, a hand-written
+# regression test in evals/src/injection.
+
+on:
+  schedule:
+    # 06:00 UTC every Monday.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+# Least privilege — scheduled, unattended, and holds a model key.
+permissions:
+  contents: read
+
+jobs:
+  redteam:
+    name: Adversarial red team
+    runs-on: ubuntu-latest
+    # Remote generation + graded probes against a live model — cap wall-clock.
+    timeout-minutes: 45
+    if: ${{ github.repository == 'StuMason/coolify-mcp' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            evals/package-lock.json
+      - name: Build server
+        run: |
+          npm ci
+          npm run build
+      - name: Install eval deps
+        working-directory: evals
+        run: npm ci
+      - name: Run red team
+        working-directory: evals
+        env:
+          # Grading/target model. Attack GENERATION uses promptfoo's remote
+          # service by default (see redteam.yaml) — no Anthropic key is used
+          # for generation, deliberately.
+          ANTHROPIC_API_KEY: ${{ secrets.EVALS_ANTHROPIC_API_KEY }}
+        run: npm run redteam
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: redteam-report
+          # The graded RESULTS (triageable), plus the generated attacks for
+          # reference. redteam.ts exports the results after the run.
+          path: |
+            evals/redteam-results.json
+            evals/redteam.generated.yaml
+          if-no-files-found: ignore

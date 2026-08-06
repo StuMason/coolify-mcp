@@ -1,0 +1,19 @@
+{
+  "name": "server_resources",
+  "description": "Resources on server",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "uuid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "uuid"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}
