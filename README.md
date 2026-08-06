@@ -47,7 +47,7 @@ claude mcp add coolify \
 
 Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (repeatable). The same config works in Cursor, Claude Code and any other MCP client, and can be repeated for multiple Coolify instances.
 
-**Remote (HTTP + OAuth, v3):** deploy the server as a container inside your own Coolify and connect claude.ai or any remote MCP client to `https://your-domain/mcp` — your Coolify token stays server-side and clients authenticate with OAuth 2.1. See [docs/http-mode.md](docs/http-mode.md).
+**Remote (HTTP + OAuth, v3):** deploy the server as a container inside your own Coolify and connect claude.ai or any remote MCP client to `https://your-domain/mcp`. Your Coolify token stays server-side; clients authenticate with OAuth 2.1. See [docs/http-mode.md](docs/http-mode.md).
 
 ## Tools
 
