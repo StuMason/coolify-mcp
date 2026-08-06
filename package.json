@@ -14,7 +14,8 @@
     }
   },
   "bin": {
-    "coolify-mcp": "dist/index.js"
+    "coolify-mcp": "dist/index.js",
+    "coolify-mcp-http": "dist/http.js"
   },
   "files": [
     "dist"
@@ -36,7 +37,8 @@
     "prepare": "husky",
     "prepublishOnly": "npm test && npm run lint",
     "version": "node scripts/sync-manifests.mjs && prettier --write server.json manifest.json && git add server.json manifest.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:http": "node dist/http.js"
   },
   "keywords": [
     "coolify",

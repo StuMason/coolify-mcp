@@ -525,8 +525,23 @@ export const TOOL_ANNOTATIONS = {
  */
 export type ToolName = keyof typeof TOOL_ANNOTATIONS;
 
+export interface CoolifyMcpServerOptions {
+  /**
+   * Register only tools annotated read-only (#303). The mutating tools do not
+   * exist on the instance at all, rather than existing and refusing.
+   */
+  readonly?: boolean;
+  /**
+   * Destructive operations refuse instead of falling back to parameter-only
+   * confirmation when the client cannot be asked via elicitation (#303).
+   * HTTP mode sets this; stdio keeps the progressive-enhancement default.
+   */
+  requireElicitation?: boolean;
+}
+
 export class CoolifyMcpServer extends McpServer {
   private readonly client: CoolifyClient;
+  private readonly serverOptions: CoolifyMcpServerOptions;
   private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
 
   /**
@@ -549,6 +564,12 @@ export class CoolifyMcpServer extends McpServer {
       throw new Error(
         `Tool "${name}" has no entry in TOOL_ANNOTATIONS. Add one — clients use these hints to decide whether a call needs confirmation.`,
       );
+    }
+    // Read-only mode (#303): anything not annotated read-only is simply never
+    // registered, so a remote observability surface cannot mutate even if a
+    // token leaks — the tools do not exist on this server instance.
+    if (this.serverOptions.readonly && (annotations as ToolAnnotations).readOnlyHint !== true) {
+      return;
     }
     // Call sites keep the raw-shape ergonomics; the z.object wrap happens here
     // because SDK v2 deprecates the raw-shape registerTool overload and this
@@ -586,16 +607,19 @@ export class CoolifyMcpServer extends McpServer {
     summarize: () => string | null | Promise<string | null>,
     operation: () => Promise<T>,
   ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
-    const outcome = await confirmDestructive(this.server, label, summarize, signal);
+    const outcome = await confirmDestructive(this.server, label, summarize, signal, {
+      requireHuman: this.serverOptions.requireElicitation,
+    });
     if (!outcome.approved) {
       return { content: [{ type: 'text' as const, text: outcome.message }] };
     }
     return wrap(operation);
   }
 
-  constructor(config: CoolifyConfig) {
+  constructor(config: CoolifyConfig, options?: CoolifyMcpServerOptions) {
     super({ name: 'coolify', version: VERSION });
     this.client = new CoolifyClient(config);
+    this.serverOptions = options ?? {};
     this.registerTools();
   }
 

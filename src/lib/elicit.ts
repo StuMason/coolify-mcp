@@ -108,8 +108,27 @@ export async function confirmDestructive(
   label: string,
   summarize: () => string | null | Promise<string | null>,
   signal?: AbortSignal,
+  options?: {
+    /**
+     * Fail closed when the client cannot be asked (#303). On stdio the
+     * capability-less fallback approves and the parameter guards stand; on an
+     * internet-facing HTTP server "the model confirms with itself" is not a
+     * credible control, so HTTP mode sets this and a client without
+     * elicitation is refused rather than waved through.
+     */
+    requireHuman?: boolean;
+  },
 ): Promise<ConfirmOutcome> {
   if (!supportsElicitation(server)) {
+    if (options?.requireHuman) {
+      return {
+        approved: false,
+        message: abortText(
+          `this server requires human confirmation for destructive operations, and this client does not support elicitation. ` +
+            `Read-only tools work normally. For destructive operations, connect with a client that supports elicitation or use the stdio server locally`,
+        ),
+      };
+    }
     return { approved: true };
   }
 

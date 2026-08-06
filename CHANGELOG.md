@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased - 3.0.0]
+
+### Added
+
+- **HTTP mode (#303): run the server as a container inside Coolify and connect remote MCP clients over Streamable HTTP with OAuth 2.1.** A second entry point (`dist/http.js`, additive; stdio is untouched) serves the same 44 tools behind a built-in OAuth 2.1 authorization server: dynamic client registration (RFC 7591), PKCE-required authorization code flow, rotating refresh tokens with reuse detection, audience-bound opaque tokens (RFC 8707), and AS/protected-resource metadata discovery (RFC 8414/9728). Authorisation is "Coolify token as proof of access": at authorize time you present your own Coolify API token, the container validates it against `GET /teams/current` and discards it — the container acts only with its env-configured token, no client ever receives a Coolify credential, and there is no secrets store (the state volume holds registered clients and token hashes only). In HTTP mode destructive operations require a human via elicitation (fail closed), and `MCP_READONLY=true` serves an observability-only surface by never registering mutating tools. Ships with a Dockerfile, a GHCR image workflow, and a Coolify compose template — see `docs/http-mode.md`.
+
+### Changed
+
+- **SDK v2 (`@modelcontextprotocol/server`)** (#259): the stateless split-package core replaces `@modelcontextprotocol/sdk`. Tool surface is unchanged; the only wire-visible difference is the declared JSON Schema draft on `tools/list` (draft-07 → 2020-12).
+
 ## [2.19.2] - 2026-08-06
 
 A security release. Update if your Coolify is older than v4.2: until now, four read tools handed an LLM client plaintext credentials that upstream serves decrypted on those versions.
