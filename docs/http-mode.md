@@ -41,15 +41,37 @@ credible control on an internet-facing service.
 
 ## Deploy on Coolify
 
-Create a new **Docker Compose** resource with:
+HTTP mode is selected by one environment variable — `MCP_TRANSPORT=http` — so
+no command overrides are involved; the same image and entry point serve stdio
+by default.
+
+**Option A, straight from the repository** (works today, and the way to run a
+branch):
+
+1. **+ New Resource → Public Repository**, URL
+   `https://github.com/StuMason/coolify-mcp`, pick your branch, **Build Pack:
+   Dockerfile**, **Ports Exposes: `8080`**.
+2. Set a domain on the resource (Coolify terminates TLS for it).
+3. Environment tab:
+   - `MCP_TRANSPORT=http`
+   - `COOLIFY_BASE_URL` — see the reachability note below
+   - `COOLIFY_ACCESS_TOKEN` — create a fresh one under Keys & Tokens
+   - `MCP_PUBLIC_URL` — the domain you set in step 2 (a bare domain is fine;
+     https is assumed)
+4. Storages tab: add a volume mounted at `/data` (keeps OAuth state across
+   restarts, so clients stay connected).
+5. Health check: path `/healthz`, port `8080`.
+6. Deploy, and check the log says `coolify-mcp http mode on :8080`.
+
+**Option B, Docker Compose resource** (once a GHCR image is published):
 
 ```yaml
 services:
   coolify-mcp:
     image: ghcr.io/stumason/coolify-mcp:latest
-    command: dist/http.js
     environment:
       - SERVICE_FQDN_COOLIFYMCP_8080
+      - MCP_TRANSPORT=http
       - COOLIFY_BASE_URL=${COOLIFY_BASE_URL:?set to your Coolify URL}
       - COOLIFY_ACCESS_TOKEN=${COOLIFY_ACCESS_TOKEN:?create under Keys & Tokens}
       - MCP_PUBLIC_URL=${SERVICE_FQDN_COOLIFYMCP}
@@ -72,9 +94,13 @@ volumes:
   coolify-mcp-data:
 ```
 
-Coolify fills `SERVICE_FQDN_COOLIFYMCP` with the domain it assigns and
-terminates TLS at its proxy. Set `COOLIFY_BASE_URL` and `COOLIFY_ACCESS_TOKEN`
-in the resource's environment tab.
+**`COOLIFY_BASE_URL` must be reachable from inside the container.** If your
+Coolify dashboard sits behind Cloudflare Access or another auth proxy, the
+container's API calls (and the authorize page's proof-of-access check) will
+hit the proxy and fail. Use the internal address instead: enable **Connect To
+Predefined Network** on the resource and set
+`COOLIFY_BASE_URL=http://coolify:8080` (Coolify's own container on its Docker
+network). A plain-https Coolify with no auth proxy can use its public URL.
 
 Then add `https://<your-domain>/mcp` to your MCP client as a remote server.
 The client discovers the OAuth endpoints itself (RFC 9728 / RFC 8414) and
