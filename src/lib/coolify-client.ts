@@ -25,6 +25,7 @@ import type {
   CreateEnvironmentRequest,
   // Application types
   Application,
+  ApplicationEnvironmentVerification,
   CreateApplicationPublicRequest,
   CreateApplicationPrivateGHRequest,
   CreateApplicationPrivateKeyRequest,
@@ -1114,6 +1115,63 @@ export class CoolifyClient {
 
   async getApplication(uuid: string, options?: { reveal?: boolean }): Promise<Application> {
     return this.request<Application>(`/applications/${uuid}`, {}, { reveal: options?.reveal });
+  }
+
+  /**
+   * Verify that one exact application is bound to one exact project environment.
+   *
+   * This intentionally uses only the application detail endpoint and the exact
+   * project/environment endpoint. It never falls back to listing applications,
+   * projects, environments, or resources. The numeric `environment_id` is the
+   * only environment identity Coolify reliably includes on application rows, so
+   * the returned identity is its canonical string representation.
+   */
+  async verifyApplicationEnvironment(
+    applicationUuid: string,
+    projectUuid: string,
+    expectedEnvironment: string,
+  ): Promise<ApplicationEnvironmentVerification> {
+    for (const [label, value] of [
+      ['application UUID', applicationUuid],
+      ['project UUID', projectUuid],
+      ['environment name', expectedEnvironment],
+    ]) {
+      if (!value || value.trim() !== value || /[\0\r\n/?#%\\]/u.test(value)) {
+        throw new Error(`Exact ${label} is invalid`);
+      }
+    }
+
+    const application = await this.getApplication(applicationUuid);
+    if (!application || application.uuid !== applicationUuid) {
+      throw new Error('Exact application UUID could not be verified');
+    }
+    const environmentIdentity = application.environment_id;
+    if (
+      typeof environmentIdentity !== 'number' ||
+      !Number.isSafeInteger(environmentIdentity) ||
+      environmentIdentity < 1
+    ) {
+      throw new Error('Exact application environment identity is unavailable');
+    }
+    if (application.project_uuid && application.project_uuid !== projectUuid) {
+      throw new Error('Exact application project UUID does not match');
+    }
+
+    const environment = await this.getProjectEnvironment(projectUuid, expectedEnvironment);
+    if (!environment || environment.name !== expectedEnvironment) {
+      throw new Error('Exact environment name does not match');
+    }
+    if (!Number.isSafeInteger(environment.id) || environment.id !== environmentIdentity) {
+      throw new Error('Exact application environment identity does not match');
+    }
+    if (environment.project_uuid && environment.project_uuid !== projectUuid) {
+      throw new Error('Exact environment project UUID does not match');
+    }
+
+    return {
+      identity: String(environment.id),
+      name: environment.name,
+    };
   }
 
   async createApplicationPublic(data: CreateApplicationPublicRequest): Promise<UuidResponse> {

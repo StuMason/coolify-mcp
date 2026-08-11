@@ -264,6 +264,16 @@ export interface Application {
   updated_at: string;
 }
 
+/**
+ * Minimal proof that one exact application belongs to one exact environment.
+ * Deliberately excludes embedded resources and configuration so callers do not
+ * need a project or environment enumeration to bind the two identities.
+ */
+export interface ApplicationEnvironmentVerification {
+  identity: string;
+  name: string;
+}
+
 export interface CreateApplicationPublicRequest {
   project_uuid: string;
   server_uuid: string;

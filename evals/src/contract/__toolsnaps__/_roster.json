@@ -42,5 +42,6 @@
   "system",
   "tags",
   "teams",
-  "validate_server"
+  "validate_server",
+  "verify_app_environment"
 ]
