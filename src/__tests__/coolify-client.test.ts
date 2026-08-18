@@ -957,6 +957,15 @@ describe('CoolifyClient', () => {
           type: 'standalone-dragonfly',
           status: 'running:healthy',
         },
+        // Defensive-filter arms: a row with no uuid and a row whose type is
+        // not a string must never be merged in, whatever /resources sends.
+        {
+          uuid: null,
+          name: 'row-without-uuid',
+          type: 'standalone-mysql',
+          status: 'running:healthy',
+        },
+        { uuid: 'weird-1', name: 'weird-type-row', type: 42, status: 'running:healthy' },
         {
           uuid: 'drg-2',
           name: 'dragonfly-two',
@@ -4054,7 +4063,8 @@ describe('CoolifyClient', () => {
           {
             ...mockApps[0],
             uuid: 'app-multi',
-            fqdn: 'https://tidylinker.com,https://www.tidylinker.com',
+            // Trailing comma leaves an empty entry, which must never match.
+            fqdn: 'https://tidylinker.com,https://www.tidylinker.com,',
           },
           { ...mockApps[1], uuid: 'app-other', fqdn: 'https://www.tidylinker.com.mirror.dev' },
         ];
@@ -4845,6 +4855,38 @@ describe('CoolifyClient', () => {
         expect(result.issues.find((i) => i.type === 'application')?.issue).toContain(
           'running but health unknown',
         );
+      });
+
+      it('should warn on databases with unknown health and non-patch proxy updates', async () => {
+        const unknownDb = {
+          ...mockDatabases[0],
+          uuid: 'db-3',
+          name: 'no-healthcheck-db',
+          status: 'running:unknown',
+        };
+        const statusServer = { ...mockServers[0], status: 'running' };
+        const minorOutdatedServer = {
+          ...statusServer,
+          traefik_outdated_info: { current: '3.6.8', latest: '3.7.8', type: 'minor_update' },
+        };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse([statusServer]))
+          .mockResolvedValueOnce(mockResponse([mockApplications[0]]))
+          .mockResolvedValueOnce(mockResponse([unknownDb]))
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse([mockServices[0]]))
+          .mockResolvedValueOnce(mockResponse(minorOutdatedServer)); // GET /servers/server-1
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.warnings).toBe(2);
+        expect(result.summary.unhealthy_databases).toBe(0);
+        expect(result.issues.find((i) => i.type === 'database')?.issue).toContain(
+          'running but health unknown',
+        );
+        const proxyIssue = result.issues.find((i) => i.type === 'server');
+        expect(proxyIssue?.issue).toBe('Proxy (Traefik) update available: 3.6.8 → 3.7.8');
+        expect(proxyIssue?.status).toBe('running');
       });
 
       it('should handle partial failures and still report issues', async () => {
