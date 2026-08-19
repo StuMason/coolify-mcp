@@ -1628,6 +1628,126 @@ describe('CoolifyClient', () => {
       expect(result).toEqual(mockApplication);
     });
 
+    describe('verifyApplicationEnvironment', () => {
+      const exactApplication = {
+        ...mockApplication,
+        uuid: 'app-exact-uuid',
+        environment_id: 17,
+        project_uuid: 'project-exact-uuid',
+      };
+      const exactEnvironment = {
+        id: 17,
+        uuid: 'environment-exact-uuid',
+        name: 'staging',
+        project_uuid: 'project-exact-uuid',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        applications: [{ uuid: 'must-not-leak' }],
+      };
+
+      it('uses only exact endpoints and returns a minimal identity proof', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(exactApplication))
+          .mockResolvedValueOnce(mockResponse(exactEnvironment));
+
+        const result = await client.verifyApplicationEnvironment(
+          'app-exact-uuid',
+          'project-exact-uuid',
+          'staging',
+        );
+
+        expect(result).toEqual({
+          identity: '17',
+          name: 'staging',
+        });
+        expect(JSON.stringify(result)).not.toContain('must-not-leak');
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          1,
+          'http://localhost:3000/api/v1/applications/app-exact-uuid',
+          expect.any(Object),
+        );
+        expect(mockFetch).toHaveBeenNthCalledWith(
+          2,
+          'http://localhost:3000/api/v1/projects/project-exact-uuid/staging',
+          expect.any(Object),
+        );
+      });
+
+      it('rejects unsafe or empty anchors before any provider call', async () => {
+        for (const args of [
+          ['', 'project-exact-uuid', 'staging'],
+          ['app-exact-uuid', '../project', 'staging'],
+          ['app-exact-uuid', 'project-exact-uuid', 'staging?full=true'],
+        ] as const) {
+          await expect(
+            client.verifyApplicationEnvironment(args[0], args[1], args[2]),
+          ).rejects.toThrow(/^Exact .+ is invalid$/);
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('accepts an application response without project_uuid when the environment identity binds it', async () => {
+        const withoutProject = { ...exactApplication, project_uuid: undefined };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(withoutProject))
+          .mockResolvedValueOnce(mockResponse(exactEnvironment));
+
+        await expect(
+          client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
+        ).resolves.toEqual({ identity: '17', name: 'staging' });
+      });
+
+      it('fails before the environment read when application identity or project drifts', async () => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ ...exactApplication, uuid: 'different-app-uuid' }),
+        );
+        await expect(
+          client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
+        ).rejects.toThrow('Exact application UUID could not be verified');
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        mockFetch.mockClear();
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ ...exactApplication, project_uuid: 'different-project-uuid' }),
+        );
+        await expect(
+          client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
+        ).rejects.toThrow('Exact application project UUID does not match');
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      it('rejects missing or drifting environment identity, name, and project', async () => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ ...exactApplication, environment_id: undefined }),
+        );
+        await expect(
+          client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
+        ).rejects.toThrow('Exact application environment identity is unavailable');
+
+        for (const [environment, message] of [
+          [
+            { ...exactEnvironment, id: 18 },
+            'Exact application environment identity does not match',
+          ],
+          [{ ...exactEnvironment, name: 'production' }, 'Exact environment name does not match'],
+          [
+            { ...exactEnvironment, project_uuid: 'different-project-uuid' },
+            'Exact environment project UUID does not match',
+          ],
+        ] as const) {
+          mockFetch.mockClear();
+          mockFetch
+            .mockResolvedValueOnce(mockResponse(exactApplication))
+            .mockResolvedValueOnce(mockResponse(environment));
+          await expect(
+            client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
+          ).rejects.toThrow(message);
+          expect(mockFetch).toHaveBeenCalledTimes(2);
+        }
+      });
+    });
+
     it('should create application from public repo', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'new-app-uuid' }));
 

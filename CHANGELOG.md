@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Exact application-environment verification without enumeration.** The new read-only `verify_app_environment` tool requires an application UUID, project UUID and expected environment name, reads only those exact application and environment endpoints, and returns a minimal identity proof. UUID, project, environment name and numeric environment identity drift all fail closed; embedded environment resources and configuration never enter the tool response.
+
 ## [2.19.3] - 2026-08-06
 
 A security release, and the one that ends the leak class instead of patching another instance of it. Update from any earlier version.

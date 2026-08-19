@@ -1,0 +1,30 @@
+{
+  "name": "verify_app_environment",
+  "description": "Verify one exact application belongs to one exact project environment without list calls",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "application_uuid": {
+        "type": "string",
+        "minLength": 1
+      },
+      "project_uuid": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expected_environment": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "application_uuid",
+      "project_uuid",
+      "expected_environment"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}
