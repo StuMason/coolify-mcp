@@ -2783,17 +2783,25 @@ describe('CoolifyClient', () => {
   // Database endpoints - extended coverage
   // =========================================================================
   describe('databases extended', () => {
-    it('should list databases with pagination', async () => {
-      mockFetch
-        .mockResolvedValueOnce(mockResponse([mockDatabase]))
-        .mockResolvedValueOnce(mockResponse([])); // /resources — collision merge (#336)
+    it('should not merge off-page resources into a paginated database list', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockDatabase])).mockResolvedValueOnce(
+        mockResponse([
+          {
+            uuid: 'off-page-db',
+            name: 'off-page-database',
+            type: 'standalone-postgresql',
+            status: 'running:healthy',
+          },
+        ]),
+      );
 
-      await client.listDatabases({ page: 1, per_page: 10 });
+      const result = await client.listDatabases({ page: 1, per_page: 10 });
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/databases?page=1&per_page=10',
         expect.any(Object),
       );
+      expect(result).toEqual([mockDatabase]);
     });
 
     it('should list databases with summary', async () => {

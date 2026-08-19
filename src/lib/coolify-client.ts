@@ -1441,7 +1441,7 @@ export class CoolifyClient {
           r.uuid &&
           !seen.has(r.uuid),
       );
-      if (dropped.length > 0) {
+      if (options?.page === undefined && options?.per_page === undefined && dropped.length > 0) {
         dbs = [...dbs, ...(dropped as unknown as Database[])];
       }
     }
