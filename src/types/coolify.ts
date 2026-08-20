@@ -64,10 +64,29 @@ export interface Server {
   unreachable_count?: number;
   proxy_type?: 'traefik' | 'caddy' | 'none';
   proxy_status?: string;
+  // Only present on GET /servers/{uuid}, not on the list endpoint. Populated
+  // by Coolify's periodic proxy version check; null when up to date or when
+  // the proxy version has not been detected yet.
+  detected_traefik_version?: string | null;
+  traefik_outdated_info?: TraefikOutdatedInfo | null;
   settings?: ServerSettings;
   team_id?: number;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Shape of `traefik_outdated_info` on GET /servers/{uuid} (verified live
+ * against Coolify v4.3.7). `type` is the semver distance of the available
+ * update, e.g. "patch_update".
+ */
+export interface TraefikOutdatedInfo {
+  current: string;
+  latest: string;
+  type?: string;
+  checked_at?: string;
+  newer_branch_target?: string;
+  newer_branch_latest?: string;
 }
 
 export interface ServerSettings {
@@ -1180,7 +1199,19 @@ export interface ApplicationDiagnostic {
   logs: string | null;
   environment_variables: {
     count: number;
-    variables: Array<{ key: string; is_buildtime: boolean; is_runtime: boolean }>;
+    // Coolify auto-creates a preview twin for every production env var and the
+    // API returns both scopes merged, so `count` can legitimately be double the
+    // number of keys a user configured. `distinct_keys` and the per-scope
+    // counts make that readable without deduping the underlying rows (#336).
+    distinct_keys: number;
+    production_count: number;
+    preview_count: number;
+    variables: Array<{
+      key: string;
+      is_buildtime: boolean;
+      is_runtime: boolean;
+      is_preview: boolean;
+    }>;
   };
   recent_deployments: Array<{
     uuid: string;
@@ -1225,15 +1256,21 @@ export interface InfrastructureIssue {
   name: string;
   issue: string;
   status: string;
+  // 'critical' = down/unhealthy/unreachable; 'warning' = degraded signal worth
+  // surfacing (unknown health, available proxy update) that is not an outage.
+  severity: 'critical' | 'warning';
 }
 
 export interface InfrastructureIssuesReport {
   summary: {
     total_issues: number;
+    // The unhealthy_*/unreachable_* counts cover critical issues only, keeping
+    // their pre-#336 meaning; warnings are counted separately.
     unhealthy_applications: number;
     unhealthy_databases: number;
     unhealthy_services: number;
     unreachable_servers: number;
+    warnings: number;
   };
   issues: InfrastructureIssue[];
   errors?: string[];

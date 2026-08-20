@@ -921,7 +921,114 @@ describe('CoolifyClient', () => {
   describe('databases', () => {
     it('should list databases', async () => {
       const mockDbs = [{ id: 1, uuid: 'db-uuid', name: 'test-db' }];
-      mockFetch.mockResolvedValueOnce(mockResponse(mockDbs));
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockDbs))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — collision merge (#336)
+
+      const result = await client.listDatabases();
+
+      expect(result).toEqual(mockDbs);
+    });
+
+    it('should merge databases /databases dropped on a per-type id collision from /resources', async () => {
+      // Coolify keeps a per-type id sequence and GET /databases merges the
+      // per-type collections keyed on id — 2 Postgres + 2 Dragonfly with ids
+      // 1 and 2 returns only the Dragonflys (#336). /resources sees all four.
+      const shadowed = [
+        { id: 1, uuid: 'drg-1', name: 'dragonfly-one', status: 'running:healthy' },
+        { id: 2, uuid: 'drg-2', name: 'dragonfly-two', status: 'running:healthy' },
+      ];
+      const resources = [
+        {
+          uuid: 'pg-1',
+          name: 'postgres-one',
+          type: 'standalone-postgresql',
+          status: 'running:healthy',
+        },
+        {
+          uuid: 'pg-2',
+          name: 'postgres-two',
+          type: 'standalone-postgresql',
+          status: 'running:healthy',
+        },
+        {
+          uuid: 'drg-1',
+          name: 'dragonfly-one',
+          type: 'standalone-dragonfly',
+          status: 'running:healthy',
+        },
+        // Defensive-filter arms: a row with no uuid and a row whose type is
+        // not a string must never be merged in, whatever /resources sends.
+        {
+          uuid: null,
+          name: 'row-without-uuid',
+          type: 'standalone-mysql',
+          status: 'running:healthy',
+        },
+        { uuid: 'weird-1', name: 'weird-type-row', type: 42, status: 'running:healthy' },
+        {
+          uuid: 'drg-2',
+          name: 'dragonfly-two',
+          type: 'standalone-dragonfly',
+          status: 'running:healthy',
+        },
+        { uuid: 'app-1', name: 'not-a-db', type: 'application', status: 'running:healthy' },
+        { uuid: 'svc-1', name: 'also-not-a-db', type: 'service', status: 'running:healthy' },
+      ];
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(shadowed))
+        .mockResolvedValueOnce(mockResponse(resources));
+
+      const result = (await client.listDatabases()) as Array<{ uuid: string }>;
+
+      expect(result.map((db) => db.uuid)).toEqual(['drg-1', 'drg-2', 'pg-1', 'pg-2']);
+    });
+
+    it('should apply the collision merge to summary projections too', async () => {
+      mockFetch
+        .mockResolvedValueOnce(
+          mockResponse([
+            {
+              id: 1,
+              uuid: 'drg-1',
+              name: 'dragonfly-one',
+              type: 'standalone-dragonfly',
+              status: 'running:healthy',
+              is_public: false,
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(
+          mockResponse([
+            {
+              uuid: 'drg-1',
+              name: 'dragonfly-one',
+              type: 'standalone-dragonfly',
+              status: 'running:healthy',
+            },
+            {
+              uuid: 'pg-1',
+              name: 'postgres-one',
+              type: 'standalone-postgresql',
+              status: 'running:healthy',
+            },
+          ]),
+        );
+
+      const result = (await client.listDatabases({ summary: true })) as Array<{
+        uuid: string;
+        type: string;
+      }>;
+
+      expect(result.map((db) => db.uuid)).toEqual(['drg-1', 'pg-1']);
+      expect(result[1].type).toBe('standalone-postgresql');
+    });
+
+    it('should return /databases unchanged when /resources fails', async () => {
+      const mockDbs = [{ id: 1, uuid: 'db-uuid', name: 'test-db' }];
+      mockFetch
+        .mockResolvedValueOnce(mockResponse(mockDbs))
+        .mockRejectedValueOnce(new Error('resources unavailable'));
 
       const result = await client.listDatabases();
 
@@ -1486,7 +1593,8 @@ describe('CoolifyClient', () => {
 
       mockFetch
         .mockResolvedValueOnce(mockResponse(mockEnvironment))
-        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — listDatabases collision merge (#336)
 
       const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
 
@@ -1510,7 +1618,8 @@ describe('CoolifyClient', () => {
 
       mockFetch
         .mockResolvedValueOnce(mockResponse(mockEnvironment))
-        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — listDatabases collision merge (#336)
 
       const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
 
@@ -1532,7 +1641,8 @@ describe('CoolifyClient', () => {
 
       mockFetch
         .mockResolvedValueOnce(mockResponse(mockEnvironment))
-        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — listDatabases collision merge (#336)
 
       const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
 
@@ -1554,7 +1664,8 @@ describe('CoolifyClient', () => {
 
       mockFetch
         .mockResolvedValueOnce(mockResponse(mockEnvironment))
-        .mockResolvedValueOnce(mockResponse(mockDbSummaries));
+        .mockResolvedValueOnce(mockResponse(mockDbSummaries))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — listDatabases collision merge (#336)
 
       const result = await client.getProjectEnvironmentWithDatabases('proj-uuid', 'production');
 
@@ -2672,19 +2783,31 @@ describe('CoolifyClient', () => {
   // Database endpoints - extended coverage
   // =========================================================================
   describe('databases extended', () => {
-    it('should list databases with pagination', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse([mockDatabase]));
+    it('should not merge off-page resources into a paginated database list', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([mockDatabase])).mockResolvedValueOnce(
+        mockResponse([
+          {
+            uuid: 'off-page-db',
+            name: 'off-page-database',
+            type: 'standalone-postgresql',
+            status: 'running:healthy',
+          },
+        ]),
+      );
 
-      await client.listDatabases({ page: 1, per_page: 10 });
+      const result = await client.listDatabases({ page: 1, per_page: 10 });
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/databases?page=1&per_page=10',
         expect.any(Object),
       );
+      expect(result).toEqual([mockDatabase]);
     });
 
     it('should list databases with summary', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse([mockDatabase]));
+      mockFetch
+        .mockResolvedValueOnce(mockResponse([mockDatabase]))
+        .mockResolvedValueOnce(mockResponse([])); // /resources — collision merge (#336)
 
       const result = await client.listDatabases({ summary: true });
 
@@ -3923,6 +4046,66 @@ describe('CoolifyClient', () => {
           'Multiple applications match',
         );
       });
+
+      it('should let an exact FQDN match win over substring multi-matches (#336)', async () => {
+        // Before the exact pass, "api.example.com" hit both apps as a
+        // substring and errored with a disambiguation prompt.
+        const apps = [
+          { ...mockApps[1], uuid: 'app-prod', fqdn: 'https://api.example.com' },
+          {
+            ...mockApps[1],
+            uuid: 'app-staging',
+            name: 'my-api-staging',
+            fqdn: 'https://api.example.com.staging.example.dev',
+          },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(apps));
+
+        const result = await client.resolveApplicationUuid('api.example.com');
+
+        expect(result).toBe('app-prod');
+      });
+
+      it('should match an exact FQDN entry inside a comma-separated fqdn list', async () => {
+        const apps = [
+          {
+            ...mockApps[0],
+            uuid: 'app-multi',
+            // Trailing comma leaves an empty entry, which must never match.
+            fqdn: 'https://tidylinker.com,https://www.tidylinker.com,',
+          },
+          { ...mockApps[1], uuid: 'app-other', fqdn: 'https://www.tidylinker.com.mirror.dev' },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(apps));
+
+        const result = await client.resolveApplicationUuid('www.tidylinker.com');
+
+        expect(result).toBe('app-multi');
+      });
+
+      it('should let an exact name match win over substring multi-matches', async () => {
+        const apps = [
+          { ...mockApps[0], uuid: 'app-api', name: 'api', fqdn: null },
+          { ...mockApps[1], uuid: 'app-api-worker', name: 'api-worker', fqdn: null },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(apps));
+
+        const result = await client.resolveApplicationUuid('api');
+
+        expect(result).toBe('app-api');
+      });
+
+      it('should still disambiguate when several apps match exactly', async () => {
+        const apps = [
+          { ...mockApps[0], uuid: 'app-1', name: 'api', fqdn: null },
+          { ...mockApps[1], uuid: 'app-2', name: 'API', fqdn: null },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(apps));
+
+        await expect(client.resolveApplicationUuid('api')).rejects.toThrow(
+          'Multiple applications match',
+        );
+      });
     });
 
     describe('resolveServerUuid', () => {
@@ -4005,6 +4188,32 @@ describe('CoolifyClient', () => {
         await expect(client.resolveServerUuid('prod-server')).rejects.toThrow(
           'Multiple servers match',
         );
+      });
+
+      it('should let an exact IP match win over substring multi-matches (#336)', async () => {
+        // "10.0.0.5" is a substring of "10.0.0.50" — without the exact pass
+        // this errored with a disambiguation prompt.
+        const servers = [
+          { ...mockServers[1], uuid: 'server-a', ip: '10.0.0.5' },
+          { ...mockServers[1], uuid: 'server-b', ip: '10.0.0.50' },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(servers));
+
+        const result = await client.resolveServerUuid('10.0.0.5');
+
+        expect(result).toBe('server-a');
+      });
+
+      it('should let an exact name match win over substring multi-matches', async () => {
+        const servers = [
+          { ...mockServers[0], uuid: 'server-a', name: 'prod' },
+          { ...mockServers[1], uuid: 'server-b', name: 'prod-db' },
+        ];
+        mockFetch.mockResolvedValueOnce(mockResponse(servers));
+
+        const result = await client.resolveServerUuid('prod');
+
+        expect(result).toBe('server-a');
       });
     });
   });
@@ -4098,9 +4307,12 @@ describe('CoolifyClient', () => {
         expect(result.health.status).toBe('healthy');
         expect(result.logs).toBe(mockLogs);
         expect(result.environment_variables.count).toBe(2);
+        expect(result.environment_variables.distinct_keys).toBe(2);
+        expect(result.environment_variables.production_count).toBe(2);
+        expect(result.environment_variables.preview_count).toBe(0);
         expect(result.environment_variables.variables).toEqual([
-          { key: 'DATABASE_URL', is_buildtime: false, is_runtime: true },
-          { key: 'NODE_ENV', is_buildtime: true, is_runtime: true },
+          { key: 'DATABASE_URL', is_buildtime: false, is_runtime: true, is_preview: false },
+          { key: 'NODE_ENV', is_buildtime: true, is_runtime: true, is_preview: false },
         ]);
         expect(result.recent_deployments).toHaveLength(2);
         expect(result.errors).toBeUndefined();
@@ -4121,8 +4333,34 @@ describe('CoolifyClient', () => {
         const result = await client.diagnoseApplication(testAppUuid);
 
         expect(result.environment_variables.variables).toEqual([
-          { key: 'LEGACY_VAR', is_buildtime: false, is_runtime: true },
+          { key: 'LEGACY_VAR', is_buildtime: false, is_runtime: true, is_preview: false },
         ]);
+      });
+
+      it('should separate preview twins from production vars instead of a doubled flat count', async () => {
+        // Coolify auto-creates a preview twin for every production env var and
+        // GET /envs returns both scopes merged (#336). The raw count stays
+        // honest, distinct_keys/preview_count make the doubling readable, and
+        // no row is deduped away — deleting a twin destroys preview config.
+        const twinnedEnvVars = [
+          { id: 1, uuid: 'env-1', key: 'DATABASE_URL', value: 'x', is_preview: false },
+          { id: 2, uuid: 'env-2', key: 'DATABASE_URL', value: 'x', is_preview: true },
+          { id: 3, uuid: 'env-3', key: 'NODE_ENV', value: 'production', is_preview: false },
+          { id: 4, uuid: 'env-4', key: 'NODE_ENV', value: 'production', is_preview: true },
+        ];
+        mockFetch
+          .mockResolvedValueOnce(mockResponse(mockApp))
+          .mockResolvedValueOnce(mockResponse(mockLogs))
+          .mockResolvedValueOnce(mockResponse(twinnedEnvVars))
+          .mockResolvedValueOnce(mockResponse({ count: 0, deployments: [] }));
+
+        const result = await client.diagnoseApplication(testAppUuid);
+
+        expect(result.environment_variables.count).toBe(4);
+        expect(result.environment_variables.distinct_keys).toBe(2);
+        expect(result.environment_variables.production_count).toBe(2);
+        expect(result.environment_variables.preview_count).toBe(2);
+        expect(result.environment_variables.variables.filter((v) => v.is_preview)).toHaveLength(2);
       });
 
       it('should detect unhealthy application status', async () => {
@@ -4534,7 +4772,10 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockServers))
           .mockResolvedValueOnce(mockResponse(mockApplications))
           .mockResolvedValueOnce(mockResponse(mockDatabases))
-          .mockResolvedValueOnce(mockResponse(mockServices));
+          .mockResolvedValueOnce(mockResponse([])) // /resources — listDatabases collision merge (#336)
+          .mockResolvedValueOnce(mockResponse(mockServices))
+          .mockResolvedValueOnce(mockResponse(mockServers[0])) // GET /servers/server-1 (proxy check)
+          .mockResolvedValueOnce(mockResponse(mockServers[1])); // GET /servers/server-2
 
         const result = await client.findInfrastructureIssues();
 
@@ -4543,7 +4784,9 @@ describe('CoolifyClient', () => {
         expect(result.summary.unhealthy_applications).toBe(1);
         expect(result.summary.unhealthy_databases).toBe(1);
         expect(result.summary.unhealthy_services).toBe(1);
+        expect(result.summary.warnings).toBe(0);
         expect(result.issues).toHaveLength(4);
+        expect(result.issues.every((i) => i.severity === 'critical')).toBe(true);
         expect(result.errors).toBeUndefined();
       });
 
@@ -4557,12 +4800,101 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(healthyServers))
           .mockResolvedValueOnce(mockResponse(healthyApps))
           .mockResolvedValueOnce(mockResponse(healthyDbs))
-          .mockResolvedValueOnce(mockResponse(healthySvcs));
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse(healthySvcs))
+          .mockResolvedValueOnce(mockResponse(mockServers[0])); // GET /servers/server-1
 
         const result = await client.findInfrastructureIssues();
 
         expect(result.summary.total_issues).toBe(0);
+        expect(result.summary.warnings).toBe(0);
         expect(result.issues).toHaveLength(0);
+      });
+
+      it('should surface running:unknown health and available proxy updates as warnings', async () => {
+        // The field test that raised #336: an app in running:unknown and a
+        // server with an available Traefik patch produced zero findings.
+        const unknownApp = {
+          id: 3,
+          uuid: 'app-3',
+          name: 'no-healthcheck-app',
+          status: 'running:unknown',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        };
+        const unknownSvc = {
+          id: 3,
+          uuid: 'svc-3',
+          name: 'no-healthcheck-service',
+          type: 'n8n',
+          status: 'running:unknown',
+          created_at: '2024-01-01',
+          updated_at: '2024-01-01',
+        };
+        const outdatedProxyServer = {
+          ...mockServers[0],
+          // Shape verified live against Coolify v4.3.7 (GET /servers/{uuid}).
+          traefik_outdated_info: {
+            current: '3.6.8',
+            latest: '3.6.23',
+            type: 'patch_update',
+            checked_at: '2026-08-16T00:00:55+00:00',
+          },
+        };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse([mockServers[0]]))
+          .mockResolvedValueOnce(mockResponse([unknownApp]))
+          .mockResolvedValueOnce(mockResponse([mockDatabases[0]]))
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse([unknownSvc]))
+          .mockResolvedValueOnce(mockResponse(outdatedProxyServer)); // GET /servers/server-1
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.total_issues).toBe(3);
+        expect(result.summary.warnings).toBe(3);
+        // Warnings must not inflate the critical counts.
+        expect(result.summary.unhealthy_applications).toBe(0);
+        expect(result.summary.unhealthy_services).toBe(0);
+        expect(result.summary.unreachable_servers).toBe(0);
+        expect(result.issues.every((i) => i.severity === 'warning')).toBe(true);
+        const proxyIssue = result.issues.find((i) => i.type === 'server');
+        expect(proxyIssue?.issue).toBe('Proxy (Traefik) patch update available: 3.6.8 → 3.6.23');
+        expect(result.issues.find((i) => i.type === 'application')?.issue).toContain(
+          'running but health unknown',
+        );
+      });
+
+      it('should warn on databases with unknown health and non-patch proxy updates', async () => {
+        const unknownDb = {
+          ...mockDatabases[0],
+          uuid: 'db-3',
+          name: 'no-healthcheck-db',
+          status: 'running:unknown',
+        };
+        const statusServer = { ...mockServers[0], status: 'running' };
+        const minorOutdatedServer = {
+          ...statusServer,
+          traefik_outdated_info: { current: '3.6.8', latest: '3.7.8', type: 'minor_update' },
+        };
+        mockFetch
+          .mockResolvedValueOnce(mockResponse([statusServer]))
+          .mockResolvedValueOnce(mockResponse([mockApplications[0]]))
+          .mockResolvedValueOnce(mockResponse([unknownDb]))
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse([mockServices[0]]))
+          .mockResolvedValueOnce(mockResponse(minorOutdatedServer)); // GET /servers/server-1
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.warnings).toBe(2);
+        expect(result.summary.unhealthy_databases).toBe(0);
+        expect(result.issues.find((i) => i.type === 'database')?.issue).toContain(
+          'running but health unknown',
+        );
+        const proxyIssue = result.issues.find((i) => i.type === 'server');
+        expect(proxyIssue?.issue).toBe('Proxy (Traefik) update available: 3.6.8 → 3.7.8');
+        expect(proxyIssue?.status).toBe('running');
       });
 
       it('should handle partial failures and still report issues', async () => {
@@ -4570,7 +4902,10 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockServers))
           .mockRejectedValueOnce(new Error('Applications unavailable'))
           .mockResolvedValueOnce(mockResponse(mockDatabases))
-          .mockResolvedValueOnce(mockResponse(mockServices));
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse(mockServices))
+          .mockResolvedValueOnce(mockResponse(mockServers[0])) // GET /servers/server-1
+          .mockResolvedValueOnce(mockResponse(mockServers[1])); // GET /servers/server-2
 
         const result = await client.findInfrastructureIssues();
 
@@ -4579,6 +4914,21 @@ describe('CoolifyClient', () => {
         expect(result.summary.unhealthy_services).toBe(1);
         expect(result.summary.unhealthy_applications).toBe(0); // Failed to fetch
         expect(result.errors).toContain('applications: Applications unavailable');
+      });
+
+      it('should keep scanning when a per-server detail fetch fails', async () => {
+        mockFetch
+          .mockResolvedValueOnce(mockResponse([mockServers[0]]))
+          .mockResolvedValueOnce(mockResponse([mockApplications[0]]))
+          .mockResolvedValueOnce(mockResponse([mockDatabases[0]]))
+          .mockResolvedValueOnce(mockResponse([])) // /resources
+          .mockResolvedValueOnce(mockResponse([mockServices[0]]))
+          .mockRejectedValueOnce(new Error('server details unavailable')); // GET /servers/server-1
+
+        const result = await client.findInfrastructureIssues();
+
+        expect(result.summary.total_issues).toBe(0);
+        expect(result.errors).toContain('server healthy-server: server details unavailable');
       });
     });
   });
@@ -4650,6 +5000,7 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(project))
           .mockResolvedValueOnce(mockResponse(mockProjectApps))
           .mockResolvedValueOnce(mockResponse(mockProjectDbs))
+          .mockResolvedValueOnce(mockResponse([])) // /resources — listDatabases collision merge (#336)
           .mockResolvedValueOnce(mockResponse(mockProjectSvcs));
       };
 

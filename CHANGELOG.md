@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`list_databases` no longer silently drops whole database types** (#336, item 1). Coolify keeps a per-type id sequence and `GET /databases` merges the per-type collections keyed on that id, so two types sharing ids shadow each other — verified live upstream: 2 standalone Postgres + 2 standalone Dragonfly, both pairs ids 1 and 2, returned only the Dragonflys. `/resources` reports every database correctly, so `listDatabases` now fetches both and merges the rows `/databases` dropped back in by uuid (every `standalone-*` resource type is a database). The merge is a no-op when `/databases` is complete, and if `/resources` fails the plain `/databases` result is returned unchanged. `get_infrastructure_overview` database counts and `find_issues` database coverage are repaired by the same merge, since both go through `listDatabases`.
+- **`environments get` now honours its own schema** (#336, item 2). The schema has always marked `name` optional, but the handler rejected with `Error: name required`. It now defaults to the sole environment when the project has exactly one; with several (or none) it explains what exists instead of a bare rejection.
+- **`diagnose_app` env-var counts no longer read as a bug** (#336, item 3). Coolify auto-creates a preview twin for every production application env var and the API returns both scopes merged, so the raw count doubles. The diagnostic now surfaces `is_preview` per variable plus `distinct_keys`, `production_count` and `preview_count` alongside the unchanged raw `count`. No row is ever deduped — deleting a twin destroys preview config.
+- **Exact matches win name resolution** (#336, item 4). `diagnose_app` resolved "api.example.com" to a multi-app disambiguation error whenever another app's FQDN contained it as a substring. An exact name or FQDN match (scheme and trailing slash ignored, each entry of a comma-separated `fqdn` compared) now wins outright before substring matching runs; same for `diagnose_server` names and IPs, where "10.0.0.5" is a substring of "10.0.0.50".
+
+### Added
+
+- **`find_issues` folds in signals it already had in hand** (#336, item 5). An app in `running:unknown` and an available proxy patch upgrade used to produce zero findings. Issues now carry a `severity` (`critical` | `warning`): resources running with unknown health warn (running container, no working healthcheck — a failure would go undetected), and servers with an available Traefik update warn with the version pair (`traefik_outdated_info` only exists on `GET /servers/{uuid}`, so each listed server is fetched individually; shape verified live against v4.3.7). The `unhealthy_*`/`unreachable_servers` summary counts keep their pre-existing critical-only meaning; warnings are counted separately in `summary.warnings`.
+
 ## [2.19.3] - 2026-08-06
 
 A security release, and the one that ends the leak class instead of patching another instance of it. Update from any earlier version.
