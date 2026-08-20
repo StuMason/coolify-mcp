@@ -275,6 +275,80 @@ describe('CoolifyMcpServer v2', () => {
     });
   });
 
+  describe('environments tool handler', () => {
+    // The schema has always marked `name` optional on get; the handler used to
+    // reject anyway. It now defaults to the sole environment (#336).
+    const callEnvironments = async (
+      srv: CoolifyMcpServer,
+      args: Record<string, unknown>,
+    ): Promise<string> => {
+      const tool = (
+        srv as unknown as {
+          _registeredTools: Record<
+            string,
+            {
+              handler: (
+                args: Record<string, unknown>,
+                extra: unknown,
+              ) => Promise<{ content: Array<{ text: string }> }>;
+            }
+          >;
+        }
+      )._registeredTools['environments'];
+      const result = await tool.handler(args, {});
+      return result.content.map((c) => c.text).join('\n');
+    };
+
+    it('get with an explicit name skips the environment listing', async () => {
+      const list = jest.spyOn(server['client'], 'listProjectEnvironments');
+      const get = jest
+        .spyOn(server['client'], 'getProjectEnvironmentWithDatabases')
+        .mockResolvedValue({ id: 1, uuid: 'env-1', name: 'production' } as never);
+
+      await callEnvironments(server, { action: 'get', project_uuid: 'proj-1', name: 'production' });
+
+      expect(get).toHaveBeenCalledWith('proj-1', 'production');
+      expect(list).not.toHaveBeenCalled();
+    });
+
+    it('get without a name defaults to the sole environment', async () => {
+      jest
+        .spyOn(server['client'], 'listProjectEnvironments')
+        .mockResolvedValue([{ id: 1, uuid: 'env-1', name: 'production' }] as never);
+      const get = jest
+        .spyOn(server['client'], 'getProjectEnvironmentWithDatabases')
+        .mockResolvedValue({ id: 1, uuid: 'env-1', name: 'production' } as never);
+
+      const text = await callEnvironments(server, { action: 'get', project_uuid: 'proj-1' });
+
+      expect(get).toHaveBeenCalledWith('proj-1', 'production');
+      expect(text).toContain('production');
+    });
+
+    it('get without a name still requires one when several environments exist', async () => {
+      jest.spyOn(server['client'], 'listProjectEnvironments').mockResolvedValue([
+        { id: 1, uuid: 'env-1', name: 'production' },
+        { id: 2, uuid: 'env-2', name: 'staging' },
+      ] as never);
+      const get = jest.spyOn(server['client'], 'getProjectEnvironmentWithDatabases');
+
+      const text = await callEnvironments(server, { action: 'get', project_uuid: 'proj-1' });
+
+      expect(text).toContain(
+        'Error: name required — project has 2 environments: production, staging',
+      );
+      expect(get).not.toHaveBeenCalled();
+    });
+
+    it('get without a name reports an environment-less project instead of a bare rejection', async () => {
+      jest.spyOn(server['client'], 'listProjectEnvironments').mockResolvedValue([] as never);
+
+      const text = await callEnvironments(server, { action: 'get', project_uuid: 'proj-1' });
+
+      expect(text).toContain('Error: Project proj-1 has no environments');
+    });
+  });
+
   describe('env_vars tool handler', () => {
     // Reach the SDK-registered handler so the is_buildtime / is_runtime
     // passthrough lines are actually executed (not just type-checked).
