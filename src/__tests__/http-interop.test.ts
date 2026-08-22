@@ -221,4 +221,27 @@ describe('HTTP mode interop with the reference MCP client', () => {
       }),
     ).rejects.toThrow();
   }, 30_000);
+
+  it('answers an unauthenticated POST /mcp with a transport-level 401 on the wire (#340)', async (): Promise<void> => {
+    const response = await fetch(resourceUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(response.status).toBe(401);
+    const challenge = response.headers.get('www-authenticate') ?? '';
+    expect(challenge).toMatch(/^Bearer /);
+    expect(challenge).toContain(
+      `resource_metadata="${publicUrl}/.well-known/oauth-protected-resource"`,
+    );
+    expect(await response.text()).not.toContain('"jsonrpc"');
+
+    // ...and the metadata it points at answers, with the resource the client typed.
+    const prm = await fetch(`${publicUrl}/.well-known/oauth-protected-resource`);
+    expect(prm.status).toBe(200);
+    expect(((await prm.json()) as { resource: string }).resource).toBe(resourceUrl);
+  });
 });
