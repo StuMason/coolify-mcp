@@ -72,11 +72,15 @@ jobs:
     name: Tool-selection & injection evals (report-only)
     runs-on: ubuntu-latest
     # Live provider calls: cap wall-clock so a stalled provider can't pin a
-    # runner (and burn quota) for the default 6 hours. continue-on-error stops
-    # it failing the build; this stops it costing.
+    # runner (and burn quota) for the default 6 hours. The step-level
+    # continue-on-error on "Run evals" stops it failing the build; this stops
+    # it costing.
     timeout-minutes: 30
-    # Never fail the build on model-in-the-loop results.
-    continue-on-error: true
+    # NOTE: continue-on-error lives on the "Run evals" STEP, not here. A
+    # job-level continue-on-error keeps the workflow green but still records
+    # the job's check-run as `failure`, so the default branch's status rollup
+    # (GitHub's own checks UI, Cockpit, badges) shows red. Step-level keeps the
+    # job green and surfaces the result as a warning + job summary instead.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -120,4 +124,29 @@ jobs:
           # runs Haiku (0.9 gate) rather than whichever provider key happens to
           # be first. Override by setting EVALS_MODEL as a repo/workflow var.
           EVALS_MODEL: ${{ vars.EVALS_MODEL || (secrets.EVALS_ANTHROPIC_API_KEY && 'anthropic:claude-haiku-4-5') || '' }}
-        run: npm run evals
+        # Report-only: never fail the job on model-in-the-loop results (models
+        # are nondeterministic, keys get rate-limited or run out of credit).
+        continue-on-error: true
+        id: evals
+        run: npm run evals 2>&1 | tee evals.log; exit ${PIPESTATUS[0]}
+      - name: Report eval outcome
+        if: steps.key.outputs.present == 'true'
+        working-directory: evals
+        env:
+          OUTCOME: ${{ steps.evals.outcome }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            echo "### Model-in-the-loop evals: passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=Evals (report-only) did not pass::Model-in-the-loop evals failed or errored. Report-only — this does not block merge. See the job summary / log."
+            echo "### Model-in-the-loop evals: FAILED (report-only, does not block merge)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
+            echo
+            echo '<details><summary>Last 60 lines of eval output</summary>'
+            echo
+            echo '```'
+            tail -n 60 evals.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"

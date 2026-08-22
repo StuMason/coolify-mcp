@@ -954,7 +954,7 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'environments',
-      'Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API)',
+      'Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API; when the project has exactly one environment, get may omit name)',
       {
         action: z.enum(['list', 'get', 'create', 'delete']),
         project_uuid: z.string(),
@@ -966,10 +966,25 @@ export class CoolifyMcpServer extends McpServer {
           case 'list':
             return wrap(() => this.client.listProjectEnvironments(project_uuid));
           case 'get':
-            if (!name)
-              return { content: [{ type: 'text' as const, text: 'Error: name required' }] };
-            // Use enhanced method that includes missing DB types (#88)
-            return wrap(() => this.client.getProjectEnvironmentWithDatabases(project_uuid, name));
+            // The schema has always marked name optional here, but the handler
+            // rejected without it (#336). Default to the sole environment when
+            // the project has exactly one; anything else still needs a name.
+            return wrap(async () => {
+              let envName = name;
+              if (!envName) {
+                const envs = await this.client.listProjectEnvironments(project_uuid);
+                if (envs.length !== 1) {
+                  throw new Error(
+                    envs.length === 0
+                      ? `Project ${project_uuid} has no environments`
+                      : `name required — project has ${envs.length} environments: ${envs.map((e) => e.name).join(', ')}`,
+                  );
+                }
+                envName = envs[0].name;
+              }
+              // Use enhanced method that includes missing DB types (#88)
+              return this.client.getProjectEnvironmentWithDatabases(project_uuid, envName);
+            });
           case 'create':
             if (!name)
               return { content: [{ type: 'text' as const, text: 'Error: name required' }] };

@@ -426,6 +426,15 @@ function toDatabaseSummary(db: Database): DatabaseSummary {
   };
 }
 
+/**
+ * "running:unknown" — the container is up but Coolify has no health signal for
+ * it, usually a missing or broken healthcheck. Not an outage, but find_issues
+ * previously ignored it entirely (#336).
+ */
+function isRunningWithUnknownHealth(status: string): boolean {
+  return status.startsWith('running') && status.endsWith(':unknown');
+}
+
 function toServiceSummary(svc: Service): ServiceSummary {
   return {
     uuid: svc.uuid,
@@ -1394,12 +1403,48 @@ export class CoolifyClient {
   // Database endpoints
   // ===========================================================================
 
+  /**
+   * List databases, augmented from `/resources`.
+   *
+   * Coolify keeps a per-type id sequence and `GET /databases` merges the
+   * per-type collections keyed on that id, so two database types sharing ids
+   * silently shadow each other (verified live: 2 Postgres + 2 Dragonfly, both
+   * pairs ids 1 and 2, returns only the Dragonflys). `/resources` reports every
+   * database correctly, so rows it knows about that `/databases` dropped are
+   * merged back in by uuid. When `/databases` is complete the merge is a no-op;
+   * if `/resources` fails the plain `/databases` result is returned unchanged.
+   * @see https://github.com/StuMason/coolify-mcp/issues/336
+   */
   async listDatabases(options?: ListOptions): Promise<Database[] | DatabaseSummary[]> {
     const query = this.buildQueryString({
       page: options?.page,
       per_page: options?.per_page,
     });
-    const dbs = await this.request<Database[]>(`/databases${query}`);
+    const [dbsResult, resourcesResult] = await Promise.allSettled([
+      this.request<Database[]>(`/databases${query}`),
+      this.request<ResourceListItemFull[]>('/resources'),
+    ]);
+    if (dbsResult.status === 'rejected') throw dbsResult.reason;
+    let dbs = dbsResult.value;
+    if (
+      Array.isArray(dbs) &&
+      resourcesResult.status === 'fulfilled' &&
+      Array.isArray(resourcesResult.value)
+    ) {
+      const seen = new Set(dbs.map((db) => db.uuid));
+      // Every standalone-* resource type is a database; applications and
+      // services carry their own type strings.
+      const dropped = resourcesResult.value.filter(
+        (r) =>
+          typeof r.type === 'string' &&
+          r.type.startsWith('standalone-') &&
+          r.uuid &&
+          !seen.has(r.uuid),
+      );
+      if (options?.page === undefined && options?.per_page === undefined && dropped.length > 0) {
+        dbs = [...dbs, ...(dropped as unknown as Database[])];
+      }
+    }
     return options?.summary && Array.isArray(dbs) ? dbs.map(toDatabaseSummary) : dbs;
   }
 
@@ -2341,7 +2386,23 @@ export class CoolifyClient {
   }
 
   /**
+   * Normalize a name/FQDN candidate for exact comparison: lowercase, trimmed,
+   * scheme and trailing slashes stripped. "https://app.example.com/" and
+   * "app.example.com" are the same address to a human asking about it.
+   */
+  private static normalizeHostLike(value: string): string {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/+$/, '');
+  }
+
+  /**
    * Find an application by UUID, name, or domain (FQDN).
+   * An exact name or FQDN match wins outright; substring matching only runs
+   * when nothing matches exactly, so "api.example.com" resolves even when
+   * "api.example.com.staging" also exists (#336).
    * Returns the UUID if found, throws if not found or multiple matches.
    */
   async resolveApplicationUuid(query: string): Promise<string> {
@@ -2353,12 +2414,29 @@ export class CoolifyClient {
     // Otherwise, search by name or domain
     const apps = (await this.listApplications()) as Application[];
     const queryLower = query.toLowerCase();
+    const queryHost = CoolifyClient.normalizeHostLike(query);
 
-    const matches = apps.filter((app) => {
-      const nameMatch = app.name?.toLowerCase().includes(queryLower);
-      const fqdnMatch = app.fqdn?.toLowerCase().includes(queryLower);
-      return nameMatch || fqdnMatch;
+    // Exact pass first. `fqdn` is a comma-separated list, so compare each entry.
+    const exactMatches = apps.filter((app) => {
+      if (app.name?.toLowerCase() === queryLower) return true;
+      return (app.fqdn || '')
+        .split(',')
+        .some(
+          (entry) => entry.trim() !== '' && CoolifyClient.normalizeHostLike(entry) === queryHost,
+        );
     });
+    if (exactMatches.length === 1) {
+      return exactMatches[0].uuid;
+    }
+
+    const matches =
+      exactMatches.length > 1
+        ? exactMatches
+        : apps.filter((app) => {
+            const nameMatch = app.name?.toLowerCase().includes(queryLower);
+            const fqdnMatch = app.fqdn?.toLowerCase().includes(queryLower);
+            return nameMatch || fqdnMatch;
+          });
 
     if (matches.length === 0) {
       throw new Error(`No application found matching "${query}"`);
@@ -2387,11 +2465,24 @@ export class CoolifyClient {
     const servers = (await this.listServers()) as Server[];
     const queryLower = query.toLowerCase();
 
-    const matches = servers.filter((server) => {
-      const nameMatch = server.name?.toLowerCase().includes(queryLower);
-      const ipMatch = server.ip?.toLowerCase().includes(queryLower);
-      return nameMatch || ipMatch;
-    });
+    // Exact pass first, same rationale as resolveApplicationUuid — and IPs are
+    // prefixes of each other constantly ("10.0.0.1" is inside "10.0.0.11").
+    const exactMatches = servers.filter(
+      (server) =>
+        server.name?.toLowerCase() === queryLower || server.ip?.toLowerCase() === queryLower,
+    );
+    if (exactMatches.length === 1) {
+      return exactMatches[0].uuid;
+    }
+
+    const matches =
+      exactMatches.length > 1
+        ? exactMatches
+        : servers.filter((server) => {
+            const nameMatch = server.name?.toLowerCase().includes(queryLower);
+            const ipMatch = server.ip?.toLowerCase().includes(queryLower);
+            return nameMatch || ipMatch;
+          });
 
     if (matches.length === 0) {
       throw new Error(`No server found matching "${query}"`);
@@ -2426,7 +2517,13 @@ export class CoolifyClient {
         application: null,
         health: { status: 'unknown', issues: [] },
         logs: null,
-        environment_variables: { count: 0, variables: [] },
+        environment_variables: {
+          count: 0,
+          distinct_keys: 0,
+          production_count: 0,
+          preview_count: 0,
+          variables: [],
+        },
         recent_deployments: [],
         errors: [msg],
       };
@@ -2521,11 +2618,16 @@ export class CoolifyClient {
       },
       logs: typeof logs === 'string' ? logs : null,
       environment_variables: {
-        count: envVars?.length || 0,
+        count: (envVars || []).length,
+        // Preview twins make the raw count read double (#336) — see the type.
+        distinct_keys: new Set((envVars || []).map((v) => v.key)).size,
+        production_count: (envVars || []).filter((v) => v.is_preview !== true).length,
+        preview_count: (envVars || []).filter((v) => v.is_preview === true).length,
         variables: (envVars || []).map((v) => ({
           key: v.key,
           is_buildtime: v.is_buildtime ?? false,
           is_runtime: v.is_runtime ?? true,
+          is_preview: v.is_preview ?? false,
         })),
       },
       recent_deployments: (deployments || []).slice(0, 5).map((d) => ({
@@ -2647,7 +2749,10 @@ export class CoolifyClient {
 
   /**
    * Scan infrastructure for common issues.
-   * Finds: unreachable servers, unhealthy apps, exited databases, stopped services.
+   * Critical: unreachable servers, unhealthy apps, exited databases, stopped
+   * services. Warnings (#336): resources running with unknown health, and
+   * servers with an available proxy update (`traefik_outdated_info`, only on
+   * GET /servers/{uuid}, so each listed server is fetched individually).
    */
   async findInfrastructureIssues(): Promise<InfrastructureIssuesReport> {
     const results = await Promise.allSettled([
@@ -2682,9 +2787,32 @@ export class CoolifyClient {
             name: server.name,
             issue: 'Server is not reachable',
             status: server.status || 'unreachable',
+            severity: 'critical',
           });
         }
       }
+
+      // traefik_outdated_info only exists on the single-server endpoint.
+      const details = await Promise.allSettled(servers.map((s) => this.getServer(s.uuid)));
+      details.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          const msg =
+            result.reason instanceof Error ? result.reason.message : String(result.reason);
+          errors.push(`server ${servers[i].name}: ${msg}`);
+          return;
+        }
+        const info = result.value.traefik_outdated_info;
+        if (info?.latest && info.current) {
+          issues.push({
+            type: 'server',
+            uuid: servers[i].uuid,
+            name: servers[i].name,
+            issue: `Proxy (Traefik) ${info.type === 'patch_update' ? 'patch update' : 'update'} available: ${info.current} → ${info.latest}`,
+            status: servers[i].status || 'running',
+            severity: 'warning',
+          });
+        }
+      });
     }
 
     // Check applications for unhealthy status
@@ -2703,6 +2831,16 @@ export class CoolifyClient {
             name: app.name,
             issue: `Application status: ${status}`,
             status,
+            severity: 'critical',
+          });
+        } else if (isRunningWithUnknownHealth(status)) {
+          issues.push({
+            type: 'application',
+            uuid: app.uuid,
+            name: app.name,
+            issue: `Application running but health unknown (${status}) — no working healthcheck, so a failure would go undetected`,
+            status,
+            severity: 'warning',
           });
         }
       }
@@ -2724,6 +2862,16 @@ export class CoolifyClient {
             name: db.name,
             issue: `Database status: ${status}`,
             status,
+            severity: 'critical',
+          });
+        } else if (isRunningWithUnknownHealth(status)) {
+          issues.push({
+            type: 'database',
+            uuid: db.uuid,
+            name: db.name,
+            issue: `Database running but health unknown (${status}) — no working healthcheck, so a failure would go undetected`,
+            status,
+            severity: 'warning',
           });
         }
       }
@@ -2745,18 +2893,30 @@ export class CoolifyClient {
             name: svc.name,
             issue: `Service status: ${status}`,
             status,
+            severity: 'critical',
+          });
+        } else if (isRunningWithUnknownHealth(status)) {
+          issues.push({
+            type: 'service',
+            uuid: svc.uuid,
+            name: svc.name,
+            issue: `Service running but health unknown (${status}) — no working healthcheck, so a failure would go undetected`,
+            status,
+            severity: 'warning',
           });
         }
       }
     }
 
+    const critical = issues.filter((i) => i.severity === 'critical');
     return {
       summary: {
         total_issues: issues.length,
-        unhealthy_applications: issues.filter((i) => i.type === 'application').length,
-        unhealthy_databases: issues.filter((i) => i.type === 'database').length,
-        unhealthy_services: issues.filter((i) => i.type === 'service').length,
-        unreachable_servers: issues.filter((i) => i.type === 'server').length,
+        unhealthy_applications: critical.filter((i) => i.type === 'application').length,
+        unhealthy_databases: critical.filter((i) => i.type === 'database').length,
+        unhealthy_services: critical.filter((i) => i.type === 'service').length,
+        unreachable_servers: critical.filter((i) => i.type === 'server').length,
+        warnings: issues.filter((i) => i.severity === 'warning').length,
       },
       issues,
       ...(errors.length > 0 && { errors }),

@@ -1,6 +1,6 @@
 {
   "name": "environments",
-  "description": "Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API)",
+  "description": "Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API; when the project has exactly one environment, get may omit name)",
   "annotations": {
     "destructiveHint": true
   },
