@@ -107,9 +107,28 @@ describe('OAuthProvider', () => {
     it('allows loopback redirect URIs over http', () => {
       const provider = makeProvider();
       const result = provider.registerClient({
-        redirect_uris: ['http://localhost:33418/callback', 'http://127.0.0.1:33418/callback'],
+        redirect_uris: [
+          'http://localhost:33418/callback',
+          'http://127.0.0.1:33418/callback',
+          'http://[::1]:33418/callback',
+        ],
       });
       expect(result.client_id).toBeDefined();
+    });
+
+    it('rejects non-http schemes even on a loopback host, and fragments (#340)', () => {
+      const provider = makeProvider();
+      for (const uri of [
+        'javascript://localhost/alert(1)',
+        'file://localhost/etc/passwd',
+        'data://127.0.0.1/text',
+        'custom://[::1]/cb',
+      ]) {
+        expect(() => provider.registerClient({ redirect_uris: [uri] })).toThrow('https');
+      }
+      expect(() =>
+        provider.registerClient({ redirect_uris: ['https://ok.example.com/cb#frag'] }),
+      ).toThrow('fragment');
     });
   });
 
@@ -467,6 +486,59 @@ describe('HTTP app routes', () => {
     expect(response.status).toBe(201);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body.client_id).toMatch(/^mcp_client_/);
+  });
+
+  it('answers an unauthenticated POST /mcp with 401 + WWW-Authenticate before the SDK sees the body (#340)', async () => {
+    const app = makeApp();
+    // The audit line is written only past the bearer gate, so capturing stdout
+    // shows whether the JSON-RPC body ever reached the handler.
+    const written: string[] = [];
+    const auditSpy = jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      written.push(args.map(String).join(' '));
+    });
+    try {
+      const toolsCall = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_mcp_version', arguments: {} },
+      });
+      const headers = {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      };
+
+      const missing = await app.fetch(
+        new Request(RESOURCE, { method: 'POST', headers, body: toolsCall }),
+      );
+      expect(missing.status).toBe(401);
+      const challenge = missing.headers.get('www-authenticate') ?? '';
+      expect(challenge).toMatch(/^Bearer /);
+      expect(challenge).toContain(
+        `resource_metadata="${ISSUER}/.well-known/oauth-protected-resource"`,
+      );
+      // Not the 200-with-isError anti-pattern: no JSON-RPC envelope comes back.
+      expect(await missing.text()).not.toContain('"jsonrpc"');
+
+      const bogus = await app.fetch(
+        new Request(RESOURCE, {
+          method: 'POST',
+          headers: { ...headers, authorization: 'Bearer mcp_at_not_a_real_token' },
+          body: toolsCall,
+        }),
+      );
+      expect(bogus.status).toBe(401);
+      expect(bogus.headers.get('www-authenticate')).toContain('error="invalid_token"');
+
+      expect(written.some((line) => line.includes('"audit"'))).toBe(false);
+
+      // The challenge points at metadata whose resource is exactly the URL the
+      // client used, so discovery can start from the 401 alone.
+      const prm = await app.fetch(new Request(`${ISSUER}/.well-known/oauth-protected-resource`));
+      expect(((await prm.json()) as { resource: string }).resource).toBe(RESOURCE);
+    } finally {
+      auditSpy.mockRestore();
+    }
   });
 
   it('renders the authorize form with state carried as hidden fields, escaped', async () => {

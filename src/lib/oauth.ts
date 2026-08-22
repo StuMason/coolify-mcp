@@ -186,11 +186,21 @@ export class OAuthProvider {
       } catch {
         throw new OAuthErrorResponse('invalid_redirect_uri', `not a valid URL: ${uri}`);
       }
-      const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-      if (parsed.protocol !== 'https:' && !isLoopback) {
+      const host = parsed.hostname.replace(/^\[|\]$/g, '');
+      const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      // Loopback relaxes the TLS requirement, never the scheme: a javascript:,
+      // data: or file: URI with a loopback "host" is still a redirect into
+      // something that is not a browser callback (#340).
+      if (!(parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLoopback))) {
         throw new OAuthErrorResponse(
           'invalid_redirect_uri',
-          'redirect_uris must be https (loopback excepted)',
+          'redirect_uris must be https (http loopback excepted)',
+        );
+      }
+      if (parsed.hash) {
+        throw new OAuthErrorResponse(
+          'invalid_redirect_uri',
+          'redirect_uris must not carry a fragment',
         );
       }
     }
