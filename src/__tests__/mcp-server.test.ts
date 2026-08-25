@@ -1010,7 +1010,7 @@ describe('CoolifyMcpServer v2', () => {
           >;
         }
       )._registeredTools['database'];
-      return tool.handler(args, {});
+      return tool.handler(args, { mcpReq: { signal: new AbortController().signal } });
     };
 
     it('forwards destination_uuid to createPostgresql when provided', async () => {
@@ -1049,6 +1049,60 @@ describe('CoolifyMcpServer v2', () => {
       });
 
       expect(spy).toHaveBeenCalledWith('db-1', { is_public: true, public_port: 5433 });
+    });
+
+    it('update passes credentials and limits through untouched (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      await callDatabase(server, {
+        action: 'update',
+        uuid: 'db-1',
+        postgres_password: 'new-secret',
+        limits_memory: '512m',
+        public_port_timeout: 30,
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-1', {
+        postgres_password: 'new-secret',
+        limits_memory: '512m',
+        public_port_timeout: 30,
+      });
+    });
+
+    it('update with is_public=true is refused when a human cannot be asked (#351)', async () => {
+      const strict = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const spy = jest
+        .spyOn(strict['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      const result = (await callDatabase(strict, {
+        action: 'update',
+        uuid: 'db-1',
+        is_public: true,
+        public_port: 5433,
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.content[0].text).toContain('requires human confirmation');
+    });
+
+    it('update with is_public=false is not guarded (#351)', async () => {
+      const strict = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const spy = jest
+        .spyOn(strict['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      await callDatabase(strict, { action: 'update', uuid: 'db-1', is_public: false });
+
+      expect(spy).toHaveBeenCalledWith('db-1', { is_public: false });
     });
 
     it('update requires a uuid', async () => {
@@ -2564,7 +2618,32 @@ describe('service sub-application actions (#322)', () => {
         description: undefined,
         docker_compose_raw: undefined,
         connect_to_docker_network: true,
+        instant_deploy: undefined,
+        is_container_label_escape_enabled: undefined,
       });
+    });
+
+    it('still forwards instant_deploy and is_container_label_escape_enabled', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateService')
+        .mockResolvedValue({ uuid: 'svc-1' } as any);
+
+      await callService({
+        action: 'update',
+        uuid: 'svc-1',
+        docker_compose_raw: 'services: {}',
+        instant_deploy: true,
+        is_container_label_escape_enabled: false,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        'svc-1',
+        expect.objectContaining({
+          docker_compose_raw: 'services: {}',
+          instant_deploy: true,
+          is_container_label_escape_enabled: false,
+        }),
+      );
     });
   });
 

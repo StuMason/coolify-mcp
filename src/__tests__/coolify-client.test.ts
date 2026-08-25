@@ -1457,6 +1457,12 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('maps a 404 on /destinations to a version hint (#351)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Not found.' }, false, 404));
+
+      await expect(client.listDestinations()).rejects.toThrow(/Coolify v4\.2\+/);
+    });
+
     it('should validate a server', async () => {
       const mockValidation = { valid: true };
       mockFetch.mockResolvedValueOnce(mockResponse(mockValidation));

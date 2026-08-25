@@ -135,10 +135,12 @@ export interface Destination {
   uuid: string;
   name: string;
   network: string;
-  type: 'standalone' | 'swarm';
-  server_uuid: string;
-  created_at: string;
-  updated_at: string;
+  // The spec declares no `required` list for Destination, so everything past
+  // the identity fields may be absent at runtime.
+  type?: 'standalone' | 'swarm';
+  server_uuid?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ServerValidation {
@@ -640,6 +642,7 @@ export interface UpdateDatabaseRequest {
   image?: string;
   is_public?: boolean;
   public_port?: number;
+  public_port_timeout?: number;
   limits_memory?: string;
   limits_memory_swap?: string;
   limits_memory_swappiness?: number;
@@ -875,9 +878,9 @@ export interface CreateServiceRequest {
 /**
  * CRITICAL: When updating services with Traefik basic auth labels
  *
- * 1. MANUAL STEP REQUIRED: You MUST disable "Escape characters in labels" in Coolify UI
- *    - Navigate to: Service Settings > Advanced > Container Label Character Escaping
- *    - This setting CANNOT be changed via API
+ * 1. You MUST disable "Escape characters in labels" on the service first:
+ *    pass `is_container_label_escape_enabled: false` on `service update`
+ *    (or Service Settings > Advanced > Container Label Character Escaping in the UI)
  *    - Without this, Coolify will double-escape $ signs, breaking htpasswd
  *
  * 2. Even with escaping disabled, Traefik still requires $$ in htpasswd hashes
@@ -898,6 +901,8 @@ export interface UpdateServiceRequest {
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
   /** Attach the stack to the shared `coolify` network so other stacks can resolve its containers by name. */
   connect_to_docker_network?: boolean;
+  instant_deploy?: boolean;
+  is_container_label_escape_enabled?: boolean;
 }
 
 /**

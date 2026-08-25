@@ -54,9 +54,42 @@
         "type": "string"
       },
       "is_public": {
+        "description": "Expose on a public port. On update, true asks for confirmation first.",
         "type": "boolean"
       },
       "public_port": {
+        "type": "number"
+      },
+      "public_port_timeout": {
+        "description": "Update only",
+        "type": "number"
+      },
+      "limits_memory": {
+        "description": "Update only, e.g. \"512m\"",
+        "type": "string"
+      },
+      "limits_memory_swap": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_memory_swappiness": {
+        "description": "Update only",
+        "type": "number"
+      },
+      "limits_memory_reservation": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_cpus": {
+        "description": "Update only, e.g. \"1.5\"",
+        "type": "string"
+      },
+      "limits_cpuset": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_cpu_shares": {
+        "description": "Update only",
         "type": "number"
       },
       "instant_deploy": {

@@ -31,6 +31,7 @@ import type {
   DeployTriggerResponse,
   UpdateServiceApplicationRequest,
   UpdateServiceRequest,
+  Database,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
@@ -1516,8 +1517,19 @@ export class CoolifyMcpServer extends McpServer {
         name: z.string().optional(),
         description: z.string().optional(),
         image: z.string().optional(),
-        is_public: z.boolean().optional(),
+        is_public: z
+          .boolean()
+          .optional()
+          .describe('Expose on a public port. On update, true asks for confirmation first.'),
         public_port: z.number().optional(),
+        public_port_timeout: z.number().optional().describe('Update only'),
+        limits_memory: z.string().optional().describe('Update only, e.g. "512m"'),
+        limits_memory_swap: z.string().optional().describe('Update only'),
+        limits_memory_swappiness: z.number().optional().describe('Update only'),
+        limits_memory_reservation: z.string().optional().describe('Update only'),
+        limits_cpus: z.string().optional().describe('Update only, e.g. "1.5"'),
+        limits_cpuset: z.string().optional().describe('Update only'),
+        limits_cpu_shares: z.number().optional().describe('Update only'),
         instant_deploy: z.boolean().optional(),
         delete_volumes: z.boolean().optional(),
         // DB-specific optional fields
@@ -1557,20 +1569,36 @@ export class CoolifyMcpServer extends McpServer {
         }
         if (action === 'update') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-          // Create-only fields: PATCH /databases/{uuid} does not take them.
-          const updateData = Object.fromEntries(
-            Object.entries(dbData).filter(
-              ([k]) =>
-                ![
-                  'server_uuid',
-                  'project_uuid',
-                  'environment_name',
-                  'destination_uuid',
-                  'instant_deploy',
-                ].includes(k),
-            ),
-          );
-          return wrap(() => this.client.updateDatabase(uuid, updateData));
+          // Create-only fields: PATCH /databases/{uuid} rejects unknown keys
+          // with a 422, so strip them here. The rest destructure keeps
+          // `updateData` typed as the remainder of the schema.
+          /* eslint-disable @typescript-eslint/no-unused-vars -- create-only keys are peeled off, not used */
+          const {
+            server_uuid: _server,
+            project_uuid: _project,
+            environment_name: _env,
+            destination_uuid: _dest,
+            instant_deploy: _deploy,
+            ...updateData
+          } = dbData;
+          /* eslint-enable @typescript-eslint/no-unused-vars */
+          const doUpdate = (): Promise<Database> => this.client.updateDatabase(uuid, updateData);
+          // Going public moves the database from Docker-network-only to
+          // internet-reachable — the widest non-delete change in the surface.
+          if (updateData.is_public === true) {
+            return this.guardDestructive(
+              extra.mcpReq.signal,
+              'Expose a database on a public port.',
+              async () => {
+                const db = await this.client.getDatabase(uuid);
+                return `Expose database "${db.name || uuid}" (${uuid}) on public port ${
+                  updateData.public_port ?? db.public_port ?? '(unchanged)'
+                }. It becomes reachable from outside the Docker network.`;
+              },
+              doUpdate,
+            );
+          }
+          return wrap(doUpdate);
         }
         // create
         if (!type || !args.server_uuid || !args.project_uuid) {
@@ -1636,8 +1664,8 @@ export class CoolifyMcpServer extends McpServer {
         type: z.string().optional(),
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
-        environment_name: z.string().optional(),
-        environment_uuid: z.string().optional(),
+        environment_name: z.string().optional().describe('Create: this or environment_uuid'),
+        environment_uuid: z.string().optional().describe('Create: this or environment_name'),
         destination_uuid: z
           .string()
           .optional()
@@ -1656,6 +1684,12 @@ export class CoolifyMcpServer extends McpServer {
           .optional()
           .describe(
             'Attach the stack to the shared `coolify` Docker network (update only). Needed for cross-stack traffic by container name.',
+          ),
+        is_container_label_escape_enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            'Update only. Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes.',
           ),
         delete_volumes: z.boolean().optional(),
         url: z
@@ -1724,6 +1758,8 @@ export class CoolifyMcpServer extends McpServer {
               description: args.description,
               docker_compose_raw: args.docker_compose_raw,
               connect_to_docker_network: args.connect_to_docker_network,
+              instant_deploy: args.instant_deploy,
+              is_container_label_escape_enabled: args.is_container_label_escape_enabled,
             };
             return wrap(() => this.client.updateService(uuid, updateData));
           }

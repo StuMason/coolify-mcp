@@ -37,9 +37,11 @@
         "type": "string"
       },
       "environment_name": {
+        "description": "Create: this or environment_uuid",
         "type": "string"
       },
       "environment_uuid": {
+        "description": "Create: this or environment_name",
         "type": "string"
       },
       "destination_uuid": {
@@ -61,6 +63,10 @@
       },
       "connect_to_docker_network": {
         "description": "Attach the stack to the shared `coolify` Docker network (update only). Needed for cross-stack traffic by container name.",
+        "type": "boolean"
+      },
+      "is_container_label_escape_enabled": {
+        "description": "Update only. Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes.",
         "type": "boolean"
       },
       "delete_volumes": {
