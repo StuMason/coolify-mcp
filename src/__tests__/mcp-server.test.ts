@@ -63,6 +63,7 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.getServer).toBe('function');
       expect(typeof client.getServerResources).toBe('function');
       expect(typeof client.getServerDomains).toBe('function');
+      expect(typeof client.listDestinations).toBe('function');
       expect(typeof client.validateServer).toBe('function');
 
       // Project operations
@@ -1032,6 +1033,31 @@ describe('CoolifyMcpServer v2', () => {
       );
     });
 
+    it('update forwards is_public/public_port and strips create-only fields (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      await callDatabase(server, {
+        action: 'update',
+        uuid: 'db-1',
+        is_public: true,
+        public_port: 5433,
+        server_uuid: 'server-uuid',
+        project_uuid: 'proj-uuid',
+        instant_deploy: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('db-1', { is_public: true, public_port: 5433 });
+    });
+
+    it('update requires a uuid', async () => {
+      const result = (await callDatabase(server, { action: 'update', is_public: true })) as {
+        content: Array<{ text: string }>;
+      };
+      expect(result.content[0].text).toBe('Error: uuid required');
+    });
+
     it('omits destination_uuid from createPostgresql when not provided', async () => {
       const spy = jest
         .spyOn(server['client'], 'createPostgresql')
@@ -1896,6 +1922,7 @@ describe('tool annotations (#260)', () => {
         'list_applications',
         'list_databases',
         'list_deployments',
+        'list_destinations',
         'list_servers',
         'list_services',
         'logs',
@@ -2497,6 +2524,50 @@ describe('service sub-application actions (#322)', () => {
     return tool.handler(args, {});
   };
 
+  describe('create', () => {
+    it('forwards destination_uuid and environment_uuid to createService (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createService')
+        .mockResolvedValue({ uuid: 'svc-1' } as any);
+
+      await callService({
+        action: 'create',
+        type: 'plausible',
+        server_uuid: 'server-uuid',
+        project_uuid: 'proj-uuid',
+        environment_uuid: 'env-uuid',
+        destination_uuid: 'dest-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ destination_uuid: 'dest-uuid', environment_uuid: 'env-uuid' }),
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('forwards connect_to_docker_network and nothing create-only (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'updateService')
+        .mockResolvedValue({ uuid: 'svc-1' } as any);
+
+      await callService({
+        action: 'update',
+        uuid: 'svc-1',
+        connect_to_docker_network: true,
+        server_uuid: 'server-uuid',
+        destination_uuid: 'dest-uuid',
+      });
+
+      expect(spy).toHaveBeenCalledWith('svc-1', {
+        name: undefined,
+        description: undefined,
+        docker_compose_raw: undefined,
+        connect_to_docker_network: true,
+      });
+    });
+  });
+
   describe('update_application', () => {
     it('requires uuid and app_uuid', async () => {
       const result = (await callService({ action: 'update_application' })) as {
@@ -2747,5 +2818,44 @@ describe('getPagination', () => {
   it('should return undefined when count is undefined', () => {
     const result = getPagination('list_apps', 1, 50, undefined);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('list_destinations (#351)', () => {
+  let server: CoolifyMcpServer;
+  beforeEach(() => {
+    server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+  });
+
+  const call = async (
+    args: Record<string, unknown>,
+  ): Promise<{ content: Array<{ text: string }> }> => {
+    const tool = (
+      server as unknown as {
+        _registeredTools: Record<
+          string,
+          { handler: (a: unknown, b: unknown) => Promise<{ content: Array<{ text: string }> }> }
+        >;
+      }
+    )._registeredTools['list_destinations'];
+    return tool.handler(args, {});
+  };
+
+  it('scopes to a server when server_uuid is given', async () => {
+    const spy = jest
+      .spyOn(server['client'], 'listDestinations')
+      .mockResolvedValue([{ uuid: 'dest-1', name: 'coolify' }] as any);
+    const result = await call({ server_uuid: 'server-uuid' });
+    expect(spy).toHaveBeenCalledWith('server-uuid');
+    expect(result.content[0].text).toContain('dest-1');
+  });
+
+  it('lists team-wide when no server_uuid is given', async () => {
+    const spy = jest.spyOn(server['client'], 'listDestinations').mockResolvedValue([]);
+    await call({});
+    expect(spy).toHaveBeenCalledWith(undefined);
   });
 });

@@ -1433,6 +1433,30 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should list destinations for one server (#351)', async () => {
+      const mockDestinations = [{ uuid: 'dest-1', name: 'coolify', network: 'coolify' }];
+      mockFetch.mockResolvedValueOnce(mockResponse(mockDestinations));
+
+      const result = await client.listDestinations('test-uuid');
+
+      expect(result).toEqual(mockDestinations);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/servers/test-uuid/destinations',
+        expect.any(Object),
+      );
+    });
+
+    it('should list team-wide destinations when no server is given (#351)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse([]));
+
+      await client.listDestinations();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/destinations',
+        expect.any(Object),
+      );
+    });
+
     it('should validate a server', async () => {
       const mockValidation = { valid: true };
       mockFetch.mockResolvedValueOnce(mockResponse(mockValidation));

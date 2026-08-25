@@ -1,0 +1,17 @@
+{
+  "name": "list_destinations",
+  "description": "List Docker network destinations (Coolify v4.2+). A server with more than one destination requires `destination_uuid` on application/database/service create; this is where to find it.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "server_uuid": {
+        "description": "Limit to one server. Omit for every destination the team can see.",
+        "type": "string"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

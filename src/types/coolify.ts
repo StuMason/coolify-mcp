@@ -130,6 +130,17 @@ export interface ServerDomain {
   domains: string[];
 }
 
+/** A Docker network destination attached to a server (GET /destinations). */
+export interface Destination {
+  uuid: string;
+  name: string;
+  network: string;
+  type: 'standalone' | 'swarm';
+  server_uuid: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ServerValidation {
   message: string;
   validation_logs?: string;
@@ -885,6 +896,8 @@ export interface UpdateServiceRequest {
   name?: string;
   description?: string;
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
+  /** Attach the stack to the shared `coolify` network so other stacks can resolve its containers by name. */
+  connect_to_docker_network?: boolean;
 }
 
 /**

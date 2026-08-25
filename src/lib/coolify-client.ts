@@ -13,6 +13,7 @@ import type {
   Server,
   ServerResource,
   ServerDomain,
+  Destination,
   ServerValidation,
   CreateServerRequest,
   UpdateServerRequest,
@@ -983,6 +984,17 @@ export class CoolifyClient {
 
   async getServerDomains(uuid: string): Promise<ServerDomain[]> {
     return this.request<ServerDomain[]>(`/servers/${uuid}/domains`);
+  }
+
+  /**
+   * Docker network destinations — the `destination_uuid` that create calls
+   * need on a server with more than one network (#351). Team-wide when
+   * `serverUuid` is omitted.
+   */
+  async listDestinations(serverUuid?: string): Promise<Destination[]> {
+    return this.request<Destination[]>(
+      serverUuid ? `/servers/${serverUuid}/destinations` : '/destinations',
+    );
   }
 
   async validateServer(uuid: string): Promise<ServerValidation> {

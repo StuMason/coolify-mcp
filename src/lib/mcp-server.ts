@@ -30,6 +30,7 @@ import type {
   DeploymentEssential,
   DeployTriggerResponse,
   UpdateServiceApplicationRequest,
+  UpdateServiceRequest,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
@@ -472,6 +473,7 @@ export const TOOL_ANNOTATIONS = {
   get_service: READ_ONLY,
   server_resources: READ_ONLY,
   server_domains: READ_ONLY,
+  list_destinations: READ_ONLY,
   diagnose_app: READ_ONLY,
   diagnose_server: READ_ONLY,
   find_issues: READ_ONLY,
@@ -573,7 +575,7 @@ export class CoolifyMcpServer extends McpServer {
     }
     // Call sites keep the raw-shape ergonomics; the z.object wrap happens here
     // because SDK v2 deprecates the raw-shape registerTool overload and this
-    // is the one place all 44 registrations pass through.
+    // is the one place all 45 registrations pass through.
     this.registerTool(name, { description, inputSchema: z.object(inputSchema), annotations }, cb);
   }
 
@@ -862,6 +864,18 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool('server_domains', 'Domains on server', { uuid: z.string() }, async ({ uuid }) =>
       wrap(() => this.client.getServerDomains(uuid)),
+    );
+
+    this.defineTool(
+      'list_destinations',
+      'List Docker network destinations (Coolify v4.2+). A server with more than one destination requires `destination_uuid` on application/database/service create; this is where to find it.',
+      {
+        server_uuid: z
+          .string()
+          .optional()
+          .describe('Limit to one server. Omit for every destination the team can see.'),
+      },
+      async ({ server_uuid }) => wrap(() => this.client.listDestinations(server_uuid)),
     );
 
     this.defineTool(
@@ -1476,9 +1490,9 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'database',
-      'Manage database: create/delete',
+      'Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials.',
       {
-        action: z.enum(['create', 'delete']),
+        action: z.enum(['create', 'update', 'delete']),
         type: z
           .enum([
             'postgresql',
@@ -1541,6 +1555,23 @@ export class CoolifyMcpServer extends McpServer {
             () => this.client.deleteDatabase(uuid, { deleteVolumes: delete_volumes }),
           );
         }
+        if (action === 'update') {
+          if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
+          // Create-only fields: PATCH /databases/{uuid} does not take them.
+          const updateData = Object.fromEntries(
+            Object.entries(dbData).filter(
+              ([k]) =>
+                ![
+                  'server_uuid',
+                  'project_uuid',
+                  'environment_name',
+                  'destination_uuid',
+                  'instant_deploy',
+                ].includes(k),
+            ),
+          );
+          return wrap(() => this.client.updateDatabase(uuid, updateData));
+        }
         // create
         if (!type || !args.server_uuid || !args.project_uuid) {
           return {
@@ -1583,7 +1614,7 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'service',
-      "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle.",
+      "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle. `update` with `connect_to_docker_network` attaches the stack to the shared `coolify` network so other stacks can reach its containers by name.",
       {
         action: z.enum([
           'create',
@@ -1606,6 +1637,13 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
         environment_name: z.string().optional(),
+        environment_uuid: z.string().optional(),
+        destination_uuid: z
+          .string()
+          .optional()
+          .describe(
+            'Destination UUID (create only). Required if the server has multiple destinations — find it with `list_destinations`.',
+          ),
         name: z.string().optional(),
         description: z.string().optional(),
         instant_deploy: z.boolean().optional(),
@@ -1613,6 +1651,12 @@ export class CoolifyMcpServer extends McpServer {
           .string()
           .optional()
           .describe('Raw docker-compose YAML for custom services (auto base64-encoded)'),
+        connect_to_docker_network: z
+          .boolean()
+          .optional()
+          .describe(
+            'Attach the stack to the shared `coolify` Docker network (update only). Needed for cross-stack traffic by container name.',
+          ),
         delete_volumes: z.boolean().optional(),
         url: z
           .string()
@@ -1666,6 +1710,8 @@ export class CoolifyMcpServer extends McpServer {
                 name: args.name,
                 description: args.description,
                 environment_name: args.environment_name,
+                environment_uuid: args.environment_uuid,
+                destination_uuid: args.destination_uuid,
                 instant_deploy: args.instant_deploy,
                 docker_compose_raw: args.docker_compose_raw,
               }),
@@ -1673,8 +1719,12 @@ export class CoolifyMcpServer extends McpServer {
           case 'update': {
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { action: _, uuid: __, delete_volumes: ___, ...updateData } = args;
+            const updateData: UpdateServiceRequest = {
+              name: args.name,
+              description: args.description,
+              docker_compose_raw: args.docker_compose_raw,
+              connect_to_docker_network: args.connect_to_docker_network,
+            };
             return wrap(() => this.client.updateService(uuid, updateData));
           }
           case 'delete':

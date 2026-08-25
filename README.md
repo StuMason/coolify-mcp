@@ -7,7 +7,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 44 consolidated tools for deploying, debugging, and operating your self-hosted PaaS in plain English.
+Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 consolidated tools for deploying, debugging, and operating your self-hosted PaaS in plain English.
 
 📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)**: what it does, how to install it, and why it is safe to point at production.
 
@@ -56,11 +56,11 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 | **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`, `system` (health, list_resources, enable/disable API)                                                    |
 | **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                                                                          |
 | **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                                                            |
-| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`                                                                                     |
+| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`, `list_destinations`                                                                |
 | **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                           |
 | **Environments**     | `environments` (list, get, create, delete via action param)                                                                                                               |
 | **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                                                             |
-| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, delete), `database_backups` (CRUD schedules, executions incl. delete)                                       |
+| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, update incl. public port, delete), `database_backups` (CRUD schedules, executions incl. delete)                                       |
 | **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers; per-container `update_application` + `start/stop/restart_application`, Coolify v4.2+) |
 | **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                                                              |
 | **Logs**             | `logs` (container logs for app, database, service; services need `container`), `application_logs` (superseded by `logs`)                                                  |

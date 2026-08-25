@@ -1,6 +1,6 @@
 {
   "name": "database",
-  "description": "Manage database: create/delete",
+  "description": "Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials.",
   "annotations": {
     "destructiveHint": true
   },
@@ -11,6 +11,7 @@
         "type": "string",
         "enum": [
           "create",
+          "update",
           "delete"
         ]
       },
