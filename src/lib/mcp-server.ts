@@ -42,7 +42,21 @@ import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './el
  * holding the old value loses its connection on the spot.
  */
 const ROTATE_WARNING =
-  'On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.';
+  'On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.';
+
+/** Database credential fields whose rotation on `update` is guarded. */
+const DB_CREDENTIAL_FIELDS = [
+  'postgres_password',
+  'mysql_root_password',
+  'mysql_password',
+  'mariadb_root_password',
+  'mariadb_password',
+  'mongo_initdb_root_password',
+  'redis_password',
+  'keydb_password',
+  'clickhouse_admin_password',
+  'dragonfly_password',
+] as const;
 
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
@@ -1084,7 +1098,12 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         github_app_uuid: z.string().optional(),
         private_key_uuid: z.string().optional(),
-        destination_uuid: z.string().optional(),
+        destination_uuid: z
+          .string()
+          .optional()
+          .describe(
+            'Required if the server has multiple destinations; find it with `list_destinations`.',
+          ),
         git_repository: z.string().optional(),
         git_branch: z.string().optional(),
         environment_name: z.string().optional(),
@@ -1521,7 +1540,9 @@ export class CoolifyMcpServer extends McpServer {
         destination_uuid: z
           .string()
           .optional()
-          .describe('Destination UUID. Required if server has multiple destinations.'),
+          .describe(
+            'Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`. Credential fields must match the database engine (postgres_* on postgresql, and so on).',
+          ),
         name: z.string().optional(),
         description: z.string().optional(),
         image: z.string().optional(),
@@ -1531,7 +1552,10 @@ export class CoolifyMcpServer extends McpServer {
           .describe('Expose on a public port. On update, true asks for confirmation first.'),
         public_port: z.number().optional(),
         public_port_timeout: z.number().optional().describe('Update only'),
-        limits_memory: z.string().optional().describe('Update only, e.g. "512m"'),
+        limits_memory: z
+          .string()
+          .optional()
+          .describe('Update only, e.g. "512m". limits_* take effect after a `control` restart.'),
         limits_memory_swap: z.string().optional().describe('Update only'),
         limits_memory_swappiness: z.number().optional().describe('Update only'),
         limits_memory_reservation: z.string().optional().describe('Update only'),
@@ -1608,6 +1632,20 @@ export class CoolifyMcpServer extends McpServer {
                 return `Expose database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)}) on public port ${
                   updateData.public_port ?? db.public_port ?? '(unchanged)'
                 }. It becomes reachable from outside the Docker network.`;
+              },
+              doUpdate,
+            );
+          }
+          // Rotating a live credential breaks every consumer holding the old
+          // one on the spot, which is at least as wide as going public.
+          const rotated = DB_CREDENTIAL_FIELDS.filter((k) => updateData[k] !== undefined);
+          if (rotated.length > 0) {
+            return this.guardDestructive(
+              extra.mcpReq.signal,
+              'Rotate database credentials.',
+              async () => {
+                const db = await this.client.getDatabase(uuid);
+                return `Rotate ${rotated.join(', ')} on database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)})? Every application using the current value loses its connection immediately.`;
               },
               doUpdate,
             );
@@ -1717,7 +1755,7 @@ export class CoolifyMcpServer extends McpServer {
           .boolean()
           .optional()
           .describe(
-            'Update only. Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes.',
+            'Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes. Accepted on create and update.',
           ),
         delete_volumes: z.boolean().optional(),
         url: z
@@ -1776,6 +1814,7 @@ export class CoolifyMcpServer extends McpServer {
                 destination_uuid: args.destination_uuid,
                 instant_deploy: args.instant_deploy,
                 docker_compose_raw: args.docker_compose_raw,
+                is_container_label_escape_enabled: args.is_container_label_escape_enabled,
               }),
             );
           case 'update': {
@@ -1789,6 +1828,9 @@ export class CoolifyMcpServer extends McpServer {
               instant_deploy: args.instant_deploy,
               is_container_label_escape_enabled: args.is_container_label_escape_enabled,
             };
+            if (Object.values(updateData).every((v) => v === undefined)) {
+              return { content: [{ type: 'text' as const, text: 'Error: nothing to update' }] };
+            }
             return wrap(() => this.client.updateService(uuid, updateData));
           }
           case 'delete':

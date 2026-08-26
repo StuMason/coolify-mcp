@@ -66,7 +66,7 @@
         "type": "boolean"
       },
       "is_container_label_escape_enabled": {
-        "description": "Update only. Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes.",
+        "description": "Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes. Accepted on create and update.",
         "type": "boolean"
       },
       "delete_volumes": {

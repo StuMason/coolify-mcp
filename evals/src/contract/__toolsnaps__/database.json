@@ -41,7 +41,7 @@
         "type": "string"
       },
       "destination_uuid": {
-        "description": "Destination UUID. Required if server has multiple destinations.",
+        "description": "Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`. Credential fields must match the database engine (postgres_* on postgresql, and so on).",
         "type": "string"
       },
       "name": {
@@ -65,7 +65,7 @@
         "type": "number"
       },
       "limits_memory": {
-        "description": "Update only, e.g. \"512m\"",
+        "description": "Update only, e.g. \"512m\". limits_* take effect after a `control` restart.",
         "type": "string"
       },
       "limits_memory_swap": {
@@ -102,35 +102,35 @@
         "type": "string"
       },
       "postgres_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "postgres_db": {
         "type": "string"
       },
       "mysql_root_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mysql_user": {
         "type": "string"
       },
       "mysql_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mysql_database": {
         "type": "string"
       },
       "mariadb_root_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mariadb_user": {
         "type": "string"
       },
       "mariadb_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mariadb_database": {
@@ -140,29 +140,29 @@
         "type": "string"
       },
       "mongo_initdb_root_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mongo_initdb_database": {
         "type": "string"
       },
       "redis_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "keydb_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "clickhouse_admin_user": {
         "type": "string"
       },
       "clickhouse_admin_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "dragonfly_password": {
-        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
+        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       }
     },

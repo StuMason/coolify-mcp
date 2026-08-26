@@ -1091,6 +1091,39 @@ describe('CoolifyMcpServer v2', () => {
       expect(result.content[0].text).toContain('requires human confirmation');
     });
 
+    it('update that rotates a credential is refused when a human cannot be asked (#351)', async () => {
+      const strict = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const spy = jest
+        .spyOn(strict['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      const result = (await callDatabase(strict, {
+        action: 'update',
+        uuid: 'db-1',
+        postgres_password: 'new-secret',
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.content[0].text).toContain('requires human confirmation');
+    });
+
+    it('update that only changes limits is not guarded (#351)', async () => {
+      const strict = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const spy = jest
+        .spyOn(strict['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+
+      await callDatabase(strict, { action: 'update', uuid: 'db-1', limits_memory: '512m' });
+
+      expect(spy).toHaveBeenCalledWith('db-1', { limits_memory: '512m' });
+    });
+
     it('update with is_public=false is not guarded (#351)', async () => {
       const strict = new CoolifyMcpServer(
         { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
@@ -2658,6 +2691,24 @@ describe('service sub-application actions (#322)', () => {
       );
     });
 
+    it('forwards is_container_label_escape_enabled on create (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createService')
+        .mockResolvedValue({ uuid: 'svc-1' } as any);
+
+      await callService({
+        action: 'create',
+        type: 'plausible',
+        server_uuid: 'server-uuid',
+        project_uuid: 'proj-uuid',
+        is_container_label_escape_enabled: false,
+      });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ is_container_label_escape_enabled: false }),
+      );
+    });
+
     it('omits destination_uuid from createService when not provided (#351)', async () => {
       const spy = jest
         .spyOn(server['client'], 'createService')
@@ -2697,6 +2748,17 @@ describe('service sub-application actions (#322)', () => {
         instant_deploy: undefined,
         is_container_label_escape_enabled: undefined,
       });
+    });
+
+    it('update with nothing to change is refused before the request (#351)', async () => {
+      const spy = jest.spyOn(server['client'], 'updateService');
+      const result = (await callService({
+        action: 'update',
+        uuid: 'svc-1',
+        server_uuid: 'server-uuid',
+      })) as { content: Array<{ text: string }> };
+      expect(result.content[0].text).toBe('Error: nothing to update');
+      expect(spy).not.toHaveBeenCalled();
     });
 
     it('still forwards instant_deploy and is_container_label_escape_enabled', async () => {

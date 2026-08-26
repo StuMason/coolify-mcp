@@ -60,7 +60,7 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 | **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                           |
 | **Environments**     | `environments` (list, get, create, delete via action param)                                                                                                               |
 | **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                                                             |
-| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, update incl. public port, delete), `database_backups` (CRUD schedules, executions incl. delete)                                       |
+| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, update incl. public port, delete), `database_backups` (CRUD schedules, executions incl. delete)             |
 | **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers; per-container `update_application` + `start/stop/restart_application`, Coolify v4.2+) |
 | **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                                                              |
 | **Logs**             | `logs` (container logs for app, database, service; services need `container`), `application_logs` (superseded by `logs`)                                                  |

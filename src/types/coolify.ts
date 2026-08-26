@@ -135,8 +135,9 @@ export interface Destination {
   uuid: string;
   name: string;
   network: string;
-  // The spec declares no `required` list for Destination, so everything past
-  // the identity fields may be absent at runtime.
+  // The spec declares no `required` list for Destination. uuid/name/network
+  // are typed required anyway because a destination without them is unusable
+  // as a `destination_uuid` target; everything else may be absent at runtime.
   type?: 'standalone' | 'swarm';
   server_uuid?: string;
   created_at?: string;
@@ -873,6 +874,7 @@ export interface CreateServiceRequest {
   destination_uuid?: string;
   instant_deploy?: boolean;
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
+  is_container_label_escape_enabled?: boolean;
 }
 
 /**
