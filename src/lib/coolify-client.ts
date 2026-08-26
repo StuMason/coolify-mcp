@@ -1766,10 +1766,16 @@ export class CoolifyClient {
    */
   async listApplicationDeployments(
     appUuid: string,
-    options?: { includeLogs?: boolean },
+    options?: { includeLogs?: boolean; page?: number; perPage?: number },
   ): Promise<{ count: number; deployments: DeploymentEssential[] }> {
+    const page = Math.max(1, options?.page ?? 1);
+    const perPage = Math.max(1, options?.perPage ?? 10);
+    const query =
+      options?.page !== undefined || options?.perPage !== undefined
+        ? `?skip=${(page - 1) * perPage}&take=${perPage}`
+        : '';
     const envelope = await this.request<{ count: number; deployments: Deployment[] }>(
-      `/deployments/applications/${appUuid}`,
+      `/deployments/applications/${appUuid}${query}`,
     );
     const deployments = Array.isArray(envelope?.deployments) ? envelope.deployments : [];
     return {

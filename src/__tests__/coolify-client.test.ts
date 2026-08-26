@@ -3546,6 +3546,17 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('should paginate application deployments with Coolify skip and take parameters', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ count: 25, deployments: [] }));
+
+      await client.listApplicationDeployments('app-uuid', { page: 2, perPage: 10 });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deployments/applications/app-uuid?skip=10&take=10',
+        expect.any(Object),
+      );
+    });
+
     it('should attach logs to the essential projection when includeLogs is true (never the raw object)', async () => {
       const withLogs = {
         ...mockDeployment,
