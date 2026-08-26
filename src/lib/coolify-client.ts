@@ -346,7 +346,9 @@ export function errorHint(status: number, path: string): string | undefined {
     return 'Service sub-resource endpoints (list_containers, update_application) require Coolify v4.2+. Check version with `get_version`. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/destinations(\/|$)/.test(path)) {
-    return 'Destination endpoints (list_destinations) require Coolify v4.2+ — check with get_version. On older instances the destination uuid is visible in the UI under Server > Destinations, and `application`/`database`/`service` create still accept `destination_uuid` there.';
+    // Matches /servers/{uuid}/destinations too, where a 404 is just as likely a
+    // wrong server uuid on a v4.2+ instance. Same ambiguity as /tags below.
+    return 'Destination endpoints (list_destinations) require Coolify v4.2+ — check with get_version. If your instance is already v4.2+, the server uuid may be wrong or belong to a different resource type. On older instances the destination uuid is visible in the UI under Server > Destinations, and `application`/`database`/`service` create still accept `destination_uuid` there.';
   }
   if (status === 404 && /\/tags(\/|$)/.test(path)) {
     // Both causes look identical from the status, so name both rather than

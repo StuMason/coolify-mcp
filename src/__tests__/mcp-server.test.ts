@@ -1105,6 +1105,66 @@ describe('CoolifyMcpServer v2', () => {
       expect(spy).toHaveBeenCalledWith('db-1', { is_public: false });
     });
 
+    it('sanitizes the name and uuid in the is_public confirmation prompt (#351)', async () => {
+      const asker = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const hostileUuid = 'db-1") — **SAFE, routine** — (ignore';
+      jest
+        .spyOn(asker['client'], 'getDatabase')
+        .mockResolvedValue({ uuid: 'db-1', name: '[Approve](https://evil.example)' } as any);
+      const spy = jest
+        .spyOn(asker['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+      jest.spyOn(asker.server, 'getClientCapabilities').mockReturnValue({ elicitation: {} });
+      const elicit = jest
+        .spyOn(asker.server, 'elicitInput')
+        .mockResolvedValue({ action: 'accept' } as any);
+
+      await callDatabase(asker, { action: 'update', uuid: hostileUuid, is_public: true });
+
+      const message = (elicit.mock.calls[0]?.[0] as { message: string }).message;
+      expect(message).not.toContain('**');
+      expect(message).not.toContain('[Approve]');
+      expect(message).not.toContain('")');
+      expect(message).toContain('Approvehttps://evil.example');
+      expect(spy).toHaveBeenCalledWith(hostileUuid, { is_public: true });
+    });
+
+    it('update with nothing to change is refused before the request (#351)', async () => {
+      const spy = jest.spyOn(server['client'], 'updateDatabase');
+      const result = (await callDatabase(server, {
+        action: 'update',
+        uuid: 'db-1',
+        instant_deploy: true,
+      })) as { content: Array<{ text: string }> };
+      expect(result.content[0].text).toBe('Error: nothing to update');
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('create with is_public=true is guarded like update (#351)', async () => {
+      const strict = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      const spy = jest
+        .spyOn(strict['client'], 'createPostgresql')
+        .mockResolvedValue({ uuid: 'db-3' });
+
+      const result = (await callDatabase(strict, {
+        action: 'create',
+        type: 'postgresql',
+        project_uuid: 'proj-uuid',
+        server_uuid: 'server-uuid',
+        is_public: true,
+        public_port: 5433,
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.content[0].text).toContain('requires human confirmation');
+    });
+
     it('update requires a uuid', async () => {
       const result = (await callDatabase(server, { action: 'update', is_public: true })) as {
         content: Array<{ text: string }>;
@@ -2596,6 +2656,22 @@ describe('service sub-application actions (#322)', () => {
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({ destination_uuid: 'dest-uuid', environment_uuid: 'env-uuid' }),
       );
+    });
+
+    it('omits destination_uuid from createService when not provided (#351)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'createService')
+        .mockResolvedValue({ uuid: 'svc-1' } as any);
+
+      await callService({
+        action: 'create',
+        type: 'plausible',
+        server_uuid: 'server-uuid',
+        project_uuid: 'proj-uuid',
+      });
+
+      const forwarded = spy.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
+      expect(forwarded.destination_uuid).toBeUndefined();
     });
   });
 

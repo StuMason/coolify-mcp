@@ -102,30 +102,35 @@
         "type": "string"
       },
       "postgres_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "postgres_db": {
         "type": "string"
       },
       "mysql_root_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "mysql_user": {
         "type": "string"
       },
       "mysql_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "mysql_database": {
         "type": "string"
       },
       "mariadb_root_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "mariadb_user": {
         "type": "string"
       },
       "mariadb_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "mariadb_database": {
@@ -135,24 +140,29 @@
         "type": "string"
       },
       "mongo_initdb_root_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "mongo_initdb_database": {
         "type": "string"
       },
       "redis_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "keydb_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "clickhouse_admin_user": {
         "type": "string"
       },
       "clickhouse_admin_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       },
       "dragonfly_password": {
+        "description": "On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.",
         "type": "string"
       }
     },

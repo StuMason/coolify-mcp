@@ -1463,6 +1463,12 @@ describe('CoolifyClient', () => {
       await expect(client.listDestinations()).rejects.toThrow(/Coolify v4\.2\+/);
     });
 
+    it('names the wrong-server-uuid cause on a /servers/{uuid}/destinations 404 (#351)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Not found.' }, false, 404));
+
+      await expect(client.listDestinations('nope')).rejects.toThrow(/server uuid may be wrong/);
+    });
+
     it('should validate a server', async () => {
       const mockValidation = { valid: true };
       mockFetch.mockResolvedValueOnce(mockResponse(mockValidation));

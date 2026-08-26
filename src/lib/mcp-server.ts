@@ -36,6 +36,14 @@ import type {
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 
+/**
+ * Shared `.describe()` for database credential fields. On `update` these
+ * rotate the live credential with no confirmation dialog, and every app still
+ * holding the old value loses its connection on the spot.
+ */
+const ROTATE_WARNING =
+  'On update this rotates the live credential immediately and without confirmation; every app using the old value breaks.';
+
 const _require = createRequire(import.meta.url);
 export const VERSION: string = _require('../../package.json').version;
 
@@ -1534,24 +1542,24 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
         // DB-specific optional fields
         postgres_user: z.string().optional(),
-        postgres_password: z.string().optional(),
+        postgres_password: z.string().optional().describe(ROTATE_WARNING),
         postgres_db: z.string().optional(),
-        mysql_root_password: z.string().optional(),
+        mysql_root_password: z.string().optional().describe(ROTATE_WARNING),
         mysql_user: z.string().optional(),
-        mysql_password: z.string().optional(),
+        mysql_password: z.string().optional().describe(ROTATE_WARNING),
         mysql_database: z.string().optional(),
-        mariadb_root_password: z.string().optional(),
+        mariadb_root_password: z.string().optional().describe(ROTATE_WARNING),
         mariadb_user: z.string().optional(),
-        mariadb_password: z.string().optional(),
+        mariadb_password: z.string().optional().describe(ROTATE_WARNING),
         mariadb_database: z.string().optional(),
         mongo_initdb_root_username: z.string().optional(),
-        mongo_initdb_root_password: z.string().optional(),
+        mongo_initdb_root_password: z.string().optional().describe(ROTATE_WARNING),
         mongo_initdb_database: z.string().optional(),
-        redis_password: z.string().optional(),
-        keydb_password: z.string().optional(),
+        redis_password: z.string().optional().describe(ROTATE_WARNING),
+        keydb_password: z.string().optional().describe(ROTATE_WARNING),
         clickhouse_admin_user: z.string().optional(),
-        clickhouse_admin_password: z.string().optional(),
-        dragonfly_password: z.string().optional(),
+        clickhouse_admin_password: z.string().optional().describe(ROTATE_WARNING),
+        dragonfly_password: z.string().optional().describe(ROTATE_WARNING),
       },
       async (args, extra) => {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
@@ -1582,6 +1590,10 @@ export class CoolifyMcpServer extends McpServer {
             ...updateData
           } = dbData;
           /* eslint-enable @typescript-eslint/no-unused-vars */
+          // An empty PATCH is a 200 that changed nothing — say so instead.
+          if (Object.values(updateData).every((v) => v === undefined)) {
+            return { content: [{ type: 'text' as const, text: 'Error: nothing to update' }] };
+          }
           const doUpdate = (): Promise<Database> => this.client.updateDatabase(uuid, updateData);
           // Going public moves the database from Docker-network-only to
           // internet-reachable — the widest non-delete change in the surface.
@@ -1591,7 +1603,9 @@ export class CoolifyMcpServer extends McpServer {
               'Expose a database on a public port.',
               async () => {
                 const db = await this.client.getDatabase(uuid);
-                return `Expose database "${db.name || uuid}" (${uuid}) on public port ${
+                // Both halves cross into the human's dialog: the name comes from
+                // the instance, the uuid is model-chosen text. Sanitize both.
+                return `Expose database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)}) on public port ${
                   updateData.public_port ?? db.public_port ?? '(unchanged)'
                 }. It becomes reachable from outside the Docker network.`;
               },
@@ -1618,7 +1632,21 @@ export class CoolifyMcpServer extends McpServer {
           clickhouse: (d) => this.client.createClickhouse(d),
           dragonfly: (d) => this.client.createDragonfly(d),
         };
-        return wrap(() => dbMethods[type](dbData));
+        const doCreate = (): Promise<unknown> => dbMethods[type](dbData);
+        // Same end state as a guarded update — a public database — reached
+        // via create instead, so it gets the same confirmation.
+        if (dbData.is_public === true) {
+          return this.guardDestructive(
+            extra.mcpReq.signal,
+            'Create a database exposed on a public port.',
+            () =>
+              `Create ${sanitizeForPrompt(type)} database "${sanitizeForPrompt(dbData.name ?? '(unnamed)')}" exposed on public port ${
+                dbData.public_port ?? '(assigned by Coolify)'
+              }. It becomes reachable from outside the Docker network.`,
+            doCreate,
+          );
+        }
+        return wrap(doCreate);
       },
     );
 
