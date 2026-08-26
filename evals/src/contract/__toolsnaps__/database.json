@@ -1,6 +1,6 @@
 {
   "name": "database",
-  "description": "Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials.",
+  "description": "Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.",
   "annotations": {
     "destructiveHint": true
   },
@@ -41,7 +41,7 @@
         "type": "string"
       },
       "destination_uuid": {
-        "description": "Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`. Credential fields must match the database engine (postgres_* on postgresql, and so on).",
+        "description": "Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`.",
         "type": "string"
       },
       "name": {
@@ -54,7 +54,7 @@
         "type": "string"
       },
       "is_public": {
-        "description": "Expose on a public port. On update, true asks for confirmation first.",
+        "description": "Expose on a public port. `true` asks for confirmation first, on create and update.",
         "type": "boolean"
       },
       "public_port": {
@@ -102,35 +102,30 @@
         "type": "string"
       },
       "postgres_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "postgres_db": {
         "type": "string"
       },
       "mysql_root_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mysql_user": {
         "type": "string"
       },
       "mysql_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mysql_database": {
         "type": "string"
       },
       "mariadb_root_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mariadb_user": {
         "type": "string"
       },
       "mariadb_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mariadb_database": {
@@ -140,29 +135,24 @@
         "type": "string"
       },
       "mongo_initdb_root_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "mongo_initdb_database": {
         "type": "string"
       },
       "redis_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "keydb_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "clickhouse_admin_user": {
         "type": "string"
       },
       "clickhouse_admin_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       },
       "dragonfly_password": {
-        "description": "On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.",
         "type": "string"
       }
     },

@@ -37,23 +37,26 @@ import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 
 /**
- * Shared `.describe()` for database credential fields. On `update` these
- * rotate the live credential with no confirmation dialog, and every app still
- * holding the old value loses its connection on the spot.
+ * Database credential fields whose change on `update` is guarded — usernames
+ * as well as passwords, since consumers hold both. The line is drawn at
+ * credentials on purpose: `image`, `public_port` and `limits_*` also disrupt,
+ * but they are the ordinary reasons to call `update` and a dialog on every
+ * one of them would teach humans to click through.
  */
-const ROTATE_WARNING =
-  'On update this rotates the live credential; every app using the old value breaks. Asks for confirmation first.';
-
-/** Database credential fields whose rotation on `update` is guarded. */
 const DB_CREDENTIAL_FIELDS = [
+  'postgres_user',
   'postgres_password',
+  'mysql_user',
   'mysql_root_password',
   'mysql_password',
+  'mariadb_user',
   'mariadb_root_password',
   'mariadb_password',
+  'mongo_initdb_root_username',
   'mongo_initdb_root_password',
   'redis_password',
   'keydb_password',
+  'clickhouse_admin_user',
   'clickhouse_admin_password',
   'dragonfly_password',
 ] as const;
@@ -1518,7 +1521,7 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'database',
-      'Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials.',
+      'Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.',
       {
         action: z.enum(['create', 'update', 'delete']),
         type: z
@@ -1541,7 +1544,7 @@ export class CoolifyMcpServer extends McpServer {
           .string()
           .optional()
           .describe(
-            'Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`. Credential fields must match the database engine (postgres_* on postgresql, and so on).',
+            'Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`.',
           ),
         name: z.string().optional(),
         description: z.string().optional(),
@@ -1549,7 +1552,9 @@ export class CoolifyMcpServer extends McpServer {
         is_public: z
           .boolean()
           .optional()
-          .describe('Expose on a public port. On update, true asks for confirmation first.'),
+          .describe(
+            'Expose on a public port. `true` asks for confirmation first, on create and update.',
+          ),
         public_port: z.number().optional(),
         public_port_timeout: z.number().optional().describe('Update only'),
         limits_memory: z
@@ -1566,24 +1571,24 @@ export class CoolifyMcpServer extends McpServer {
         delete_volumes: z.boolean().optional(),
         // DB-specific optional fields
         postgres_user: z.string().optional(),
-        postgres_password: z.string().optional().describe(ROTATE_WARNING),
+        postgres_password: z.string().optional(),
         postgres_db: z.string().optional(),
-        mysql_root_password: z.string().optional().describe(ROTATE_WARNING),
+        mysql_root_password: z.string().optional(),
         mysql_user: z.string().optional(),
-        mysql_password: z.string().optional().describe(ROTATE_WARNING),
+        mysql_password: z.string().optional(),
         mysql_database: z.string().optional(),
-        mariadb_root_password: z.string().optional().describe(ROTATE_WARNING),
+        mariadb_root_password: z.string().optional(),
         mariadb_user: z.string().optional(),
-        mariadb_password: z.string().optional().describe(ROTATE_WARNING),
+        mariadb_password: z.string().optional(),
         mariadb_database: z.string().optional(),
         mongo_initdb_root_username: z.string().optional(),
-        mongo_initdb_root_password: z.string().optional().describe(ROTATE_WARNING),
+        mongo_initdb_root_password: z.string().optional(),
         mongo_initdb_database: z.string().optional(),
-        redis_password: z.string().optional().describe(ROTATE_WARNING),
-        keydb_password: z.string().optional().describe(ROTATE_WARNING),
+        redis_password: z.string().optional(),
+        keydb_password: z.string().optional(),
         clickhouse_admin_user: z.string().optional(),
-        clickhouse_admin_password: z.string().optional().describe(ROTATE_WARNING),
-        dragonfly_password: z.string().optional().describe(ROTATE_WARNING),
+        clickhouse_admin_password: z.string().optional(),
+        dragonfly_password: z.string().optional(),
       },
       async (args, extra) => {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
@@ -1619,33 +1624,36 @@ export class CoolifyMcpServer extends McpServer {
             return { content: [{ type: 'text' as const, text: 'Error: nothing to update' }] };
           }
           const doUpdate = (): Promise<Database> => this.client.updateDatabase(uuid, updateData);
-          // Going public moves the database from Docker-network-only to
-          // internet-reachable — the widest non-delete change in the surface.
-          if (updateData.is_public === true) {
+          // Two changes earn a confirmation: going public (Docker-network-only
+          // to internet-reachable, the widest non-delete change in the surface)
+          // and rotating a credential (every consumer holding the old value
+          // breaks on the spot). One call can do both, so one prompt must say
+          // both — a dialog that understates the blast radius is worse than none.
+          const exposing = updateData.is_public === true;
+          const rotated = DB_CREDENTIAL_FIELDS.filter((k) => updateData[k] !== undefined);
+          if (exposing || rotated.length > 0) {
             return this.guardDestructive(
               extra.mcpReq.signal,
-              'Expose a database on a public port.',
+              exposing ? 'Expose a database on a public port.' : 'Rotate database credentials.',
               async () => {
                 const db = await this.client.getDatabase(uuid);
                 // Both halves cross into the human's dialog: the name comes from
                 // the instance, the uuid is model-chosen text. Sanitize both.
-                return `Expose database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)}) on public port ${
-                  updateData.public_port ?? db.public_port ?? '(unchanged)'
-                }. It becomes reachable from outside the Docker network.`;
-              },
-              doUpdate,
-            );
-          }
-          // Rotating a live credential breaks every consumer holding the old
-          // one on the spot, which is at least as wide as going public.
-          const rotated = DB_CREDENTIAL_FIELDS.filter((k) => updateData[k] !== undefined);
-          if (rotated.length > 0) {
-            return this.guardDestructive(
-              extra.mcpReq.signal,
-              'Rotate database credentials.',
-              async () => {
-                const db = await this.client.getDatabase(uuid);
-                return `Rotate ${rotated.join(', ')} on database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)})? Every application using the current value loses its connection immediately.`;
+                const target = `database "${sanitizeForPrompt(db.name || uuid)}" (${sanitizeForPrompt(uuid)})`;
+                const parts: string[] = [];
+                if (exposing) {
+                  parts.push(
+                    `Expose ${target} on public port ${
+                      updateData.public_port ?? db.public_port ?? '(assigned by Coolify)'
+                    }. It becomes reachable from outside the Docker network.`,
+                  );
+                }
+                if (rotated.length > 0) {
+                  parts.push(
+                    `${exposing ? 'Also rotate' : `Rotate`} ${rotated.join(', ')}${exposing ? '' : ` on ${target}`}. Every application using the current value loses its connection immediately.`,
+                  );
+                }
+                return parts.join('\n\n');
               },
               doUpdate,
             );

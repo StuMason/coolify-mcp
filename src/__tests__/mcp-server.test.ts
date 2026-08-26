@@ -1165,6 +1165,37 @@ describe('CoolifyMcpServer v2', () => {
       expect(spy).toHaveBeenCalledWith(hostileUuid, { is_public: true });
     });
 
+    it('is_public plus a credential in one update produces one prompt naming both (#351)', async () => {
+      const asker = new CoolifyMcpServer(
+        { baseUrl: 'http://localhost:3000', accessToken: 'test-token' },
+        { requireElicitation: true },
+      );
+      jest
+        .spyOn(asker['client'], 'getDatabase')
+        .mockResolvedValue({ uuid: 'db-1', name: 'shop-db' } as any);
+      const spy = jest
+        .spyOn(asker['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+      jest.spyOn(asker.server, 'getClientCapabilities').mockReturnValue({ elicitation: {} });
+      const elicit = jest
+        .spyOn(asker.server, 'elicitInput')
+        .mockResolvedValue({ action: 'accept' } as any);
+
+      await callDatabase(asker, {
+        action: 'update',
+        uuid: 'db-1',
+        is_public: true,
+        postgres_password: 'newpw',
+      });
+
+      const message = (elicit.mock.calls[0]?.[0] as { message: string }).message;
+      expect(elicit).toHaveBeenCalledTimes(1);
+      expect(message).toContain('public port (assigned by Coolify)');
+      expect(message).toContain('rotate postgres_password');
+      expect(message).not.toContain('newpw');
+      expect(spy).toHaveBeenCalledWith('db-1', { is_public: true, postgres_password: 'newpw' });
+    });
+
     it('update with nothing to change is refused before the request (#351)', async () => {
       const spy = jest.spyOn(server['client'], 'updateDatabase');
       const result = (await callDatabase(server, {
