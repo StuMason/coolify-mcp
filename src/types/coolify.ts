@@ -130,6 +130,20 @@ export interface ServerDomain {
   domains: string[];
 }
 
+/** A Docker network destination attached to a server (GET /destinations). */
+export interface Destination {
+  uuid: string;
+  name: string;
+  network: string;
+  // The spec declares no `required` list for Destination. uuid/name/network
+  // are typed required anyway because a destination without them is unusable
+  // as a `destination_uuid` target; everything else may be absent at runtime.
+  type?: 'standalone' | 'swarm';
+  server_uuid?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ServerValidation {
   message: string;
   validation_logs?: string;
@@ -629,6 +643,7 @@ export interface UpdateDatabaseRequest {
   image?: string;
   is_public?: boolean;
   public_port?: number;
+  public_port_timeout?: number;
   limits_memory?: string;
   limits_memory_swap?: string;
   limits_memory_swappiness?: number;
@@ -859,14 +874,15 @@ export interface CreateServiceRequest {
   destination_uuid?: string;
   instant_deploy?: boolean;
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
+  is_container_label_escape_enabled?: boolean;
 }
 
 /**
  * CRITICAL: When updating services with Traefik basic auth labels
  *
- * 1. MANUAL STEP REQUIRED: You MUST disable "Escape characters in labels" in Coolify UI
- *    - Navigate to: Service Settings > Advanced > Container Label Character Escaping
- *    - This setting CANNOT be changed via API
+ * 1. You MUST disable "Escape characters in labels" on the service first:
+ *    pass `is_container_label_escape_enabled: false` on `service update`
+ *    (or Service Settings > Advanced > Container Label Character Escaping in the UI)
  *    - Without this, Coolify will double-escape $ signs, breaking htpasswd
  *
  * 2. Even with escaping disabled, Traefik still requires $$ in htpasswd hashes
@@ -885,6 +901,10 @@ export interface UpdateServiceRequest {
   name?: string;
   description?: string;
   docker_compose_raw?: string; // Raw or base64 docker-compose YAML (auto-encoded by client)
+  /** Attach the stack to the shared `coolify` network so other stacks can resolve its containers by name. */
+  connect_to_docker_network?: boolean;
+  instant_deploy?: boolean;
+  is_container_label_escape_enabled?: boolean;
 }
 
 /**

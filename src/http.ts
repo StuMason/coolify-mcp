@@ -5,7 +5,7 @@
  * deployable as a container next to the Coolify instance it manages.
  *
  * stdio (`index.ts`) remains the default and is untouched — this is an
- * additive second transport over the same 44 tools.
+ * additive second transport over the same 45 tools.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';

@@ -42,7 +42,7 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 
 ### Servers
 
-`list_servers`, `get_server`, `server_resources`, `server_domains`, `validate_server`.
+`list_servers`, `get_server`, `server_resources`, `server_domains`, `list_destinations` (the `destination_uuid` a create needs on multi-network servers), `validate_server`.
 
 ### Projects & environments
 
@@ -59,13 +59,13 @@ Tool names below are the MCP tool identifiers exposed by `@masonator/coolify-mcp
 ### Databases
 
 - `list_databases`, `get_database`
-- `database` — create/delete. Supported `type` values: `postgresql`, `mysql`, `mariadb`, `mongodb`, `redis`, `keydb`, `clickhouse`, `dragonfly`.
+- `database` — create/update/delete (`update` exposes an existing database on a public port via `is_public` + `public_port`). Supported `type` values: `postgresql`, `mysql`, `mariadb`, `mongodb`, `redis`, `keydb`, `clickhouse`, `dragonfly`.
 - `database_backups` — schedule + execution tracking
 - `control` — start / stop / restart
 
 ### Services
 
-`list_services`, `get_service`, `service` (create/update/delete), `env_vars` (with `resource: "service"` — list/create/delete only), `control`.
+`list_services`, `get_service`, `service` (create/update/delete; `update` takes `connect_to_docker_network` for cross-stack traffic), `env_vars` (with `resource: "service"` — list/create/delete only), `control`.
 
 ### Deployments
 

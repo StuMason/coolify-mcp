@@ -120,6 +120,19 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
             status: a.status,
           })),
         );
+      if ((m = p.match(/^\/servers\/([^/]+)\/destinations$/)))
+        return json(res, 200, [
+          { uuid: 'dest-coolify', name: 'coolify', network: 'coolify', server_uuid: m![1] },
+        ]);
+      if (p.split('?')[0] === '/destinations')
+        return json(res, 200, [
+          {
+            uuid: 'dest-coolify',
+            name: 'coolify',
+            network: 'coolify',
+            server_uuid: SERVERS[0].uuid,
+          },
+        ]);
       if ((m = p.match(/^\/servers\/([^/]+)\/domains$/)))
         return json(
           res,

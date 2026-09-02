@@ -1,6 +1,6 @@
 {
   "name": "database",
-  "description": "Manage database: create/delete",
+  "description": "Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.",
   "annotations": {
     "destructiveHint": true
   },
@@ -11,6 +11,7 @@
         "type": "string",
         "enum": [
           "create",
+          "update",
           "delete"
         ]
       },
@@ -40,7 +41,7 @@
         "type": "string"
       },
       "destination_uuid": {
-        "description": "Destination UUID. Required if server has multiple destinations.",
+        "description": "Destination UUID. Required if the server has multiple destinations; find it with `list_destinations`.",
         "type": "string"
       },
       "name": {
@@ -53,9 +54,42 @@
         "type": "string"
       },
       "is_public": {
+        "description": "Expose on a public port. `true` asks for confirmation first, on create and update.",
         "type": "boolean"
       },
       "public_port": {
+        "type": "number"
+      },
+      "public_port_timeout": {
+        "description": "Update only",
+        "type": "number"
+      },
+      "limits_memory": {
+        "description": "Update only, e.g. \"512m\". limits_* take effect after a `control` restart.",
+        "type": "string"
+      },
+      "limits_memory_swap": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_memory_swappiness": {
+        "description": "Update only",
+        "type": "number"
+      },
+      "limits_memory_reservation": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_cpus": {
+        "description": "Update only, e.g. \"1.5\"",
+        "type": "string"
+      },
+      "limits_cpuset": {
+        "description": "Update only",
+        "type": "string"
+      },
+      "limits_cpu_shares": {
+        "description": "Update only",
         "type": "number"
       },
       "instant_deploy": {

@@ -1,6 +1,6 @@
 {
   "name": "service",
-  "description": "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle.",
+  "description": "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle. `update` with `connect_to_docker_network` attaches the stack to the shared `coolify` network so other stacks can reach its containers by name.",
   "annotations": {
     "destructiveHint": true
   },
@@ -37,6 +37,15 @@
         "type": "string"
       },
       "environment_name": {
+        "description": "Create: this or environment_uuid",
+        "type": "string"
+      },
+      "environment_uuid": {
+        "description": "Create: this or environment_name",
+        "type": "string"
+      },
+      "destination_uuid": {
+        "description": "Destination UUID (create only). Required if the server has multiple destinations — find it with `list_destinations`.",
         "type": "string"
       },
       "name": {
@@ -51,6 +60,14 @@
       "docker_compose_raw": {
         "description": "Raw docker-compose YAML for custom services (auto base64-encoded)",
         "type": "string"
+      },
+      "connect_to_docker_network": {
+        "description": "Attach the stack to the shared `coolify` Docker network (update only). Needed for cross-stack traffic by container name.",
+        "type": "boolean"
+      },
+      "is_container_label_escape_enabled": {
+        "description": "Set false before writing Traefik basic-auth labels, or Coolify double-escapes the $ in htpasswd hashes. Accepted on create and update.",
+        "type": "boolean"
       },
       "delete_volumes": {
         "type": "boolean"

@@ -36,6 +36,7 @@
         "type": "string"
       },
       "destination_uuid": {
+        "description": "Required if the server has multiple destinations; find it with `list_destinations`.",
         "type": "string"
       },
       "git_repository": {
