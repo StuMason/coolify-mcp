@@ -2056,11 +2056,12 @@ export class CoolifyMcpServer extends McpServer {
         action: z.enum(['get', 'cancel', 'list_for_app']),
         uuid: z.string(),
         lines: z.number().optional(), // Include logs truncated to last N entries (omit for no logs)
-        page: z.number().optional(), // Log page (1=most recent, 2=older, etc.)
+        page: z.number().int().positive().optional(), // Log page for get; deployment page for list_for_app
+        per_page: z.number().int().positive().optional(), // list_for_app page size (default 10)
         max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)
         include_logs: z.boolean().optional(), // list_for_app only: include raw build logs (default false; upstream returns ~30KB per deployment)
       },
-      async ({ action, uuid, lines, page, max_chars, include_logs }) => {
+      async ({ action, uuid, lines, page, per_page, max_chars, include_logs }) => {
         switch (action) {
           case 'get':
             // If lines param specified, include logs and truncate
@@ -2126,6 +2127,8 @@ export class CoolifyMcpServer extends McpServer {
             return wrap(async () => {
               const result = await this.client.listApplicationDeployments(uuid, {
                 includeLogs: include_logs,
+                ...(page !== undefined && { page }),
+                ...(per_page !== undefined && { perPage: per_page }),
               });
               // include_logs pulls raw build output onto each row — same
               // attacker-influenceable surface as the other log paths (FINDINGS #4).

@@ -1268,6 +1268,27 @@ describe('CoolifyMcpServer v2', () => {
       expect(spy).toHaveBeenCalledWith('app-uuid', { includeLogs: false });
       expect(result.content[0].text).not.toContain('BEGIN UNTRUSTED LOG OUTPUT');
     });
+
+    it('passes list pagination to the Coolify client', async () => {
+      const server = new CoolifyMcpServer({ baseUrl: 'http://localhost:3000', accessToken: 't' });
+      const spy = jest.spyOn(server['client'], 'listApplicationDeployments').mockResolvedValue({
+        count: 25,
+        deployments: [],
+      });
+
+      await callDeploymentTool(server, {
+        action: 'list_for_app',
+        uuid: 'app-uuid',
+        page: 2,
+        per_page: 10,
+      });
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', {
+        includeLogs: undefined,
+        page: 2,
+        perPage: 10,
+      });
+    });
   });
 
   describe('scheduled_tasks tool handler', () => {
