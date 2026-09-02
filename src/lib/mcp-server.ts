@@ -1555,7 +1555,11 @@ export class CoolifyMcpServer extends McpServer {
           .describe(
             'Expose on a public port. `true` asks for confirmation first, on create and update.',
           ),
-        public_port: z.number().optional(),
+        public_port: z
+          .number()
+          .nullable()
+          .optional()
+          .describe('Public port. On update, null clears the assigned port.'),
         public_port_timeout: z.number().optional().describe('Update only'),
         limits_memory: z
           .string()
@@ -1661,6 +1665,13 @@ export class CoolifyMcpServer extends McpServer {
           return wrap(doUpdate);
         }
         // create
+        if (dbData.public_port === null) {
+          return {
+            content: [
+              { type: 'text' as const, text: 'Error: public_port cannot be null on create' },
+            ],
+          };
+        }
         if (!type || !args.server_uuid || !args.project_uuid) {
           return {
             content: [

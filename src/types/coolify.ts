@@ -642,7 +642,7 @@ export interface UpdateDatabaseRequest {
   description?: string;
   image?: string;
   is_public?: boolean;
-  public_port?: number;
+  public_port?: number | null;
   public_port_timeout?: number;
   limits_memory?: string;
   limits_memory_swap?: string;

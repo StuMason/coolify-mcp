@@ -1051,6 +1051,49 @@ describe('CoolifyMcpServer v2', () => {
       expect(spy).toHaveBeenCalledWith('db-1', { is_public: true, public_port: 5433 });
     });
 
+    it('allows null public_port only on update through MCP validation', async () => {
+      const transportServer = new CoolifyMcpServer({
+        baseUrl: 'http://localhost:3000',
+        accessToken: 'test-token',
+      });
+      const updateSpy = jest
+        .spyOn(transportServer['client'], 'updateDatabase')
+        .mockResolvedValue({ uuid: 'db-1' } as any);
+      const createSpy = jest
+        .spyOn(transportServer['client'], 'createPostgresql')
+        .mockResolvedValue({ uuid: 'db-1' });
+      const client = new Client({ name: 'test', version: '0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([
+        transportServer.connect(serverTransport),
+        client.connect(clientTransport),
+      ]);
+
+      try {
+        await client.callTool({
+          name: 'database',
+          arguments: { action: 'update', uuid: 'db-1', public_port: null },
+        });
+
+        expect(updateSpy).toHaveBeenCalledWith('db-1', { public_port: null });
+        const result = (await client.callTool({
+          name: 'database',
+          arguments: {
+            action: 'create',
+            type: 'postgresql',
+            server_uuid: 'server-1',
+            project_uuid: 'project-1',
+            public_port: null,
+          },
+        })) as { content: Array<{ text: string }> };
+
+        expect(result.content[0]?.text).toContain('public_port cannot be null on create');
+        expect(createSpy).not.toHaveBeenCalled();
+      } finally {
+        await client.close();
+      }
+    });
+
     it('update passes credentials and limits through untouched (#351)', async () => {
       const spy = jest
         .spyOn(server['client'], 'updateDatabase')
