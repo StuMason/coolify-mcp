@@ -119,7 +119,7 @@ Set `COOLIFY_MCP_ELICITATION=off` to turn the confirmations off entirely. It exi
 
 Secrets are masked at the API boundary. A client granted "list" access never sees plaintext credentials unless you explicitly opt in with `reveal: true`:
 
-- **`env_vars`**: variable values return as `***`
+- **`env_vars`**: variable values return as `***`. `reveal: true` is accepted only with an exact `key`; the tool then returns only that matching row. Coolify exposes env vars through a collection endpoint, not a per-variable GET or a `reveal` query flag, so the token must have `read:sensitive` access (and the required owner/admin role on newer versions). If the API omits both value fields, the tool returns a capability error instead of claiming the value was revealed.
 - **`system list_resources` (full mode)**: webhook HMAC secrets, basic-auth and database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env vars
 - **`get_database` / `get_service`**: the same credential fields are masked on the detail endpoints, and any embedded server row is projected down to uuid/name/ip so its sentinel token and log-drain config never leave the client
 - **`get_server`**: sentinel and log-drain credentials are always masked, with no reveal
@@ -134,7 +134,7 @@ Destructive operations also ask a human first; see [Ask before it hurts](#ask-be
 
 Works against Coolify v4.0 through v4.2+. Two v4.2 changes are worth knowing about:
 
-- **Secrets are hidden by default.** From v4.2 Coolify strips sensitive fields from API responses unless the token has sensitive-read scope, so `reveal: true` can return a variable with no value at all. That is the server withholding it, not a bug here; issue a token with sensitive-read scope if you need plaintext back.
+- **Secrets are hidden by default.** From v4.2 Coolify strips sensitive fields from API responses unless the token has sensitive-read scope. For `env_vars`, the exact-key `reveal: true` path reports a capability error when the server withholds the value; issue a token with sensitive-read scope if you need plaintext back.
 - **Member-role tokens are read-only.** From v4.2 a token belonging to a Member-role user can view resources but cannot deploy, start, stop, create, update or delete. Those calls return 403. Promote the user or use a token from a role with write access.
 
 State-changing endpoints also moved from GET to POST in v4.2. The client handles this for you across both eras, so no action is needed.

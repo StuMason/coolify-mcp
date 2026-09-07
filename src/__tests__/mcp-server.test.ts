@@ -611,13 +611,98 @@ describe('CoolifyMcpServer v2', () => {
       expect(vars[0].key).toBe('NODE_ENV');
     });
 
+    it('list with an application key + reveal requests full values and filters exactly', async () => {
+      const spy = jest.spyOn(server['client'], 'listApplicationEnvVars').mockResolvedValue([
+        {
+          uuid: 'env-1',
+          key: 'NODE_ENV',
+          value: 'plain-value',
+          real_value: 'plain-value',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
+        {
+          uuid: 'env-2',
+          key: 'UNSELECTED_VALUE',
+          value: 'do-not-return',
+          real_value: 'do-not-return',
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
+      ] as never);
+
+      const result = (await callEnvVars(server, {
+        resource: 'application',
+        action: 'list',
+        uuid: 'app-uuid',
+        key: 'NODE_ENV',
+        reveal: true,
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', { summary: false, reveal: true });
+      expect(result.content[0].text).not.toContain('do-not-return');
+      const vars = JSON.parse(result.content[0].text) as Array<{
+        key: string;
+        value: string;
+        real_value: string;
+      }>;
+      expect(vars).toHaveLength(1);
+      expect(vars[0]).toEqual(
+        expect.objectContaining({
+          key: 'NODE_ENV',
+          value: 'plain-value',
+          real_value: 'plain-value',
+        }),
+      );
+    });
+
+    it('reports when exact-key reveal is unavailable from the API', async () => {
+      const spy = jest.spyOn(server['client'], 'listApplicationEnvVars').mockResolvedValue([
+        {
+          uuid: 'env-1',
+          key: 'NODE_ENV',
+          value: undefined,
+          is_buildtime: false,
+          is_runtime: true,
+          is_preview: false,
+        },
+      ] as never);
+
+      const result = (await callEnvVars(server, {
+        resource: 'application',
+        action: 'list',
+        uuid: 'app-uuid',
+        key: 'NODE_ENV',
+        reveal: true,
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', { summary: false, reveal: true });
+      expect(result.content[0].text).toContain('does not support sensitive env-var reads');
+    });
+
+    it('rejects reveal without an exact key before calling Coolify', async () => {
+      const spy = jest.spyOn(server['client'], 'listApplicationEnvVars');
+
+      const result = (await callEnvVars(server, {
+        resource: 'application',
+        action: 'list',
+        uuid: 'app-uuid',
+        reveal: true,
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.content[0].text).toContain('requires an exact key');
+    });
+
     it('list with key + reveal exposes only the requested value', async () => {
       const spy = jest.spyOn(server['client'], 'listServiceEnvVars').mockResolvedValue([
         { uuid: 'env-1', key: 'FLAG', value: 'true', is_buildtime: false, is_runtime: true },
         {
           uuid: 'env-2',
           key: 'DB_PASSWORD',
-          value: 'hunter2',
+          value: 'not-selected',
           is_buildtime: false,
           is_runtime: true,
         },
@@ -632,7 +717,7 @@ describe('CoolifyMcpServer v2', () => {
       })) as { content: Array<{ text: string }> };
 
       expect(spy).toHaveBeenCalledWith('svc-uuid', { reveal: true });
-      expect(result.content[0].text).not.toContain('hunter2');
+      expect(result.content[0].text).not.toContain('not-selected');
       const vars = JSON.parse(result.content[0].text) as Array<{ key: string; value: string }>;
       expect(vars).toEqual([expect.objectContaining({ key: 'FLAG', value: 'true' })]);
     });
@@ -652,15 +737,16 @@ describe('CoolifyMcpServer v2', () => {
       expect(JSON.parse(result.content[0].text)).toHaveLength(2);
     });
 
-    it('database list forwards reveal to listDatabaseEnvVars (#276)', async () => {
+    it('database list forwards exact-key reveal to listDatabaseEnvVars (#276)', async () => {
       const spy = jest
         .spyOn(server['client'], 'listDatabaseEnvVars')
-        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: 'hunter2' }] as never);
+        .mockResolvedValue([{ uuid: 'env-1', key: 'DB_PASSWORD', value: 'plain-value' }] as never);
 
       await callEnvVars(server, {
         resource: 'database',
         action: 'list',
         uuid: 'db-uuid',
+        key: 'DB_PASSWORD',
         reveal: true,
       });
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`env_vars` exact-key reveal now returns a value or a capability error** (Tchori-Labs/infra#137). Application lists request the full env-var representation when `key` and `reveal: true` are supplied, then filter to that exact key. Reveal without a key is rejected before the API call, and APIs/tokens that omit both `value` and `real_value` return a clear sensitive-read capability error instead of claiming success. Coolify exposes only the collection env endpoint; there is no supported per-variable GET or reveal query flag.
+
 ## [2.19.4] - 2026-08-22
 
 The field-test follow-ups from #336, contributed by the field-tester. The headline is an upstream bug: `GET /databases` can drop whole database types, and `list_databases` now repairs that from `/resources`.
