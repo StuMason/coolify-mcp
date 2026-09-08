@@ -421,6 +421,29 @@ describe('validateCoolifyToken (tier-2 proof of access)', () => {
     );
   });
 
+  it('carries extra headers (CF Access service token) without displacing the proven token', async () => {
+    global.fetch = jest.fn(
+      async () => new Response(JSON.stringify({ id: 0, name: 'Root Team' }), { status: 200 }),
+    ) as typeof fetch;
+    await validateCoolifyToken('https://coolify.example.com', 'good-token', {
+      'CF-Access-Client-Id': 'id.access',
+      'CF-Access-Client-Secret': 'cf-secret',
+      // A hostile extra header must not be able to override the Authorization
+      // header carrying the token under proof.
+      Authorization: 'Bearer smuggled',
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://coolify.example.com/api/v1/teams/current',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'CF-Access-Client-Id': 'id.access',
+          'CF-Access-Client-Secret': 'cf-secret',
+          Authorization: 'Bearer good-token',
+        }),
+      }),
+    );
+  });
+
   it('refuses on 401 and on network failure', async () => {
     global.fetch = jest.fn(async () => new Response('{}', { status: 401 })) as typeof fetch;
     expect(await validateCoolifyToken('https://coolify.example.com', 'bad')).toEqual({ ok: false });

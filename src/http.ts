@@ -10,6 +10,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createHttpApp, normalizePublicUrl } from './lib/http-server.js';
+import { checkStartupConfig, cfAccessHeaders } from './lib/startup-check.js';
 import type { CoolifyConfig } from './types/coolify.js';
 
 /**
@@ -102,13 +103,27 @@ function main(): void {
     }
   }
 
+  // Startup self-check (#368): shape problems (unexpanded ${VAR} literals,
+  // pasted whitespace, a doubled /api/v1, a half-set CF Access pair) that
+  // would otherwise surface as unexplained 401s deep inside tool calls.
+  const check = checkStartupConfig(process.env);
+  problems.push(...check.errors);
+  for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
+
   if (problems.length > 0) {
     console.error('coolify-mcp http mode cannot start:');
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
 
-  const coolify: CoolifyConfig = { baseUrl, accessToken };
+  const coolify: CoolifyConfig = {
+    baseUrl,
+    accessToken,
+    // Cloudflare Access service token (#373): rides on every Coolify API
+    // request, including the tier-2 proof-of-access fetch. Never on any
+    // other fetch this server makes.
+    customHeaders: cfAccessHeaders(process.env),
+  };
   const port = Number(process.env.MCP_PORT || process.env.PORT || 8080);
   const readonly = process.env.MCP_READONLY === 'true';
 
