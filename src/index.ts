@@ -7,6 +7,13 @@ import { checkStartupConfig, mergeCfAccessHeaders } from './lib/startup-check.js
 import type { CoolifyConfig } from './types/coolify.js';
 
 async function main(): Promise<void> {
+  // `npx @masonator/coolify-mcp doctor` (#368): diagnose the environment and
+  // exit — checked before the transport switch so it works in any config.
+  if (process.argv[2] === 'doctor') {
+    const { runDoctorCli } = await import('./lib/doctor.js');
+    process.exit(await runDoctorCli(process.env, process.argv.includes('--json')));
+  }
+
   // One image, two transports (#303): MCP_TRANSPORT=http hands over to the
   // HTTP entry point, so a container platform needs an env var rather than a
   // command override. Anything else (including unset) is stdio, unchanged.
