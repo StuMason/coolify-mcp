@@ -137,9 +137,17 @@ async function probeAbility(
       if (isMemberBlocked(body)) return 'member-blocked';
       return 'unknown';
     }
-    // A 401 or a server error is evidence of nothing; any other answer means
-    // the ability gate let the request through to a handler.
+    // A 401, a redirect, or a server error is evidence of nothing. Neither is
+    // the routing catch-all 404 (its `docs` body key): that answer means no
+    // middleware ran at all — the exact mechanism that made a GET-based write
+    // probe unsound — so if this route ever moves, the probe must degrade to
+    // "unknown", never to a confident "granted".
     if (response.status === 401 || response.status >= 500) return 'unknown';
+    if (response.status >= 300 && response.status < 400) return 'unknown';
+    if (response.status === 404) {
+      const body = await readJson(response);
+      if (typeof (body as { docs?: unknown })?.docs === 'string') return 'unknown';
+    }
     return 'granted';
   } catch {
     return 'unknown';
@@ -361,7 +369,7 @@ async function checkInstance(
     } else if (deploy === 'unknown') {
       checks.push({
         check: 'abilities',
-        status: 'pass',
+        status: 'inconclusive',
         detail: `token grants: read (deploy: could not determine; ${WRITE_NOTE})`,
       });
     } else {
@@ -437,8 +445,11 @@ export async function runDoctor(
     },
   ];
 
+  // A diagnostic exists to *confirm* things: an inconclusive check means it
+  // could not, so it is not a green run. Warnings don't gate — "outside the
+  // tested range" and friends are survivable by construction.
   const ok = [...instances.flatMap((report) => report.checks), ...checks].every(
-    (c) => c.status !== 'fail',
+    (c) => c.status !== 'fail' && c.status !== 'inconclusive',
   );
   return { ok, instances, checks };
 }
@@ -472,7 +483,18 @@ export async function runDoctorCli(
       instance.checks.forEach(line);
     }
     report.checks.forEach(line);
-    out(report.ok ? 'No failures.' : 'Failures found — fixes listed above.');
+    const all = [...report.instances.flatMap((i) => i.checks), ...report.checks];
+    const count = (status: DoctorStatus): number => all.filter((c) => c.status === status).length;
+    const fails = count('fail');
+    const warns = count('warn');
+    const inconclusive = count('inconclusive');
+    if (report.ok) {
+      out(warns === 0 ? 'All checks passed.' : `Passed with ${warns} warning(s).`);
+    } else {
+      out(
+        `${fails} failure(s), ${warns} warning(s), ${inconclusive} inconclusive — details above.`,
+      );
+    }
   }
   return report.ok ? 0 : 1;
 }

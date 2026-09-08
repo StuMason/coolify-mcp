@@ -309,9 +309,10 @@ describe('runDoctor', () => {
     });
     let report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
     // Unknown is not proof of a missing ability — report only what's proven,
-    // and say explicitly what could not be determined.
-    expect(check(report, 'abilities').status).toBe('pass');
+    // say what could not be determined, and don't count the run as green.
+    expect(check(report, 'abilities').status).toBe('inconclusive');
     expect(check(report, 'abilities').detail).toContain('deploy: could not determine');
+    expect(report.ok).toBe(false);
 
     const throwing = jest.fn(async (url: unknown, init?: unknown) => {
       const path = String(url).replace(`${BASE}/api/v1`, '');
@@ -326,6 +327,39 @@ describe('runDoctor', () => {
     });
     report = await runDoctor(cleanEnv(), throwing as unknown as FetchLike);
     expect(check(report, 'abilities').detail).toContain('deploy: could not determine');
+  });
+
+  it('never reads a routing-miss 404 or a redirect on the deploy probe as granted', async () => {
+    // The catch-all 404 (docs key) means no middleware ran — the mechanism
+    // that made a GET write probe unsound. If /deploy ever moves, the probe
+    // must degrade to "could not determine", not to a confident grant.
+    const probeAnswers: Array<[Response, string]> = [
+      [
+        jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' }),
+        'inconclusive',
+      ],
+      [
+        new Response(null, { status: 302, headers: { location: 'https://x.example.com' } }),
+        'inconclusive',
+      ],
+      // A controller's genuine 404 (no docs key) reached a handler: gate passed.
+      [jsonResponse(404, { message: 'Application not found.' }), 'pass'],
+    ];
+    for (const [probeAnswer, expected] of probeAnswers) {
+      const fetchMock = jest.fn(async (url: unknown, init?: unknown) => {
+        const path = String(url).replace(`${BASE}/api/v1`, '');
+        const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+        if (path === '/version') {
+          return headers?.Authorization
+            ? new Response('4.1.2', { status: 200 })
+            : jsonResponse(401, { message: 'Unauthenticated.' });
+        }
+        if (path === '/deploy') return probeAnswer.clone();
+        return jsonResponse(404, { message: 'Not found.', docs: 'x' });
+      });
+      const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+      expect(check(report, 'abilities').status).toBe(expected);
+    }
   });
 
   it('marks api-shape inconclusive when the probe itself fails', async () => {
@@ -355,6 +389,8 @@ describe('runDoctor', () => {
     expect(token.detail).toContain('not with a version string');
     expect(check(report, 'version').status).toBe('skipped');
     expect(JSON.stringify(report)).not.toContain('sentinel-csrf-token');
+    // A setup doctor could not confirm is not a green run.
+    expect(report.ok).toBe(false);
   });
 
   it('sends --header values on every probe, the same as the server would', async () => {
@@ -414,8 +450,26 @@ describe('runDoctorCli', () => {
     expect(code).toBe(0);
     const output = lines.join('\n');
     expect(output).toContain('✓ token');
-    expect(output).toContain('No failures.');
+    expect(output).toContain('All checks passed.');
     expect(output).not.toContain('sentinelsecretvalue');
+  });
+
+  it('summarizes an ok run that carries warnings without calling it all-clear', async () => {
+    const fetchMock = healthyFetch();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (String(url).endsWith('/version') && headers?.Authorization) {
+        return new Response('4.9.0', { status: 200 });
+      }
+      return base(url, init) as Promise<Response>;
+    });
+    const lines: string[] = [];
+    const code = await runDoctorCli(cleanEnv(), false, fetchMock as unknown as FetchLike, (l) =>
+      lines.push(l),
+    );
+    expect(code).toBe(0);
+    expect(lines.join('\n')).toContain('Passed with 1 warning(s).');
   });
 
   it('prints parseable JSON with --json and exits 1 on failure', async () => {
