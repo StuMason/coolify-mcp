@@ -614,6 +614,48 @@ describe('HTTP app routes', () => {
     expect(page).not.toContain('not-a-real-token');
   });
 
+  it('sends configured customHeaders (CF Access) on the authorize-time token validation', async () => {
+    // The wiring the 2026-09-08 incident was about: createHttpApp must hand
+    // config.coolify.customHeaders to validateCoolifyToken, or authorize
+    // dies behind Cloudflare Access while /healthz stays green.
+    const fetchMock = jest.fn(
+      async () => new Response(JSON.stringify({ name: 'Root Team' }), { status: 200 }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const app = makeApp({
+      coolify: {
+        baseUrl: 'https://coolify.example.com',
+        accessToken: 'env-token',
+        customHeaders: { 'CF-Access-Client-Id': 'id.access', 'CF-Access-Client-Secret': 'cf-s' },
+      },
+    });
+    const clientId = registerTestClient(app.provider);
+    const { challenge } = pkcePair();
+    const form = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: 'https://client.example.com/callback',
+      response_type: 'code',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      state: 'abc',
+      coolify_token: 'valid-team-token',
+    });
+    const authResponse = await app.fetch(
+      new Request(`${ISSUER}/authorize`, { method: 'POST', body: form.toString() }),
+    );
+    expect(authResponse.status).toBe(302);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://coolify.example.com/api/v1/teams/current',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'CF-Access-Client-Id': 'id.access',
+          'CF-Access-Client-Secret': 'cf-s',
+          Authorization: 'Bearer valid-team-token',
+        }),
+      }),
+    );
+  });
+
   it('completes authorize → token over HTTP when proof of access succeeds', async () => {
     global.fetch = jest.fn(
       async () => new Response(JSON.stringify({ name: 'Root Team' }), { status: 200 }),

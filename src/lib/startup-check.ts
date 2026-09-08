@@ -39,11 +39,14 @@ function looksUnexpanded(value: string): boolean {
   return value.includes('${') || /^\$[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 }
 
-/** Characters that are illegal in an HTTP header value — fetch() throws on them. */
-function hasControlChars(value: string): boolean {
-  // eslint-disable-next-line no-control-regex
-  return /[\x00-\x1f\x7f]/.test(value);
-}
+/**
+ * The characters that actually make fetch() throw in a header value: NUL, CR
+ * and LF — and only where they survive the fetch spec's normalization, which
+ * strips *outer* whitespace from the composed header value first. Verified
+ * against undici. Everything else (tabs, other control bytes) is legal.
+ */
+
+const HEADER_BREAKING = /[\0\r\n]/;
 
 export function checkStartupConfig(env: NodeJS.ProcessEnv): StartupCheckResult {
   const errors: string[] = [];
@@ -54,23 +57,45 @@ export function checkStartupConfig(env: NodeJS.ProcessEnv): StartupCheckResult {
     if (value !== undefined && value !== '' && looksUnexpanded(value)) {
       errors.push(
         `${name} contains an unexpanded \${VAR} placeholder — the literal text reached this process instead of the value. ` +
-          `macOS Keychain entries and some launchers do this. Set the real value directly.`,
+          `macOS Keychain entries and some launchers do this. Set the real value directly. ` +
+          `(If your real value genuinely contains "\${", open an issue — no known Coolify credential or URL does.)`,
       );
     }
   }
 
+  // COOLIFY_ACCESS_TOKEN is sent as `Bearer <value>`, so header normalization
+  // applies to the *composed* value (verified against undici): trailing
+  // whitespace is stripped and works — say nothing about it; leading
+  // whitespace survives as `Bearer  <token>` and 401s every call; NUL/CR/LF
+  // anywhere before the trailing run makes fetch throw before sending.
   const token = env.COOLIFY_ACCESS_TOKEN;
   if (token !== undefined && token !== '' && !looksUnexpanded(token)) {
-    if (hasControlChars(token)) {
+    const core = token.replace(/\s+$/, '');
+    if (HEADER_BREAKING.test(core)) {
       errors.push(
-        'COOLIFY_ACCESS_TOKEN contains a control character (usually a copy-pasted newline). ' +
-          'Every request would fail before reaching Coolify. Re-paste the token without it.',
+        'COOLIFY_ACCESS_TOKEN contains a line break or NUL — every request would fail before it is even sent. ' +
+          'Re-paste the token without it.',
       );
-    } else if (token !== token.trim()) {
-      warnings.push(
-        'COOLIFY_ACCESS_TOKEN has leading or trailing whitespace — Coolify will reject it as-is. ' +
-          'Re-paste the token without the surrounding space.',
+    } else if (/^[ \t]/.test(core)) {
+      errors.push(
+        'COOLIFY_ACCESS_TOKEN has leading whitespace, which becomes part of the credential — ' +
+          'Coolify rejects every request with 401. Re-paste the token without it.',
       );
+    }
+  }
+
+  // The CF Access pair are sent as whole header values, where outer
+  // whitespace is normalized away harmlessly — only an interior line break
+  // or NUL breaks fetch, and it breaks every Coolify request at once.
+  for (const name of ['CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET'] as const) {
+    const value = env[name];
+    if (value !== undefined && value !== '' && !looksUnexpanded(value)) {
+      if (HEADER_BREAKING.test(value.trim())) {
+        errors.push(
+          `${name} contains a line break or NUL — every request to Coolify would fail before it is even sent. ` +
+            'Re-paste it without it.',
+        );
+      }
     }
   }
 
@@ -81,16 +106,24 @@ export function checkStartupConfig(env: NodeJS.ProcessEnv): StartupCheckResult {
       parsed = new URL(baseUrl);
     } catch {
       errors.push(
-        `COOLIFY_BASE_URL is not a usable URL. Set it to your Coolify URL, e.g. https://coolify.example.com`,
+        'COOLIFY_BASE_URL is not a usable URL (a missing http:// or https:// scheme is the usual cause). ' +
+          'Set it to your Coolify URL, e.g. https://coolify.example.com',
       );
     }
     if (parsed) {
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         errors.push(`COOLIFY_BASE_URL has scheme "${parsed.protocol}" — it must be http or https.`);
-      } else if (/\/api(\/v1)?\/?$/.test(parsed.pathname)) {
+      } else if (/\/api\/v1\/?$/.test(parsed.pathname)) {
+        // Guaranteed 404 on every call — the server appends /api/v1 itself.
+        errors.push(
+          'COOLIFY_BASE_URL ends with /api/v1. The server appends /api/v1 itself, so every request ' +
+            'would hit /api/v1/api/v1 and 404. Set it to the bare Coolify URL.',
+        );
+      } else if (/\/api\/?$/.test(parsed.pathname)) {
+        // Could conceivably be a deliberate proxy prefix, so only a warning.
         warnings.push(
-          'COOLIFY_BASE_URL ends with an API path. The server appends /api/v1 itself, so requests ' +
-            'would hit /api/v1 twice and 404. Set it to the bare Coolify URL.',
+          'COOLIFY_BASE_URL ends with /api. The server appends /api/v1 itself — unless this is a ' +
+            'deliberate proxy prefix, set it to the bare Coolify URL.',
         );
       }
     }
@@ -128,4 +161,23 @@ export function cfAccessHeaders(env: NodeJS.ProcessEnv): Record<string, string> 
     'CF-Access-Client-Id': id,
     'CF-Access-Client-Secret': secret,
   };
+}
+
+/**
+ * Merge env-derived CF Access headers with CLI `--header` flags, CLI winning.
+ *
+ * Header names are case-insensitive on the wire, so the override has to be
+ * too: without this, `--header "cf-access-client-id: x"` would produce a
+ * second distinct key and fetch would send both values comma-joined —
+ * rejected by Access with no indication why.
+ */
+export function mergeCfAccessHeaders(
+  env: NodeJS.ProcessEnv,
+  cliHeaders: Record<string, string>,
+): Record<string, string> {
+  const cliKeys = new Set(Object.keys(cliHeaders).map((key) => key.toLowerCase()));
+  const fromEnv = Object.entries(cfAccessHeaders(env) ?? {}).filter(
+    ([key]) => !cliKeys.has(key.toLowerCase()),
+  );
+  return { ...Object.fromEntries(fromEnv), ...cliHeaders };
 }

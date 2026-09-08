@@ -3,7 +3,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { CoolifyMcpServer } from './lib/mcp-server.js';
 import { parseHeaders } from './lib/parse-headers.js';
-import { checkStartupConfig, cfAccessHeaders } from './lib/startup-check.js';
+import { checkStartupConfig, mergeCfAccessHeaders } from './lib/startup-check.js';
 import type { CoolifyConfig } from './types/coolify.js';
 
 async function main(): Promise<void> {
@@ -26,8 +26,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // CF Access headers first so a --header flag can override them.
-  const customHeaders = { ...cfAccessHeaders(process.env), ...parseHeaders(process.argv) };
+  // CF Access headers from env, overridable by --header flags (case-insensitively).
+  const customHeaders = mergeCfAccessHeaders(process.env, parseHeaders(process.argv));
 
   const config: CoolifyConfig = {
     baseUrl: process.env.COOLIFY_BASE_URL || 'http://localhost:3000',

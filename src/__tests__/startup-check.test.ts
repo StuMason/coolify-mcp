@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { checkStartupConfig, cfAccessHeaders } from '../lib/startup-check.js';
+import { checkStartupConfig, cfAccessHeaders, mergeCfAccessHeaders } from '../lib/startup-check.js';
 
 // A base env that passes every check, so each test breaks exactly one thing.
 const cleanEnv = (): NodeJS.ProcessEnv => ({
@@ -47,21 +47,44 @@ describe('checkStartupConfig', () => {
     expect(errors.some((e) => e.includes('unexpanded'))).toBe(true);
   });
 
-  it('errors on a control character in the token (pasted newline)', () => {
+  // Fetch's header normalization strips *outer* whitespace of the composed
+  // `Bearer <token>` value, so a trailing newline (an --env-file or mounted
+  // k8s secret preserves one) actually works — flagging it would refuse
+  // startup for a config that is fine today.
+  it('says nothing about trailing whitespace in the token (normalized away, works)', () => {
     const env = cleanEnv();
     env.COOLIFY_ACCESS_TOKEN = '7|sentinelsecretvalue\n';
-    const { errors } = checkStartupConfig(env);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain('control character');
+    expect(checkStartupConfig(env)).toEqual({ errors: [], warnings: [] });
+    env.COOLIFY_ACCESS_TOKEN = '7|sentinelsecretvalue ';
+    expect(checkStartupConfig(env)).toEqual({ errors: [], warnings: [] });
   });
 
-  it('warns on surrounding whitespace in the token', () => {
+  it('errors on leading whitespace in the token (survives as part of the credential)', () => {
+    for (const value of [' 7|sentinelsecretvalue', '\t7|sentinelsecretvalue']) {
+      const env = cleanEnv();
+      env.COOLIFY_ACCESS_TOKEN = value;
+      const { errors } = checkStartupConfig(env);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain('leading whitespace');
+    }
+  });
+
+  it('errors on an interior line break in the token (fetch refuses to send it)', () => {
     const env = cleanEnv();
-    env.COOLIFY_ACCESS_TOKEN = ' 7|sentinelsecretvalue ';
-    const { errors, warnings } = checkStartupConfig(env);
-    expect(errors).toEqual([]);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('whitespace');
+    env.COOLIFY_ACCESS_TOKEN = '7|sentinel\nsecretvalue';
+    const { errors } = checkStartupConfig(env);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('line break');
+  });
+
+  it('errors on an interior line break in a CF Access value', () => {
+    const env = cleanEnv();
+    env.CF_ACCESS_CLIENT_ID = 'id.access';
+    env.CF_ACCESS_CLIENT_SECRET = 'cf-sent\ninel-secret';
+    const { errors } = checkStartupConfig(env);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('CF_ACCESS_CLIENT_SECRET');
+    expect(errors[0]).toContain('line break');
   });
 
   it('errors on an unparseable base URL', () => {
@@ -80,13 +103,21 @@ describe('checkStartupConfig', () => {
     expect(errors.some((e) => e.includes('must be http or https'))).toBe(true);
   });
 
-  it('warns when the base URL already ends in /api/v1 (the server appends it again)', () => {
-    for (const suffix of ['/api/v1', '/api/v1/', '/api']) {
+  it('errors when the base URL ends in /api/v1 (guaranteed 404 on every call)', () => {
+    for (const suffix of ['/api/v1', '/api/v1/']) {
       const env = cleanEnv();
       env.COOLIFY_BASE_URL = `https://coolify.example.com${suffix}`;
-      const { warnings } = checkStartupConfig(env);
-      expect(warnings.some((w) => w.includes('/api/v1 itself'))).toBe(true);
+      const { errors } = checkStartupConfig(env);
+      expect(errors.some((e) => e.includes('/api/v1 itself'))).toBe(true);
     }
+  });
+
+  it('warns when the base URL ends in /api (could be a deliberate proxy prefix)', () => {
+    const env = cleanEnv();
+    env.COOLIFY_BASE_URL = 'https://coolify.example.com/api';
+    const { errors, warnings } = checkStartupConfig(env);
+    expect(errors).toEqual([]);
+    expect(warnings.some((w) => w.includes('/api/v1 itself'))).toBe(true);
   });
 
   it('leaves unset and empty variables alone (the entry points own required-var errors)', () => {
@@ -146,5 +177,33 @@ describe('cfAccessHeaders', () => {
     expect(
       cfAccessHeaders({ CF_ACCESS_CLIENT_ID: '', CF_ACCESS_CLIENT_SECRET: 's3cret' }),
     ).toBeUndefined();
+  });
+});
+
+describe('mergeCfAccessHeaders', () => {
+  const cfEnv: NodeJS.ProcessEnv = {
+    CF_ACCESS_CLIENT_ID: 'env-id',
+    CF_ACCESS_CLIENT_SECRET: 'env-secret',
+  };
+
+  it('combines env CF headers with CLI headers', () => {
+    expect(mergeCfAccessHeaders(cfEnv, { 'X-Custom': 'v' })).toEqual({
+      'CF-Access-Client-Id': 'env-id',
+      'CF-Access-Client-Secret': 'env-secret',
+      'X-Custom': 'v',
+    });
+  });
+
+  it('lets a --header flag override a CF header case-insensitively (no comma-joined duplicates)', () => {
+    const merged = mergeCfAccessHeaders(cfEnv, { 'cf-access-client-id': 'cli-id' });
+    expect(merged['cf-access-client-id']).toBe('cli-id');
+    // The env-derived spelling must be gone entirely — two spellings of the
+    // same header would be sent comma-joined and rejected by Access.
+    expect(merged['CF-Access-Client-Id']).toBeUndefined();
+    expect(merged['CF-Access-Client-Secret']).toBe('env-secret');
+  });
+
+  it('is just the CLI headers when no CF pair is configured', () => {
+    expect(mergeCfAccessHeaders({}, { 'X-Custom': 'v' })).toEqual({ 'X-Custom': 'v' });
   });
 });

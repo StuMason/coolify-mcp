@@ -108,13 +108,13 @@ function main(): void {
   // would otherwise surface as unexplained 401s deep inside tool calls.
   const check = checkStartupConfig(process.env);
   problems.push(...check.errors);
-  for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
 
   if (problems.length > 0) {
     console.error('coolify-mcp http mode cannot start:');
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
+  for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
 
   const coolify: CoolifyConfig = {
     baseUrl,
