@@ -36,7 +36,7 @@ function healthyFetch(): jest.Mock {
         ? new Response('4.1.2', { status: 200 })
         : jsonResponse(401, { message: 'Unauthenticated.' });
     }
-    if (path === '/enable' || path === '/deploy') {
+    if (path === '/deploy') {
       return jsonResponse(400, { message: 'Invalid uuid.' });
     }
     return jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' });
@@ -47,7 +47,7 @@ function check(
   report: DoctorReport,
   name: string,
 ): { status: string; detail: string; fix?: string } {
-  const found = report.instances[0].checks.find((c) => c.check === name);
+  const found = [...report.instances[0].checks, ...report.checks].find((c) => c.check === name);
   if (!found) throw new Error(`no such check: ${name}`);
   return found;
 }
@@ -62,7 +62,9 @@ describe('runDoctor', () => {
     expect(check(report, 'version').status).toBe('pass');
     expect(check(report, 'version').detail).toContain('4.1.2');
     expect(check(report, 'abilities').status).toBe('pass');
-    expect(check(report, 'abilities').detail).toContain('read, write, deploy');
+    expect(check(report, 'abilities').detail).toContain('read, deploy');
+    // `write` has no side-effect-free probe — the report must say so, never guess.
+    expect(check(report, 'abilities').detail).toContain('write: not probeable');
     expect(check(report, 'api-shape').status).toBe('pass');
     expect(check(report, 'runtime').status).toBe('pass');
   });
@@ -141,9 +143,6 @@ describe('runDoctor', () => {
       if (path === '/deploy') {
         return jsonResponse(403, { message: 'Missing required permissions: deploy' });
       }
-      if (path === '/enable') {
-        return jsonResponse(405, { message: 'This endpoint has changed to a POST request.' });
-      }
       return jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' });
     });
     const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
@@ -151,7 +150,7 @@ describe('runDoctor', () => {
     const abilities = check(report, 'abilities');
     expect(abilities.status).toBe('warn');
     expect(abilities.detail).toContain('token lacks: deploy');
-    expect(abilities.detail).toContain('read, write');
+    expect(abilities.detail).toContain('granted: read');
   });
 
   it('distinguishes the Member-role hard block from missing abilities', async () => {
@@ -305,16 +304,28 @@ describe('runDoctor', () => {
           ? new Response('4.1.2', { status: 200 })
           : jsonResponse(401, { message: 'Unauthenticated.' });
       }
-      if (path === '/enable') return new Response('forbidden', { status: 403 });
+      if (path === '/deploy') return new Response('forbidden', { status: 403 });
+      return jsonResponse(404, { message: 'Not found.', docs: 'x' });
+    });
+    let report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    // Unknown is not proof of a missing ability — report only what's proven,
+    // and say explicitly what could not be determined.
+    expect(check(report, 'abilities').status).toBe('pass');
+    expect(check(report, 'abilities').detail).toContain('deploy: could not determine');
+
+    const throwing = jest.fn(async (url: unknown, init?: unknown) => {
+      const path = String(url).replace(`${BASE}/api/v1`, '');
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (path === '/version') {
+        return headers?.Authorization
+          ? new Response('4.1.2', { status: 200 })
+          : jsonResponse(401, { message: 'Unauthenticated.' });
+      }
       if (path === '/deploy') throw new TypeError('boom');
       return jsonResponse(404, { message: 'Not found.', docs: 'x' });
     });
-    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
-    const abilities = check(report, 'abilities');
-    // Unknown is not proof of a missing ability — report only what's proven.
-    expect(abilities.status).toBe('pass');
-    expect(abilities.detail).toContain('read');
-    expect(abilities.detail).not.toContain('write');
+    report = await runDoctor(cleanEnv(), throwing as unknown as FetchLike);
+    expect(check(report, 'abilities').detail).toContain('deploy: could not determine');
   });
 
   it('marks api-shape inconclusive when the probe itself fails', async () => {
@@ -326,6 +337,36 @@ describe('runDoctor', () => {
     });
     const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
     expect(check(report, 'api-shape').status).toBe('inconclusive');
+  });
+
+  it('refuses to echo a 200 that is not a version string (SSO page, proxy error)', async () => {
+    const fetchMock = jest.fn(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (headers?.Authorization) {
+        return new Response('<html><input name="csrf" value="sentinel-csrf-token"></html>', {
+          status: 200,
+        });
+      }
+      return jsonResponse(401, { message: 'Unauthenticated.' });
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    const token = check(report, 'token');
+    expect(token.status).toBe('inconclusive');
+    expect(token.detail).toContain('not with a version string');
+    expect(check(report, 'version').status).toBe('skipped');
+    expect(JSON.stringify(report)).not.toContain('sentinel-csrf-token');
+  });
+
+  it('sends --header values on every probe, the same as the server would', async () => {
+    const fetchMock = healthyFetch();
+    await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike, 'v22.0.0', {
+      'X-Proxy-Auth': 'proxy-credential',
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(2);
+    for (const call of fetchMock.mock.calls) {
+      const headers = (call[1] as RequestInit | undefined)?.headers as Record<string, string>;
+      expect(headers['X-Proxy-Auth']).toBe('proxy-credential');
+    }
   });
 
   it('reports config warnings as a warn without blocking the probes', async () => {

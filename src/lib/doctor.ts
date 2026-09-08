@@ -17,7 +17,7 @@
  *   which today has exactly one entry.
  */
 
-import { checkStartupConfig, cfAccessHeaders, type Transport } from './startup-check.js';
+import { checkStartupConfig, mergeCfAccessHeaders, type Transport } from './startup-check.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skipped' | 'inconclusive';
 
@@ -36,6 +36,8 @@ export interface InstanceReport {
 export interface DoctorReport {
   ok: boolean;
   instances: InstanceReport[];
+  /** Process-wide checks (runtime), not tied to any instance — this shape survives #367's fleet. */
+  checks: DoctorCheck[];
 }
 
 /** One Coolify instance to examine. The fleet issue (#367) will grow this list. */
@@ -57,15 +59,30 @@ const PROBE_TIMEOUT_MS = 10_000;
 
 type FetchLike = typeof fetch;
 
-function instancesFromEnv(env: NodeJS.ProcessEnv): InstanceConfig[] {
+function instancesFromEnv(
+  env: NodeJS.ProcessEnv,
+  cliHeaders: Record<string, string>,
+): InstanceConfig[] {
   return [
     {
       name: 'default',
       baseUrl: env.COOLIFY_BASE_URL?.replace(/\/$/, ''),
       token: env.COOLIFY_ACCESS_TOKEN,
-      headers: cfAccessHeaders(env) ?? {},
+      // The same merge the server itself performs — doctor must diagnose the
+      // config the server would actually run with, --header flags included.
+      headers: mergeCfAccessHeaders(env, cliHeaders),
     },
   ];
+}
+
+/**
+ * An error message safe to put in a report: inline basic-auth credentials in
+ * a URL are masked, and the length is capped so an unexpected upstream can't
+ * dump a page into the output.
+ */
+function describeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'unknown error';
+  return message.replace(/\/\/[^@/\s]+@/g, '//***@').slice(0, 140);
 }
 
 /** The upstream ApiAbility middleware's missing-ability 403 body. */
@@ -120,6 +137,9 @@ async function probeAbility(
       if (isMemberBlocked(body)) return 'member-blocked';
       return 'unknown';
     }
+    // A 401 or a server error is evidence of nothing; any other answer means
+    // the ability gate let the request through to a handler.
+    if (response.status === 401 || response.status >= 500) return 'unknown';
     return 'granted';
   } catch {
     return 'unknown';
@@ -204,14 +224,15 @@ async function checkInstance(
       checks.push({
         check: 'reachability',
         status: 'fail',
-        detail: `cannot reach COOLIFY_BASE_URL: ${error instanceof Error ? error.message : 'unknown error'}`,
+        detail: `cannot reach COOLIFY_BASE_URL: ${describeError(error)}`,
         fix: 'Check the URL, DNS and firewall. If this runs as a container next to Coolify, use the internal address (see docs/http-mode.md)',
       });
     }
   }
 
   // --- token + version: one authenticated GET answers both ---
-  let coolifyVersion: string | undefined;
+  let tokenOk = false;
+  let coolifyVersion = '';
   if (configBroken || !reachable || !instance.token) {
     const detail = !instance.token ? 'no token to test' : 'blocked by an earlier failure';
     checks.push({ check: 'token', status: 'skipped', detail });
@@ -228,8 +249,22 @@ async function checkInstance(
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
       if (response.ok) {
-        coolifyVersion = (await response.text()).trim();
-        checks.push({ check: 'token', status: 'pass', detail: 'accepted by Coolify' });
+        // Only a version-shaped answer counts, and only a bounded slice of it
+        // is ever echoed — a 200 from something that isn't Coolify (a proxy
+        // error page, an SSO login) must not flow into the report.
+        const body = (await response.text()).trim();
+        if (/^v?\d+\.\d+\.\d+/.test(body)) {
+          tokenOk = true;
+          coolifyVersion = body.slice(0, 32);
+          checks.push({ check: 'token', status: 'pass', detail: 'accepted by Coolify' });
+        } else {
+          checks.push({
+            check: 'token',
+            status: 'inconclusive',
+            detail:
+              'the version endpoint answered 200 but not with a version string — is COOLIFY_BASE_URL pointing at Coolify?',
+          });
+        }
       } else if (response.status === 401 || response.status === 400) {
         checks.push({
           check: 'token',
@@ -263,17 +298,22 @@ async function checkInstance(
       checks.push({
         check: 'token',
         status: 'inconclusive',
-        detail: `probe failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        detail: `probe failed: ${describeError(error)}`,
       });
     }
 
-    if (coolifyVersion) {
-      const match = /^(\d+)\.(\d+)/.exec(coolifyVersion);
-      const inRange =
-        match !== null &&
-        Number(match[1]) === TESTED_RANGE.min[0] &&
-        Number(match[2]) >= TESTED_RANGE.min[1] &&
-        Number(match[2]) <= TESTED_RANGE.max[1];
+    if (tokenOk) {
+      const match = /^v?(\d+)\.(\d+)/.exec(coolifyVersion);
+      let inRange = false;
+      if (match !== null) {
+        const major = Number(match[1]);
+        const minor = Number(match[2]);
+        const [minMajor, minMinor] = TESTED_RANGE.min;
+        const [maxMajor, maxMinor] = TESTED_RANGE.max;
+        inRange =
+          (major > minMajor || (major === minMajor && minor >= minMinor)) &&
+          (major < maxMajor || (major === maxMajor && minor <= maxMinor));
+      }
       checks.push({
         check: 'version',
         status: inRange ? 'pass' : 'warn',
@@ -284,52 +324,58 @@ async function checkInstance(
           ? {}
           : { fix: 'Probably fine, but suspect this first if another check is red' }),
       });
-    } else if (checks[checks.length - 1]?.check === 'token') {
+    } else {
       checks.push({ check: 'version', status: 'skipped', detail: 'token check did not pass' });
     }
   }
 
-  // --- abilities: read is proven by the token check; probe write + deploy ---
-  if (!coolifyVersion) {
+  // --- abilities: read is proven by the token check; probe deploy ---
+  //
+  // Only `deploy` is probeable side-effect-free: `GET /deploy` is routed in
+  // every Coolify era and its controller 400s without a uuid/tag. `write`
+  // has no equivalent — every write-gated endpoint is POST/PATCH/DELETE, and
+  // a GET against those is a *routing miss* that never reaches the ability
+  // middleware (the same mechanism the api-shape check below verifies), so
+  // any GET-based write probe would report "granted" on no evidence.
+  // (`/enable` specifically is root-gated AND method-split across v4.2 —
+  // wrong on both axes.) Saying "undetermined" beats guessing.
+  const WRITE_NOTE = 'write: not probeable without side effects';
+  if (!tokenOk) {
     checks.push({ check: 'abilities', status: 'skipped', detail: 'token check did not pass' });
   } else {
-    const [write, deploy] = await Promise.all([
-      probeAbility(fetchImpl, instance, '/enable'),
-      probeAbility(fetchImpl, instance, '/deploy'),
-    ]);
-    const granted = [
-      'read',
-      write === 'granted' ? 'write' : '',
-      deploy === 'granted' ? 'deploy' : '',
-    ]
-      .filter(Boolean)
-      .join(', ');
-    const blocked = [write, deploy].includes('member-blocked');
-    const missing = [write === 'missing' ? 'write' : '', deploy === 'missing' ? 'deploy' : '']
-      .filter(Boolean)
-      .join(', ');
-    if (blocked) {
+    const deploy = await probeAbility(fetchImpl, instance, '/deploy');
+    if (deploy === 'member-blocked') {
       checks.push({
         check: 'abilities',
         status: 'warn',
-        detail: `token abilities exceed your team role — writes are blocked upstream (granted: ${granted})`,
+        detail: `token abilities exceed your team role — writes are blocked upstream (granted: read; ${WRITE_NOTE})`,
         fix: 'Ask a team admin/owner to issue the token, or expect read-only behaviour',
       });
-    } else if (missing) {
+    } else if (deploy === 'missing') {
       checks.push({
         check: 'abilities',
         status: 'warn',
-        detail: `token lacks: ${missing} (granted: ${granted}) — the matching tools will 403`,
-        fix: 'Recreate the token with those abilities if you need the tools they gate',
+        detail: `token lacks: deploy (granted: read; ${WRITE_NOTE}) — deploy tools will 403`,
+        fix: 'Recreate the token with the deploy ability if you need those tools',
+      });
+    } else if (deploy === 'unknown') {
+      checks.push({
+        check: 'abilities',
+        status: 'pass',
+        detail: `token grants: read (deploy: could not determine; ${WRITE_NOTE})`,
       });
     } else {
-      checks.push({ check: 'abilities', status: 'pass', detail: `token grants: ${granted}` });
+      checks.push({
+        check: 'abilities',
+        status: 'pass',
+        detail: `token grants: read, deploy (${WRITE_NOTE})`,
+      });
     }
   }
 
   // --- api-shape: is the routing catch-all still shaped the way our v4.2
   // method fallback detection depends on? (#292's check, running itself) ---
-  if (!coolifyVersion) {
+  if (!tokenOk) {
     checks.push({ check: 'api-shape', status: 'skipped', detail: 'token check did not pass' });
   } else {
     try {
@@ -373,23 +419,28 @@ export async function runDoctor(
   env: NodeJS.ProcessEnv,
   fetchImpl: FetchLike = fetch,
   nodeVersion: string = process.version,
+  cliHeaders: Record<string, string> = {},
 ): Promise<DoctorReport> {
   const transport: Transport = env.MCP_TRANSPORT === 'http' ? 'http' : 'stdio';
   const instances: InstanceReport[] = [];
-  for (const instance of instancesFromEnv(env)) {
+  for (const instance of instancesFromEnv(env, cliHeaders)) {
     instances.push(await checkInstance(env, instance, transport, fetchImpl));
   }
   // runtime is process-wide, not per instance
   const major = Number(nodeVersion.replace(/^v/, '').split('.')[0]);
-  instances[0].checks.push({
-    check: 'runtime',
-    status: major >= 20 ? 'pass' : 'warn',
-    detail: `node ${nodeVersion}`,
-    ...(major >= 20 ? {} : { fix: 'coolify-mcp is tested on Node 20+' }),
-  });
+  const checks: DoctorCheck[] = [
+    {
+      check: 'runtime',
+      status: major >= 20 ? 'pass' : 'warn',
+      detail: `node ${nodeVersion}`,
+      ...(major >= 20 ? {} : { fix: 'coolify-mcp is tested on Node 20+' }),
+    },
+  ];
 
-  const ok = instances.every((report) => report.checks.every((c) => c.status !== 'fail'));
-  return { ok, instances };
+  const ok = [...instances.flatMap((report) => report.checks), ...checks].every(
+    (c) => c.status !== 'fail',
+  );
+  return { ok, instances, checks };
 }
 
 const GLYPH: Record<DoctorStatus, string> = {
@@ -406,18 +457,21 @@ export async function runDoctorCli(
   json: boolean,
   fetchImpl: FetchLike = fetch,
   out: (line: string) => void = console.log,
+  cliHeaders: Record<string, string> = {},
 ): Promise<number> {
-  const report = await runDoctor(env, fetchImpl);
+  const report = await runDoctor(env, fetchImpl, process.version, cliHeaders);
   if (json) {
     out(JSON.stringify(report, null, 2));
   } else {
+    const line = (check: DoctorCheck): void => {
+      out(`  ${GLYPH[check.status]} ${check.check}: ${check.detail}`);
+      if (check.fix) out(`      fix: ${check.fix}`);
+    };
     for (const instance of report.instances) {
       out(`coolify-mcp doctor — instance: ${instance.instance}`);
-      for (const check of instance.checks) {
-        out(`  ${GLYPH[check.status]} ${check.check}: ${check.detail}`);
-        if (check.fix) out(`      fix: ${check.fix}`);
-      }
+      instance.checks.forEach(line);
     }
+    report.checks.forEach(line);
     out(report.ok ? 'No failures.' : 'Failures found — fixes listed above.');
   }
   return report.ok ? 0 : 1;

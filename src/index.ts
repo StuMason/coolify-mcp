@@ -10,8 +10,35 @@ async function main(): Promise<void> {
   // `npx @masonator/coolify-mcp doctor` (#368): diagnose the environment and
   // exit — checked before the transport switch so it works in any config.
   if (process.argv[2] === 'doctor') {
+    const args = process.argv.slice(3);
+    const unknown: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '--json') continue;
+      if (args[i] === '--header') {
+        i++; // its value
+        continue;
+      }
+      unknown.push(args[i]);
+    }
+    if (unknown.length > 0) {
+      console.log(
+        'usage: coolify-mcp doctor [--json] [--header "Key: Value"]\n' +
+          'Reads COOLIFY_BASE_URL, COOLIFY_ACCESS_TOKEN and the CF_ACCESS_* pair from the environment. Network probes time out after 10s each.',
+      );
+      process.exitCode = unknown.includes('--help') ? 0 : 2;
+      return;
+    }
     const { runDoctorCli } = await import('./lib/doctor.js');
-    process.exit(await runDoctorCli(process.env, process.argv.includes('--json')));
+    // exitCode + return (never process.exit): stdout may be a pipe (--json | jq)
+    // and exit() would truncate whatever is still buffered.
+    process.exitCode = await runDoctorCli(
+      process.env,
+      args.includes('--json'),
+      fetch,
+      console.log,
+      parseHeaders(process.argv),
+    );
+    return;
   }
 
   // One image, two transports (#303): MCP_TRANSPORT=http hands over to the

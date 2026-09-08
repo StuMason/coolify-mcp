@@ -67,7 +67,7 @@ COOLIFY_BASE_URL="https://your-coolify-instance.com" COOLIFY_ACCESS_TOKEN="your-
   npx @masonator/coolify-mcp doctor
 ```
 
-It checks your config for the classic traps (unexpanded `${VAR}` placeholders, pasted whitespace, a doubled `/api/v1`), that Coolify is reachable (naming Cloudflare Access interception when that's the wall), that your token is accepted and which abilities it carries, and whether your Coolify version is in the tested range — each failure with a one-line fix. Add `--json` for machine-readable output. It never prints a secret.
+It checks your config for the classic traps (unexpanded `${VAR}` placeholders, pasted whitespace, a doubled `/api/v1`), that Coolify is reachable (naming Cloudflare Access interception when that's the wall), that your token is accepted and whether it can deploy (probed side-effect-free; `write` has no safe probe, so doctor says "undetermined" rather than guessing), and whether your Coolify version is in the tested range — each failure with a one-line fix. `--header "Key: Value"` flags are honoured the same as the server honours them; network probes time out after 10s each. Add `--json` for machine-readable output. It never prints a secret.
 
 ## Tools
 
