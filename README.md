@@ -28,6 +28,15 @@ claude mcp add coolify \
   -- npx @masonator/coolify-mcp@latest
 ```
 
+**Codex CLI:**
+
+```bash
+codex mcp add coolify \
+  --env COOLIFY_BASE_URL="https://your-coolify-instance.com" \
+  --env COOLIFY_ACCESS_TOKEN="your-api-token" \
+  -- npx -y @masonator/coolify-mcp@latest
+```
+
 **Any MCP client (JSON config):**
 
 ```json
