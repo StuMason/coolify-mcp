@@ -18,6 +18,7 @@
  */
 
 import { checkStartupConfig, mergeCfAccessHeaders, type Transport } from './startup-check.js';
+import { isRoutingCatchAllBody } from './api-shape.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skipped' | 'inconclusive';
 
@@ -137,18 +138,17 @@ async function probeAbility(
       if (isMemberBlocked(body)) return 'member-blocked';
       return 'unknown';
     }
-    // A 401, a redirect, or a server error is evidence of nothing. Neither is
-    // the routing catch-all 404 (its `docs` body key): that answer means no
-    // middleware ran at all — the exact mechanism that made a GET-based write
-    // probe unsound — so if this route ever moves, the probe must degrade to
-    // "unknown", never to a confident "granted".
-    if (response.status === 401 || response.status >= 500) return 'unknown';
-    if (response.status >= 300 && response.status < 400) return 'unknown';
-    if (response.status === 404) {
-      const body = await readJson(response);
-      if (typeof (body as { docs?: unknown })?.docs === 'string') return 'unknown';
+    // Allowlist, not denylist: "granted" requires a status that proves a
+    // handler beyond the ability gate was reached — 2xx, the paramless 400,
+    // the v4.2 405, or a controller's own 404. Everything else (a 429 from
+    // throttle middleware that runs before the gate, a redirect, a routing
+    // catch-all 404 where nothing ran at all — the mechanism that made a
+    // GET-based write probe unsound) proves nothing and reads as "unknown".
+    if (response.ok || response.status === 400 || response.status === 405) return 'granted';
+    if (response.status === 404 && !isRoutingCatchAllBody(await readJson(response))) {
+      return 'granted';
     }
-    return 'granted';
+    return 'unknown';
   } catch {
     return 'unknown';
   }
@@ -400,8 +400,10 @@ async function checkInstance(
         },
       );
       const body = await readJson(response);
-      const hasDocsKey = typeof (body as { docs?: unknown })?.docs === 'string';
-      if (response.status === 404 && hasDocsKey) {
+      // The same predicate the client's v4.2 method fallback uses — this
+      // check exists to verify what the client actually does.
+      const isCatchAll = isRoutingCatchAllBody(body);
+      if (response.status === 404 && isCatchAll) {
         checks.push({
           check: 'api-shape',
           status: 'pass',
@@ -411,7 +413,7 @@ async function checkInstance(
         checks.push({
           check: 'api-shape',
           status: 'warn',
-          detail: `unrouted path answered HTTP ${response.status}${hasDocsKey ? '' : ' without the expected body shape'}`,
+          detail: `unrouted path answered HTTP ${response.status}${isCatchAll ? '' : ' without the expected body shape'}`,
           fix: 'A Coolify update may have changed API routing — check for a newer coolify-mcp release',
         });
       }

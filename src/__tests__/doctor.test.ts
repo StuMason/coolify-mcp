@@ -338,10 +338,14 @@ describe('runDoctor', () => {
         jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' }),
         'inconclusive',
       ],
+      // The catch-all's exact wording is the second signal even without docs.
+      [jsonResponse(404, { message: 'Not found.' }), 'inconclusive'],
       [
         new Response(null, { status: 302, headers: { location: 'https://x.example.com' } }),
         'inconclusive',
       ],
+      // Throttle middleware answers before the ability gate — proves nothing.
+      [jsonResponse(429, { message: 'Too Many Requests' }), 'inconclusive'],
       // A controller's genuine 404 (no docs key) reached a handler: gate passed.
       [jsonResponse(404, { message: 'Application not found.' }), 'pass'],
     ];
