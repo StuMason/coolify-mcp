@@ -22,8 +22,7 @@ mode. There are no command overrides and no compose file to write.
 
 1. **+ New Resource → Public Repository**
    - Repository: `https://github.com/StuMason/coolify-mcp`
-   - Branch: `v3`. Check this after creation. The branch picker sometimes
-     sticks on `main`, and `main` restart-loops (see troubleshooting).
+   - Branch: `main` (HTTP mode ships on `main` since 3.0.0).
    - Build Pack: **Dockerfile**
    - Ports Exposes: **`8080`**
 2. **Domain:** set one, **with the https scheme**: `https://mcp.example.com`.
@@ -70,6 +69,37 @@ COOLIFY_BASE_URL=http://coolify:8080
 
 A Coolify with no auth proxy in front can use its public URL.
 
+### Coolify behind Cloudflare Access
+
+If the internal-network route is not available (the MCP container runs on a
+different host from Coolify) and your dashboard sits behind Cloudflare
+Access, use an Access **service token** — Cloudflare's machine-to-machine
+path. Without one, every API call 302s to the SSO page while `/healthz`
+stays green, which took down our own reference deployment before this
+existed.
+
+1. In Zero Trust → Access → Service Auth → **Create Service Token**. Note
+   the Client ID and Client Secret.
+2. In the Access application protecting your Coolify domain, add a policy
+   with action **Service Auth** that includes that token.
+3. Set both variables on the MCP container:
+
+   ```text
+   CF_ACCESS_CLIENT_ID=<the client id>
+   CF_ACCESS_CLIENT_SECRET=<the client secret>
+   ```
+
+The pair rides on every request to `COOLIFY_BASE_URL` — tool calls and the
+authorize page's token validation alike — and on nothing else. Setting one
+variable without the other is a startup error. The secret is treated as a
+credential: never logged, never echoed.
+
+One more Cloudflare Access warning while you are here: Access in front of
+the Coolify **dashboard** breaks Coolify's own websockets unless you exempt
+them, and with Livewire down the UI's env-var Save can silently store
+nothing. If you "saved" a variable and the container disagrees, set it via
+the Coolify API instead.
+
 ## Or: have your assistant install it
 
 Already running coolify-mcp over stdio? It can deploy its own HTTP mode.
@@ -78,7 +108,7 @@ Paste this at your assistant:
 ```text
 Deploy the coolify-mcp HTTP container on my Coolify:
 create an application from the public repo https://github.com/StuMason/coolify-mcp,
-branch v3, dockerfile build pack, port 8080, domain https://mcp.MYDOMAIN.
+branch main, dockerfile build pack, port 8080, domain https://mcp.MYDOMAIN.
 Env vars: MCP_TRANSPORT=http, MCP_PUBLIC_URL=mcp.MYDOMAIN,
 COOLIFY_BASE_URL and COOLIFY_ACCESS_TOKEN as I give them to you.
 Add a persistent volume at /data, enable a health check on /healthz port
@@ -154,13 +184,15 @@ internet-facing service.
 | `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                      |
 | `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence                              |
 | `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL |
+| `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)   |
+| `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)   |
 
 ## Troubleshooting: every one of these happened to us
 
-**Container restart-loops, log shows nothing useful.** You are deploying the
-`main` branch. `main` has no HTTP mode: the container starts the stdio
-server, waits on stdin forever, fails the health check, and Coolify restarts
-it. Set the branch to `v3` and redeploy.
+**Container restart-loops, log shows nothing useful.** You are deploying a
+pre-3.0 ref with no HTTP mode: the container starts the stdio server, waits
+on stdin forever, fails the health check, and Coolify restarts it. Set the
+branch to `main` (3.0.0 or later) and redeploy.
 
 **`https://` 503s, `http://` 404s.** The domain was saved with the `http://`
 scheme, so the proxy created no TLS router. Change the Domains field to
@@ -175,6 +207,11 @@ or malformed variable, with instructions. Fix the lot, redeploy once.
 **Authorize page rejects a token you know is good.** The container cannot
 reach Coolify. See the `COOLIFY_BASE_URL` reachability note. The token is
 validated by the container, not by your browser.
+
+**Every tool call fails while `/healthz` stays green.** The health check
+never touches Coolify, so a green check proves only that the container is
+up. If Coolify sits behind Cloudflare Access, see the service-token section
+above — the wire signature is a 302 to `<team>.cloudflareaccess.com`.
 
 **Clients ask to log in again after every deploy.** The `/data` volume is
 missing, so OAuth state dies with the container. Add it under Storages.

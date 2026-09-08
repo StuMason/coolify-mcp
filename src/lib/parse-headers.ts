@@ -5,7 +5,14 @@ export function parseHeaders(argv: string[]): Record<string, string> {
       const value = argv[i + 1];
       const colonIndex = value.indexOf(':');
       if (colonIndex > 0) {
-        headers[value.slice(0, colonIndex).trim()] = value.slice(colonIndex + 1).trim();
+        const key = value.slice(0, colonIndex).trim();
+        // Header names are case-insensitive on the wire: a repeated flag
+        // replaces rather than accumulating two spellings, which fetch would
+        // send comma-joined.
+        for (const existing of Object.keys(headers)) {
+          if (existing.toLowerCase() === key.toLowerCase()) delete headers[existing];
+        }
+        headers[key] = value.slice(colonIndex + 1).trim();
       }
       i++;
     }

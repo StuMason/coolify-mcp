@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Startup config self-check** (#368, first slice). Both entry points now inspect the environment before serving anything and say what is wrong with it on stderr: an unexpanded `${VAR}` placeholder that a launcher failed to substitute (the macOS Keychain failure that cost one team their whole integration), a line break pasted into the token or a header credential (fetch would refuse to send it), leading whitespace on the token (it becomes part of the credential and 401s every call — trailing whitespace is normalized away by fetch and deliberately not flagged), an unusable `COOLIFY_BASE_URL`, or a base URL that already ends in `/api/v1` (the server appends that itself, so every call would 404). Fatal problems are listed together and refuse startup; survivable ones print as warnings. Messages name the variable and the shape of the problem — never the value.
+- **Cloudflare Access service tokens for the Coolify base URL** (#373). If your Coolify control plane sits behind Cloudflare Access, set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (Cloudflare's own names) and every request to `COOLIFY_BASE_URL` — tool calls and HTTP mode's authorize-time token validation alike — carries the `CF-Access-Client-Id`/`CF-Access-Client-Secret` headers. The headers attach to base-URL requests only, never to any other fetch. Setting one variable without the other is a startup error (both or neither). Documented in `docs/http-mode.md`, including the internal-Docker-network alternative that avoids Cloudflare entirely when the container runs next to Coolify.
+
+### Fixed
+
+- **`docs/http-mode.md` no longer tells you to deploy the retired `v3` branch.** HTTP mode ships on `main` since 3.0.0; the guide and its restart-loop troubleshooting entry now say so.
+
 ## [3.0.0] - 2026-09-08
 
 The remote release. 3.0 can run as a container inside your Coolify instance and serve remote MCP clients over Streamable HTTP behind OAuth 2.1 — claude.ai, Claude Desktop and Claude Code all connect with nothing installed locally. For stdio users nothing moves: same entry point, same tools (now 45), and the wire-visible change from the SDK swap is limited to the declared JSON Schema draft.

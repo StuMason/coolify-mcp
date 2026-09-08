@@ -58,6 +58,8 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 
 **Remote (HTTP + OAuth, v3):** deploy the server as a container inside your own Coolify and connect claude.ai or any remote MCP client to `https://your-domain/mcp`. Your Coolify token stays server-side; clients authenticate with OAuth 2.1. See [docs/http-mode.md](docs/http-mode.md).
 
+**Coolify behind Cloudflare Access?** Set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (a Cloudflare Access service token) and every request to `COOLIFY_BASE_URL` carries the Access headers — works in both stdio and HTTP mode. Setup in [docs/http-mode.md](docs/http-mode.md#coolify-behind-cloudflare-access).
+
 ## Tools
 
 | Category             | Tools                                                                                                                                                                     |

@@ -92,6 +92,22 @@ describe('DocsSearchEngine', () => {
     expect(engine.getEntryCount()).toBeGreaterThan(5);
   });
 
+  it('never sends credential headers off-estate, even with CF Access configured (#373)', async () => {
+    // The CF Access service token rides only on Coolify base-URL requests.
+    // This fetch goes to coolify.io — assert it carries no headers at all.
+    process.env.CF_ACCESS_CLIENT_ID = 'id.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cf-secret';
+    try {
+      mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
+      await engine.search('install');
+      const init = mockFetch.mock.calls[0][1] as RequestInit;
+      expect(init.headers).toBeUndefined();
+    } finally {
+      delete process.env.CF_ACCESS_CLIENT_ID;
+      delete process.env.CF_ACCESS_CLIENT_SECRET;
+    }
+  });
+
   it('ranks the obviously right page first', async () => {
     mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
 

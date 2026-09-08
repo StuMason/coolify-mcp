@@ -66,10 +66,19 @@ export function normalizePublicUrl(raw: string): string {
 export async function validateCoolifyToken(
   baseUrl: string,
   presentedToken: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ ok: true; teamName: string } | { ok: false }> {
   try {
+    // extraHeaders carries the Cloudflare Access service token (#373) when
+    // configured — without it, an Access policy 302s this probe to an SSO
+    // page and every authorization fails while /healthz stays green. Spread
+    // first so it can never displace the Authorization being proven.
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/teams/current`, {
-      headers: { Authorization: `Bearer ${presentedToken}`, Accept: 'application/json' },
+      headers: {
+        ...extraHeaders,
+        Authorization: `Bearer ${presentedToken}`,
+        Accept: 'application/json',
+      },
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) return { ok: false };
@@ -313,7 +322,11 @@ export function createHttpApp(config: HttpServerConfig): {
 
       const presented = form.get('coolify_token') ?? '';
       const proof = presented
-        ? await validateCoolifyToken(config.coolify.baseUrl, presented)
+        ? await validateCoolifyToken(
+            config.coolify.baseUrl,
+            presented,
+            config.coolify.customHeaders,
+          )
         : ({ ok: false } as const);
       // `presented` is not referenced past this line: used once as proof,
       // then gone. That property is the tier-2 design.
