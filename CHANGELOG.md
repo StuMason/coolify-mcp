@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Lockfile bumped past four npm advisories to unblock CI** (#363). `npm audit fix` for `fast-uri` (high: SSRF and host-confusion, GHSA-5jgf/f65p/fph4/jqff), `qs` and `@humanfs/node` (moderate), all in the dev/CI install tree this repo controls. This unblocks the `npm audit --audit-level=high` CI gate; it does not change what consumers install — a downstream `@masonator/coolify-mcp` install resolves `fast-uri@3` through `@modelcontextprotocol/sdk` → `ajv`, and this package's `overrides` only apply at its own root. The `body-parser` low (GHSA-v422) is left in place: this server only ever constructs a `StdioServerTransport`, so the SDK's express code paths never load.
+
 ## [2.19.4] - 2026-08-22
 
 The field-test follow-ups from #336, contributed by the field-tester. The headline is an upstream bug: `GET /databases` can drop whole database types, and `list_databases` now repairs that from `/resources`.
