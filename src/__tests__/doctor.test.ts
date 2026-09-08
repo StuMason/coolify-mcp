@@ -310,9 +310,11 @@ describe('runDoctor', () => {
     let report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
     // Unknown is not proof of a missing ability — report only what's proven,
     // say what could not be determined, and don't count the run as green.
-    expect(check(report, 'abilities').status).toBe('inconclusive');
+    expect(check(report, 'abilities').status).toBe('warn');
     expect(check(report, 'abilities').detail).toContain('deploy: could not determine');
-    expect(report.ok).toBe(false);
+    // Visible but non-gating: an undeterminable extra ability must not fail
+    // a healthy instance.
+    expect(report.ok).toBe(true);
 
     const throwing = jest.fn(async (url: unknown, init?: unknown) => {
       const path = String(url).replace(`${BASE}/api/v1`, '');
@@ -334,18 +336,14 @@ describe('runDoctor', () => {
     // that made a GET write probe unsound. If /deploy ever moves, the probe
     // must degrade to "could not determine", not to a confident grant.
     const probeAnswers: Array<[Response, string]> = [
-      [
-        jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' }),
-        'inconclusive',
-      ],
+      [jsonResponse(404, { message: 'Not found.', docs: 'https://coolify.io/docs' }), 'warn'],
       // The catch-all's exact wording is the second signal even without docs.
-      [jsonResponse(404, { message: 'Not found.' }), 'inconclusive'],
-      [
-        new Response(null, { status: 302, headers: { location: 'https://x.example.com' } }),
-        'inconclusive',
-      ],
+      [jsonResponse(404, { message: 'Not found.' }), 'warn'],
+      [new Response(null, { status: 302, headers: { location: 'https://x.example.com' } }), 'warn'],
       // Throttle middleware answers before the ability gate — proves nothing.
-      [jsonResponse(429, { message: 'Too Many Requests' }), 'inconclusive'],
+      [jsonResponse(429, { message: 'Too Many Requests' }), 'warn'],
+      // A paramless GET /deploy never legitimately 200s — anomaly, not proof.
+      [jsonResponse(200, { message: 'unexpected' }), 'warn'],
       // A controller's genuine 404 (no docs key) reached a handler: gate passed.
       [jsonResponse(404, { message: 'Application not found.' }), 'pass'],
     ];
@@ -425,6 +423,16 @@ describe('runDoctor', () => {
     const runtime = check(report, 'runtime');
     expect(runtime.status).toBe('warn');
     expect(runtime.fix).toContain('Node 20+');
+  });
+
+  it('only ever sends GET requests — the side-effect-free invariant', async () => {
+    const fetchMock = healthyFetch();
+    await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(2);
+    for (const call of fetchMock.mock.calls) {
+      const method = (call[1] as RequestInit | undefined)?.method ?? 'GET';
+      expect(method).toBe('GET');
+    }
   });
 
   // The iron rule: no secret ever reaches the output, whatever went wrong.

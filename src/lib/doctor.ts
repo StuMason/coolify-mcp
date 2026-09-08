@@ -139,12 +139,16 @@ async function probeAbility(
       return 'unknown';
     }
     // Allowlist, not denylist: "granted" requires a status that proves a
-    // handler beyond the ability gate was reached — 2xx, the paramless 400,
-    // the v4.2 405, or a controller's own 404. Everything else (a 429 from
-    // throttle middleware that runs before the gate, a redirect, a routing
-    // catch-all 404 where nothing ran at all — the mechanism that made a
-    // GET-based write probe unsound) proves nothing and reads as "unknown".
-    if (response.ok || response.status === 400 || response.status === 405) return 'granted';
+    // handler beyond the ability gate was reached — the paramless 400
+    // (pre-4.2's live GET route without a uuid/tag), the 405 (v4.2.0 and
+    // main both register `GET /deploy` to a 405-returning post_required
+    // handler BEHIND api.ability:deploy — verified in routes/api.php, so the
+    // gate ran), or a controller's own 404. Everything else proves nothing:
+    // a 429 from throttle middleware that runs before the gate, a redirect,
+    // the routing catch-all where nothing ran at all — and a 2xx, which a
+    // paramless GET /deploy never legitimately returns, so it must read as
+    // an anomaly rather than as proof.
+    if (response.status === 400 || response.status === 405) return 'granted';
     if (response.status === 404 && !isRoutingCatchAllBody(await readJson(response))) {
       return 'granted';
     }
@@ -367,9 +371,12 @@ async function checkInstance(
         fix: 'Recreate the token with the deploy ability if you need those tools',
       });
     } else if (deploy === 'unknown') {
+      // Visible but non-gating, like the write note: an undeterminable extra
+      // ability must not fail a healthy instance. The gating "inconclusive"
+      // status stays reserved for checks that verify the setup itself.
       checks.push({
         check: 'abilities',
-        status: 'inconclusive',
+        status: 'warn',
         detail: `token grants: read (deploy: could not determine; ${WRITE_NOTE})`,
       });
     } else {
