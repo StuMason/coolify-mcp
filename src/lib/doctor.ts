@@ -372,6 +372,7 @@ async function checkInstance(
 export async function runDoctor(
   env: NodeJS.ProcessEnv,
   fetchImpl: FetchLike = fetch,
+  nodeVersion: string = process.version,
 ): Promise<DoctorReport> {
   const transport: Transport = env.MCP_TRANSPORT === 'http' ? 'http' : 'stdio';
   const instances: InstanceReport[] = [];
@@ -379,11 +380,11 @@ export async function runDoctor(
     instances.push(await checkInstance(env, instance, transport, fetchImpl));
   }
   // runtime is process-wide, not per instance
-  const major = Number(process.version.replace(/^v/, '').split('.')[0]);
+  const major = Number(nodeVersion.replace(/^v/, '').split('.')[0]);
   instances[0].checks.push({
     check: 'runtime',
     status: major >= 20 ? 'pass' : 'warn',
-    detail: `node ${process.version}`,
+    detail: `node ${nodeVersion}`,
     ...(major >= 20 ? {} : { fix: 'coolify-mcp is tested on Node 20+' }),
   });
 

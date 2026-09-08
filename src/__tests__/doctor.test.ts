@@ -217,6 +217,135 @@ describe('runDoctor', () => {
     expect(check(report, 'token').status).toBe('skipped');
   });
 
+  it('treats a non-Cloudflare redirect as a warning and keeps probing', async () => {
+    const fetchMock = healthyFetch();
+    const base = fetchMock.getMockImplementation()!;
+    let first = true;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      if (first) {
+        // Only the unauthenticated reachability probe sees the redirect.
+        first = false;
+        return new Response(null, {
+          status: 301,
+          headers: { location: 'https://coolify.example.com/api/v1/version' },
+        });
+      }
+      return base(url, init) as Promise<Response>;
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    const reach = check(report, 'reachability');
+    expect(reach.status).toBe('warn');
+    expect(reach.fix).toContain('final URL');
+    expect(check(report, 'token').status).toBe('pass');
+  });
+
+  it('skips reachability when the base URL is set but unusable', async () => {
+    const env = cleanEnv();
+    env.COOLIFY_BASE_URL = 'not a url at all';
+    const fetchMock = jest.fn();
+    const report = await runDoctor(env, fetchMock as unknown as FetchLike);
+    expect(check(report, 'config').status).toBe('fail');
+    expect(check(report, 'reachability').status).toBe('skipped');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a token lacking read from the version endpoint 403', async () => {
+    const fetchMock = jest.fn(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (headers?.Authorization) {
+        return jsonResponse(403, { message: 'Missing required permissions: read' });
+      }
+      return jsonResponse(401, { message: 'Unauthenticated.' });
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    const token = check(report, 'token');
+    expect(token.status).toBe('fail');
+    expect(token.detail).toContain('lacks the "read" ability');
+    expect(check(report, 'version').status).toBe('skipped');
+  });
+
+  it('reports the Member-role block from the version endpoint 403', async () => {
+    const fetchMock = jest.fn(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (headers?.Authorization) {
+        return jsonResponse(403, {
+          message: 'permissions exceed your current role as a team member',
+        });
+      }
+      return jsonResponse(401, { message: 'Unauthenticated.' });
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    expect(check(report, 'token').detail).toContain('team role');
+  });
+
+  it('marks the token check inconclusive on an unexpected status or a thrown probe', async () => {
+    const unexpected = jest.fn(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (headers?.Authorization) return new Response('oops', { status: 500 });
+      return jsonResponse(401, { message: 'Unauthenticated.' });
+    });
+    let report = await runDoctor(cleanEnv(), unexpected as unknown as FetchLike);
+    expect(check(report, 'token').status).toBe('inconclusive');
+
+    const throwing = jest.fn(async (url: unknown, init?: unknown) => {
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (headers?.Authorization) throw new TypeError('boom');
+      return jsonResponse(401, { message: 'Unauthenticated.' });
+    });
+    report = await runDoctor(cleanEnv(), throwing as unknown as FetchLike);
+    expect(check(report, 'token').status).toBe('inconclusive');
+  });
+
+  it('treats an unrecognized 403 body or a thrown ability probe as not-missing', async () => {
+    const fetchMock = jest.fn(async (url: unknown, init?: unknown) => {
+      const path = String(url).replace(`${BASE}/api/v1`, '');
+      const headers = (init as RequestInit | undefined)?.headers as Record<string, string>;
+      if (path === '/version') {
+        return headers?.Authorization
+          ? new Response('4.1.2', { status: 200 })
+          : jsonResponse(401, { message: 'Unauthenticated.' });
+      }
+      if (path === '/enable') return new Response('forbidden', { status: 403 });
+      if (path === '/deploy') throw new TypeError('boom');
+      return jsonResponse(404, { message: 'Not found.', docs: 'x' });
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    const abilities = check(report, 'abilities');
+    // Unknown is not proof of a missing ability — report only what's proven.
+    expect(abilities.status).toBe('pass');
+    expect(abilities.detail).toContain('read');
+    expect(abilities.detail).not.toContain('write');
+  });
+
+  it('marks api-shape inconclusive when the probe itself fails', async () => {
+    const fetchMock = healthyFetch();
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      if (String(url).includes('doctor-probe-')) throw new TypeError('boom');
+      return base(url, init) as Promise<Response>;
+    });
+    const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+    expect(check(report, 'api-shape').status).toBe('inconclusive');
+  });
+
+  it('reports config warnings as a warn without blocking the probes', async () => {
+    const env = cleanEnv();
+    env.COOLIFY_BASE_URL = `${BASE}/api`;
+    const fetchMock = jest.fn(async () => jsonResponse(401, { message: 'Unauthenticated.' }));
+    const report = await runDoctor(env, fetchMock as unknown as FetchLike);
+    const config = check(report, 'config');
+    expect(config.status).toBe('warn');
+    expect(config.detail).toContain('/api');
+    expect(check(report, 'reachability').status).toBe('pass');
+  });
+
+  it('warns on a node version below the tested floor', async () => {
+    const report = await runDoctor(cleanEnv(), healthyFetch() as unknown as FetchLike, 'v18.19.0');
+    const runtime = check(report, 'runtime');
+    expect(runtime.status).toBe('warn');
+    expect(runtime.fix).toContain('Node 20+');
+  });
+
   // The iron rule: no secret ever reaches the output, whatever went wrong.
   it('never includes the token value anywhere in the report', async () => {
     for (const fetchMock of [
