@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased - 3.0.0]
+## [3.0.0] - 2026-09-08
+
+The remote release. 3.0 can run as a container inside your Coolify instance and serve remote MCP clients over Streamable HTTP behind OAuth 2.1 — claude.ai, Claude Desktop and Claude Code all connect with nothing installed locally. For stdio users nothing moves: same entry point, same tools (now 45), and the wire-visible change from the SDK swap is limited to the declared JSON Schema draft.
+
+### Upgrading from 2.x
+
+- **stdio (npx / MCPB / local config): drop-in.** `dist/index.js` is untouched; HTTP mode is a second, additive entry point (`dist/http.js`). No config changes required.
+- **The 2.x line moves to the `v2` branch** and receives security-only backports until the end of January 2027. New features land on 3.x only.
+- **HTTP mode token lifecycle, if you deploy it:** refresh tokens rotate on every use, and a replayed (already-used) refresh token revokes the whole token family — that is reuse detection working, not a bug. The refresh TTL is 8 hours, rolling: clients in active use never re-authenticate; a client idle for more than 8 hours signs in again.
+- **Remote clients cannot run destructive operations in 3.0.** Confirmation prompts (elicitation) fail closed over HTTP, so delete/stop-all class tools refuse rather than act unconfirmed. Use stdio for destructive work, or wait for a 3.x that carries a remote confirmation path. `MCP_READONLY=true` serves an observability-only surface.
 
 ### Added
 
