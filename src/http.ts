@@ -106,15 +106,17 @@ function main(): void {
   // Startup self-check (#368): shape problems (unexpanded ${VAR} literals,
   // pasted whitespace, a doubled /api/v1, a half-set CF Access pair) that
   // would otherwise surface as unexplained 401s deep inside tool calls.
-  const check = checkStartupConfig(process.env);
+  const check = checkStartupConfig(process.env, 'http');
   problems.push(...check.errors);
 
+  // Warnings print even when startup then fails: the operator staring at the
+  // deploy log should learn everything in one boot, not one problem per boot.
+  for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
   if (problems.length > 0) {
     console.error('coolify-mcp http mode cannot start:');
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
-  for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
 
   const coolify: CoolifyConfig = {
     baseUrl,

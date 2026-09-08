@@ -32,6 +32,18 @@ describe('parseHeaders', () => {
     expect(parseHeaders(['--other', 'flag'])).toEqual({});
   });
 
+  it('replaces a repeated header case-insensitively instead of keeping two spellings', () => {
+    // Two spellings of one header would be sent comma-joined by fetch —
+    // fatal for credential headers like CF-Access-Client-Id.
+    const result = parseHeaders([
+      '--header',
+      'cf-access-client-id: first',
+      '--header',
+      'CF-Access-Client-Id: second',
+    ]);
+    expect(result).toEqual({ 'CF-Access-Client-Id': 'second' });
+  });
+
   it('should ignore --header without a following value', () => {
     const result = parseHeaders(['--header']);
     expect(result).toEqual({});

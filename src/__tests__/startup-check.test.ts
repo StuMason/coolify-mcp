@@ -9,7 +9,7 @@ const cleanEnv = (): NodeJS.ProcessEnv => ({
 
 describe('checkStartupConfig', () => {
   it('passes a clean config with no errors or warnings', () => {
-    expect(checkStartupConfig(cleanEnv())).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig(cleanEnv(), 'http')).toEqual({ errors: [], warnings: [] });
   });
 
   // The failure story behind the check: a macOS Keychain entry stored the
@@ -18,7 +18,7 @@ describe('checkStartupConfig', () => {
   it('catches an unexpanded ${VAR} placeholder in the token', () => {
     const env = cleanEnv();
     env.COOLIFY_ACCESS_TOKEN = '${COOLIFY_ACCESS_TOKEN}';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('COOLIFY_ACCESS_TOKEN');
     expect(errors[0]).toContain('unexpanded');
@@ -35,15 +35,24 @@ describe('checkStartupConfig', () => {
       env.CF_ACCESS_CLIENT_ID = 'id.access';
       env.CF_ACCESS_CLIENT_SECRET = 'cf-sentinel-secret';
       env[name] = '${SERVICE_FQDN_COOLIFYMCP}';
-      const { errors } = checkStartupConfig(env);
+      const { errors } = checkStartupConfig(env, 'http');
       expect(errors.some((e) => e.includes(name) && e.includes('unexpanded'))).toBe(true);
     }
+  });
+
+  it('ignores MCP_PUBLIC_URL on stdio, where it is never read', () => {
+    // A shared .env between a stdio config and an HTTP deployment must not
+    // stop a stdio server that would run fine.
+    const env = cleanEnv();
+    env.MCP_PUBLIC_URL = '${SERVICE_FQDN_COOLIFYMCP}';
+    expect(checkStartupConfig(env, 'stdio')).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig(env, 'http').errors).toHaveLength(1);
   });
 
   it('catches a braceless $VAR placeholder', () => {
     const env = cleanEnv();
     env.COOLIFY_ACCESS_TOKEN = '$COOLIFY_ACCESS_TOKEN';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(errors.some((e) => e.includes('unexpanded'))).toBe(true);
   });
 
@@ -54,16 +63,16 @@ describe('checkStartupConfig', () => {
   it('says nothing about trailing whitespace in the token (normalized away, works)', () => {
     const env = cleanEnv();
     env.COOLIFY_ACCESS_TOKEN = '7|sentinelsecretvalue\n';
-    expect(checkStartupConfig(env)).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig(env, 'http')).toEqual({ errors: [], warnings: [] });
     env.COOLIFY_ACCESS_TOKEN = '7|sentinelsecretvalue ';
-    expect(checkStartupConfig(env)).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig(env, 'http')).toEqual({ errors: [], warnings: [] });
   });
 
   it('errors on leading whitespace in the token (survives as part of the credential)', () => {
     for (const value of [' 7|sentinelsecretvalue', '\t7|sentinelsecretvalue']) {
       const env = cleanEnv();
       env.COOLIFY_ACCESS_TOKEN = value;
-      const { errors } = checkStartupConfig(env);
+      const { errors } = checkStartupConfig(env, 'http');
       expect(errors).toHaveLength(1);
       expect(errors[0]).toContain('leading whitespace');
     }
@@ -72,7 +81,7 @@ describe('checkStartupConfig', () => {
   it('errors on an interior line break in the token (fetch refuses to send it)', () => {
     const env = cleanEnv();
     env.COOLIFY_ACCESS_TOKEN = '7|sentinel\nsecretvalue';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('line break');
   });
@@ -81,7 +90,7 @@ describe('checkStartupConfig', () => {
     const env = cleanEnv();
     env.CF_ACCESS_CLIENT_ID = 'id.access';
     env.CF_ACCESS_CLIENT_SECRET = 'cf-sent\ninel-secret';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('CF_ACCESS_CLIENT_SECRET');
     expect(errors[0]).toContain('line break');
@@ -90,7 +99,7 @@ describe('checkStartupConfig', () => {
   it('errors on an unparseable base URL', () => {
     const env = cleanEnv();
     env.COOLIFY_BASE_URL = 'not a url at all';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(
       errors.some((e) => e.includes('COOLIFY_BASE_URL') && e.includes('not a usable URL')),
     ).toBe(true);
@@ -99,7 +108,7 @@ describe('checkStartupConfig', () => {
   it('errors on a non-http scheme', () => {
     const env = cleanEnv();
     env.COOLIFY_BASE_URL = 'ftp://coolify.example.com';
-    const { errors } = checkStartupConfig(env);
+    const { errors } = checkStartupConfig(env, 'http');
     expect(errors.some((e) => e.includes('must be http or https'))).toBe(true);
   });
 
@@ -107,7 +116,7 @@ describe('checkStartupConfig', () => {
     for (const suffix of ['/api/v1', '/api/v1/']) {
       const env = cleanEnv();
       env.COOLIFY_BASE_URL = `https://coolify.example.com${suffix}`;
-      const { errors } = checkStartupConfig(env);
+      const { errors } = checkStartupConfig(env, 'http');
       expect(errors.some((e) => e.includes('/api/v1 itself'))).toBe(true);
     }
   });
@@ -115,32 +124,39 @@ describe('checkStartupConfig', () => {
   it('warns when the base URL ends in /api (could be a deliberate proxy prefix)', () => {
     const env = cleanEnv();
     env.COOLIFY_BASE_URL = 'https://coolify.example.com/api';
-    const { errors, warnings } = checkStartupConfig(env);
+    const { errors, warnings } = checkStartupConfig(env, 'http');
     expect(errors).toEqual([]);
     expect(warnings.some((w) => w.includes('/api/v1 itself'))).toBe(true);
   });
 
   it('leaves unset and empty variables alone (the entry points own required-var errors)', () => {
-    expect(checkStartupConfig({})).toEqual({ errors: [], warnings: [] });
-    expect(checkStartupConfig({ COOLIFY_ACCESS_TOKEN: '' })).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig({}, 'http')).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig({ COOLIFY_ACCESS_TOKEN: '' }, 'http')).toEqual({
+      errors: [],
+      warnings: [],
+    });
   });
 
   it('errors when exactly one CF Access variable is set, naming the missing one', () => {
     const idOnly = cleanEnv();
     idOnly.CF_ACCESS_CLIENT_ID = 'id.access';
-    expect(checkStartupConfig(idOnly).errors[0]).toContain('CF_ACCESS_CLIENT_SECRET is not');
+    expect(checkStartupConfig(idOnly, 'http').errors[0]).toContain(
+      'CF_ACCESS_CLIENT_SECRET is not',
+    );
 
     const secretOnly = cleanEnv();
     secretOnly.CF_ACCESS_CLIENT_SECRET = 'cf-sentinel-secret';
-    expect(checkStartupConfig(secretOnly).errors[0]).toContain('CF_ACCESS_CLIENT_ID is not');
+    expect(checkStartupConfig(secretOnly, 'http').errors[0]).toContain(
+      'CF_ACCESS_CLIENT_ID is not',
+    );
   });
 
   it('accepts the CF Access pair together, and neither', () => {
     const both = cleanEnv();
     both.CF_ACCESS_CLIENT_ID = 'id.access';
     both.CF_ACCESS_CLIENT_SECRET = 'cf-sentinel-secret';
-    expect(checkStartupConfig(both).errors).toEqual([]);
-    expect(checkStartupConfig(cleanEnv()).errors).toEqual([]);
+    expect(checkStartupConfig(both, 'http').errors).toEqual([]);
+    expect(checkStartupConfig(cleanEnv(), 'http').errors).toEqual([]);
   });
 
   // The iron rule of #368: messages name variables and shapes, never values.
@@ -151,7 +167,7 @@ describe('checkStartupConfig', () => {
       MCP_PUBLIC_URL: 'prefix${UNEXPANDED}suffix-sentinel',
       CF_ACCESS_CLIENT_SECRET: 'cf-sentinel-secret',
     };
-    const { errors, warnings } = checkStartupConfig(env);
+    const { errors, warnings } = checkStartupConfig(env, 'http');
     const output = [...errors, ...warnings].join('\n');
     expect(errors.length + warnings.length).toBeGreaterThanOrEqual(3);
     for (const sentinel of ['sentinelsecretvalue', 'suffix-sentinel', 'cf-sentinel-secret']) {

@@ -21,14 +21,30 @@ export interface StartupCheckResult {
   warnings: string[];
 }
 
-/** The env vars whose values we sanity-check. Secrets among them are only ever described, never echoed. */
-const CHECKED_VARS = [
-  'COOLIFY_BASE_URL',
-  'COOLIFY_ACCESS_TOKEN',
-  'MCP_PUBLIC_URL',
-  'CF_ACCESS_CLIENT_ID',
-  'CF_ACCESS_CLIENT_SECRET',
-] as const;
+/**
+ * The env vars whose values we sanity-check, per transport. Secrets among
+ * them are only ever described, never echoed. MCP_PUBLIC_URL is HTTP-only:
+ * stdio never reads it, so a broken value there (say, a shared .env with an
+ * unexpanded Coolify magic var) must not stop a stdio server that would run
+ * fine.
+ */
+const CHECKED_VARS = {
+  stdio: [
+    'COOLIFY_BASE_URL',
+    'COOLIFY_ACCESS_TOKEN',
+    'CF_ACCESS_CLIENT_ID',
+    'CF_ACCESS_CLIENT_SECRET',
+  ],
+  http: [
+    'COOLIFY_BASE_URL',
+    'COOLIFY_ACCESS_TOKEN',
+    'MCP_PUBLIC_URL',
+    'CF_ACCESS_CLIENT_ID',
+    'CF_ACCESS_CLIENT_SECRET',
+  ],
+} as const;
+
+export type Transport = keyof typeof CHECKED_VARS;
 
 /**
  * An unexpanded shell/launcher placeholder: the whole value is `${VAR}`,
@@ -48,11 +64,14 @@ function looksUnexpanded(value: string): boolean {
 
 const HEADER_BREAKING = /[\0\r\n]/;
 
-export function checkStartupConfig(env: NodeJS.ProcessEnv): StartupCheckResult {
+export function checkStartupConfig(
+  env: NodeJS.ProcessEnv,
+  transport: Transport,
+): StartupCheckResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  for (const name of CHECKED_VARS) {
+  for (const name of CHECKED_VARS[transport]) {
     const value = env[name];
     if (value !== undefined && value !== '' && looksUnexpanded(value)) {
       errors.push(

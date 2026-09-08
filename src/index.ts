@@ -18,7 +18,7 @@ async function main(): Promise<void> {
   // Startup self-check (#368): most "it's broken" reports are the
   // environment, so say what's wrong with it before failing somewhere deep.
   // stderr is safe on stdio — the protocol owns stdout only.
-  const check = checkStartupConfig(process.env);
+  const check = checkStartupConfig(process.env, 'stdio');
   for (const warning of check.warnings) console.error(`coolify-mcp: warning: ${warning}`);
   if (check.errors.length > 0) {
     console.error('coolify-mcp cannot start:');
