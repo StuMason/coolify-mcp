@@ -12,10 +12,8 @@
  * Every Coolify call is spied, so no test here talks to an API.
  */
 import { describe, it, expect, jest } from '@jest/globals';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ElicitRequestSchema, type ElicitResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Client, InMemoryTransport, type ElicitResult } from '@modelcontextprotocol/client';
+import type { Server } from '@modelcontextprotocol/server';
 import { CoolifyMcpServer } from '../lib/mcp-server.js';
 import {
   confirmDestructive,
@@ -56,8 +54,8 @@ async function harness(answer?: Answer): Promise<Harness> {
 
   const prompts: string[] = [];
   if (answer) {
-    client.setRequestHandler(ElicitRequestSchema, async (request) => {
-      const { message } = request.params as { message: string };
+    client.setRequestHandler('elicitation/create', async (request) => {
+      const { message } = request.params;
       prompts.push(message);
       return answer(message);
     });
@@ -323,7 +321,7 @@ describe('elicitation: cancellation and no-ops', () => {
       { capabilities: { elicitation: {} } },
     );
     let asked = false;
-    client.setRequestHandler(ElicitRequestSchema, async () => {
+    client.setRequestHandler('elicitation/create', async () => {
       asked = true;
       // The human accepts, but only *after* the caller has given up — the
       // t=90s accept following a t=60s client timeout, scaled down. A test
@@ -337,9 +335,7 @@ describe('elicitation: cancellation and no-ops', () => {
     const { stopAllApps } = stubEstate(server);
 
     await expect(
-      client.callTool({ name: 'stop_all_apps', arguments: { confirm: true } }, undefined, {
-        timeout: 250,
-      }),
+      client.callTool({ name: 'stop_all_apps', arguments: { confirm: true } }, { timeout: 250 }),
     ).rejects.toThrow();
 
     // Wait past the point where the late accept lands. Without the signal

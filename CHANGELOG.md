@@ -5,11 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-09-08
+
+The remote release. 3.0 can run as a container inside your Coolify instance and serve remote MCP clients over Streamable HTTP behind OAuth 2.1 — claude.ai, Claude Desktop and Claude Code all connect with nothing installed locally. For stdio users nothing moves: same entry point, same tools (now 45), and the wire-visible change from the SDK swap is limited to the declared JSON Schema draft.
+
+### Upgrading from 2.x
+
+- **stdio (npx / MCPB / local config): drop-in.** `dist/index.js` is untouched; HTTP mode is a second, additive entry point (`dist/http.js`). No config changes required.
+- **The 2.x line moves to the `v2` branch** and receives security-only backports until the end of January 2027. New features land on 3.x only.
+- **HTTP mode token lifecycle, if you deploy it:** refresh tokens rotate on every use, and a replayed (already-used) refresh token revokes the whole token family — that is reuse detection working, not a bug. The refresh TTL is 8 hours, rolling: clients in active use never re-authenticate; a client idle for more than 8 hours signs in again.
+- **Remote clients cannot run destructive operations in 3.0.** Confirmation prompts (elicitation) fail closed over HTTP, so delete/stop-all class tools refuse rather than act unconfirmed. Use stdio for destructive work, or wait for a 3.x that carries a remote confirmation path. `MCP_READONLY=true` serves an observability-only surface.
+
+### Added
+
+- **HTTP mode (#303): run the server as a container inside Coolify and connect remote MCP clients over Streamable HTTP with OAuth 2.1.** A second entry point (`dist/http.js`, additive; stdio is untouched) serves the same 45 tools behind a built-in OAuth 2.1 authorization server: dynamic client registration (RFC 7591), PKCE-required authorization code flow, rotating refresh tokens with reuse detection, audience-bound opaque tokens (RFC 8707), and AS/protected-resource metadata discovery (RFC 8414/9728). Authorisation is "Coolify token as proof of access": at authorize time you present your own Coolify API token, the container validates it against `GET /teams/current` and discards it — the container acts only with its env-configured token, no client ever receives a Coolify credential, and there is no secrets store (the state volume holds registered clients and token hashes only). In HTTP mode destructive operations require a human via elicitation (fail closed), and `MCP_READONLY=true` serves an observability-only surface by never registering mutating tools. Ships with a Dockerfile, a GHCR image workflow, and a Coolify compose template — see `docs/http-mode.md`.
+
+- **Three Coolify API parameters the tools never exposed** (#351, reported by a field-tester on 2.19.3). `service create` now takes `destination_uuid` (and `environment_uuid`) — on a server with more than one Docker network `POST /services` refuses without it, so creating a service there was impossible through the MCP even though `application` and `database` already accepted it. `database` gains an `update` action over the existing `PATCH /databases/{uuid}` client method, which is how you expose an existing database on a public port (`is_public` + `public_port`) or change its limits and credentials; `public_port: null` clears an assigned port, and create-only fields are stripped before the PATCH. `service create` and `update` now take `is_container_label_escape_enabled`; `service update` also takes `connect_to_docker_network`, the toggle that attaches a stack to the shared `coolify` network so two stacks can resolve each other by container name, (the label-escape flag is the Traefik basic-auth prerequisite that was documented as UI-only). The update payload is an explicit pick now instead of every tool argument spread into the PATCH. Going public (`is_public: true`, on `database update` or `create`) asks for confirmation like a delete does, since it is the widest non-delete change in the surface; changing any credential (user or password) on `update` asks for confirmation too, since every app holding the old value breaks on the spot; one call that both exposes and rotates gets one prompt naming both, and an `update` with nothing to change is refused instead of sending an empty PATCH. New read-only `list_destinations` tool (`GET /destinations`, or `/servers/{uuid}/destinations` with `server_uuid`; Coolify v4.2+, older instances 404) so the `destination_uuid` value is discoverable without the browser.
+
+### Changed
+
+- **SDK v2 (`@modelcontextprotocol/server`)** (#259): the stateless split-package core replaces `@modelcontextprotocol/sdk`. Tool surface is unchanged; the only wire-visible difference is the declared JSON Schema draft on `tools/list` (draft-07 → 2020-12).
 
 ### Security
 
-- **Lockfile bumped past four npm advisories to unblock CI** (#363). `npm audit fix` for `fast-uri` (high: SSRF and host-confusion, GHSA-5jgf/f65p/fph4/jqff), `qs` and `@humanfs/node` (moderate), all in the dev/CI install tree this repo controls. This unblocks the `npm audit --audit-level=high` CI gate; it does not change what consumers install — a downstream `@masonator/coolify-mcp` install resolves `fast-uri@3` through `@modelcontextprotocol/sdk` → `ajv`, and this package's `overrides` only apply at its own root. The `body-parser` low (GHSA-v422) is left in place: this server only ever constructs a `StdioServerTransport`, so the SDK's express code paths never load.
+- **Lockfile bumped past four npm advisories** (#363, applied on the 2.x line and carried here). `npm audit fix` for `fast-uri` (high: SSRF and host-confusion, GHSA-5jgf/f65p/fph4/jqff), `qs` and `@humanfs/node` (moderate). On 2.x this only unblocked the CI audit gate — the stdio server never loads the SDK's express paths. In 3.0's HTTP mode the express stack is live, so these resolutions (and the `body-parser` fix this branch's tree already carries) are load-bearing, not just hygiene.
 
 ## [2.19.4] - 2026-08-22
 

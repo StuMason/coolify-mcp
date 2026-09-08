@@ -25,6 +25,7 @@
   "list_applications",
   "list_databases",
   "list_deployments",
+  "list_destinations",
   "list_servers",
   "list_services",
   "logs",

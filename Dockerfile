@@ -27,9 +27,19 @@ RUN npm ci --omit=dev --ignore-scripts
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
+# OAuth state volume for HTTP mode (holds OAuth artefacts only — registered
+# clients and token hashes — never a Coolify credential).
+RUN mkdir -p /data && chown node:node /data
+VOLUME /data
+
+USER node
+
 # Environment variables (must be provided at runtime)
 ENV COOLIFY_BASE_URL=""
 ENV COOLIFY_ACCESS_TOKEN=""
 
-# Run the MCP server
-ENTRYPOINT ["node", "dist/index.js"]
+# Default is the stdio server (unchanged behaviour for existing users).
+# HTTP mode (#303): override the command with dist/http.js and set
+# MCP_PUBLIC_URL — see docs/http-mode.md.
+ENTRYPOINT ["node"]
+CMD ["dist/index.js"]

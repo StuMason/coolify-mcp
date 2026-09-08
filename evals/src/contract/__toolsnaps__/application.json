@@ -36,6 +36,7 @@
         "type": "string"
       },
       "destination_uuid": {
+        "description": "Required if the server has multiple destinations; find it with `list_destinations`.",
         "type": "string"
       },
       "git_repository": {
@@ -160,6 +161,6 @@
     "required": [
       "action"
     ],
-    "$schema": "http://json-schema.org/draft-07/schema#"
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
   }
 }

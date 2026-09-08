@@ -1,9 +1,9 @@
 {
   "name": "@masonator/coolify-mcp",
   "scope": "@masonator",
-  "version": "2.19.4",
+  "version": "3.0.0-alpha.1",
   "mcpName": "io.github.StuMason/coolify",
-  "description": "MCP server for Coolify — 44 optimized tools for infrastructure management, diagnostics, and documentation search",
+  "description": "MCP server for Coolify — 45 optimized tools for infrastructure management, diagnostics, and documentation search",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,7 +14,8 @@
     }
   },
   "bin": {
-    "coolify-mcp": "dist/index.js"
+    "coolify-mcp": "dist/index.js",
+    "coolify-mcp-http": "dist/http.js"
   },
   "files": [
     "dist"
@@ -36,7 +37,8 @@
     "prepare": "husky",
     "prepublishOnly": "npm test && npm run lint",
     "version": "node scripts/sync-manifests.mjs && prettier --write server.json manifest.json && git add server.json manifest.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:http": "node dist/http.js"
   },
   "keywords": [
     "coolify",
@@ -63,12 +65,14 @@
     "url": "https://github.com/StuMason/coolify-mcp/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.23.0",
+    "@modelcontextprotocol/core": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "minisearch": "^7.2.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.0.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
@@ -98,9 +102,6 @@
     "@hono/node-server": "^2.0.5",
     "express-rate-limit": "^8.5.2",
     "path-to-regexp": "^8.4.2",
-    "@modelcontextprotocol/sdk": {
-      "ajv": "^8.20.0"
-    },
     "fast-uri": "^4.0.0",
     "ip-address": "^10.2.0",
     "flatted": "^3.4.2",

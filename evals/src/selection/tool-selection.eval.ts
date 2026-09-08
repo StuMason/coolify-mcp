@@ -69,6 +69,12 @@ const CASES: SelectionCase[] = [
     // globally via TOLERATED_MUTATION, so no per-case allowance is needed here.
   },
   {
+    name: 'destination uuid → list_destinations',
+    input: 'where do I find the destination uuid for server hetzner-fsn1?',
+    expectTool: ['list_destinations'],
+    kind: 'read',
+  },
+  {
     name: 'recent deploys → deployment tooling',
     input: 'show me recent deploys for shop-frontend',
     expectTool: ['deployment', 'list_deployments'],
