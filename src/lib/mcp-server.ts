@@ -2205,9 +2205,15 @@ export class CoolifyMcpServer extends McpServer {
           vars: T[],
         ): T[] => {
           const filtered = key ? vars.filter((v) => v.key === key) : vars;
+          // `every`, not `some`: Coolify auto-creates a preview twin for each
+          // production application env var (#291), so an exact-key filter
+          // legitimately yields two rows, and one of them carrying the value
+          // is a successful read. v4.2 withholding strips every row, which
+          // this still catches.
           if (
             reveal === true &&
-            filtered.some((v) => !hasReturnedValue(v.value) && !hasReturnedValue(v.real_value))
+            filtered.length > 0 &&
+            filtered.every((v) => !hasReturnedValue(v.value) && !hasReturnedValue(v.real_value))
           ) {
             throw new Error(
               'Coolify did not return the requested environment variable value. The API or token does not support sensitive env-var reads; use a token with read:sensitive permission (and the required owner/admin role on newer Coolify versions).',
