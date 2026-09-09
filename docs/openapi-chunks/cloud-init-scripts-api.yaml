@@ -1,0 +1,144 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /cloud-init-scripts:
+    get:
+      tags:
+        - 'Cloud-init Scripts'
+      summary: 'List Cloud-init Scripts'
+      description: 'List all cloud-init scripts for the authenticated team.'
+      operationId: list-cloud-init-scripts
+      responses:
+        '200':
+          description: 'Cloud-init scripts for the team.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Cloud-init Scripts'
+      summary: 'Create Cloud-init Script'
+      description: 'Create a new cloud-init script for the authenticated team.'
+      operationId: create-cloud-init-script
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+                - script
+              properties:
+                name:
+                  type: string
+                script:
+                  description: 'Bash script (#!) or cloud-config YAML.'
+                  type: string
+              type: object
+      responses:
+        '201':
+          description: 'Cloud-init script created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/cloud-init-scripts/{uuid}':
+    get:
+      tags:
+        - 'Cloud-init Scripts'
+      summary: 'Get Cloud-init Script'
+      description: 'Get a cloud-init script by UUID.'
+      operationId: get-cloud-init-script-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloud-init script.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - 'Cloud-init Scripts'
+      summary: 'Delete Cloud-init Script'
+      description: 'Delete a cloud-init script by UUID.'
+      operationId: delete-cloud-init-script-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloud-init script deleted.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Cloud-init Scripts'
+      summary: 'Update Cloud-init Script'
+      description: 'Update a cloud-init script by UUID.'
+      operationId: update-cloud-init-script-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                script:
+                  type: string
+              type: object
+      responses:
+        '200':
+          description: 'Cloud-init script updated.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

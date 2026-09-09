@@ -77,6 +77,8 @@ export async function validateCoolifyToken(
     // configured — without it, an Access policy 302s this probe to an SSO
     // page and every authorization fails while /healthz stays green. Spread
     // first so it can never displace the Authorization being proven.
+    // `/teams/current`, not the spec's `/team`: the old path is still routed
+    // upstream and is the only one on 4.0–4.2 (#347, CLAUDE.md gotcha).
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/teams/current`, {
       headers: {
         ...extraHeaders,

@@ -33,18 +33,25 @@ export const CHUNKS_DIR = path.join(ROOT, 'docs/openapi-chunks');
  */
 export const GROUPS = {
   applications: 'applications-api',
+  'cloud-init-scripts': 'cloud-init-scripts-api',
   databases: 'databases-api',
   deploy: 'deployments-api',
   deployments: 'deployments-api',
   destinations: 'destinations-api',
   digitalocean: 'cloud-providers-api',
+  'gitlab-apps': 'gitlab-apps-api',
   hetzner: 'cloud-providers-api',
+  mcp: 'mcp-api',
+  notifications: 'notifications-api',
   projects: 'projects-api',
+  's3-storages': 's3-storages-api',
   resources: 'resources-api',
   security: 'private-keys-api',
   servers: 'servers-api',
   services: 'services-api',
   tags: 'tags-api',
+  // `/team` (singular: the token's own team, 4.3+) is tagged Teams upstream.
+  team: 'teams-api',
   teams: 'teams-api',
   vultr: 'cloud-providers-api',
 };
@@ -58,6 +65,23 @@ export const GROUPS = {
  * swallowed into schemas.yaml.
  */
 export const DROPPED_TOP_LEVEL_KEYS = ['servers', 'tags'];
+
+/**
+ * First path segments that deliberately fall through to `untagged-api`. The
+ * bare instance-level routes have no resource to be grouped under; the rest
+ * are small enough not to earn a file. A test asserts the spec's untagged set
+ * is exactly this list, so a re-vendor that brings a new resource family
+ * fails loudly and forces the GROUPS decision instead of silently growing
+ * the dumping ground (#347 review).
+ */
+export const UNTAGGED_SEGMENTS = [
+  'cloud-tokens',
+  'disable',
+  'enable',
+  'github-apps',
+  'health',
+  'version',
+];
 
 /** Top-level keys that make up the header shared by every chunk. */
 const HEADER_KEYS = ['openapi', 'info'];

@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /s3-storages:
+    get:
+      tags:
+        - 'S3 Storages'
+      summary: 'List S3 Storages'
+      description: 'List all S3 storages for the authenticated team.'
+      operationId: list-s3-storages
+      responses:
+        '200':
+          description: 'Get all S3 storages.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { uuid: { type: string }, name: { type: string }, description: { type: string, nullable: true }, endpoint: { type: string }, bucket: { type: string }, region: { type: string }, is_usable: { type: boolean }, team_id: { type: integer }, created_at: { type: string }, updated_at: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'S3 Storages'
+      summary: 'Create S3 Storage'
+      description: 'Create a new S3 storage configuration for the authenticated team.'
+      operationId: create-s3-storage
+      requestBody:
+        description: 'S3 storage details'
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+                - endpoint
+                - bucket
+                - region
+                - key
+                - secret
+              properties:
+                name:
+                  type: string
+                  example: 'My S3 Storage'
+                  description: 'A friendly name for the storage.'
+                description:
+                  type: string
+                  nullable: true
+                  description: 'Optional description.'
+                endpoint:
+                  type: string
+                  example: 'https://s3.us-east-1.amazonaws.com'
+                  description: 'S3-compatible endpoint URL.'
+                bucket:
+                  type: string
+                  example: my-bucket
+                  description: 'S3 bucket name.'
+                region:
+                  type: string
+                  example: us-east-1
+                  description: 'S3 region.'
+                key:
+                  type: string
+                  description: 'Access key.'
+                secret:
+                  type: string
+                  description: 'Secret key.'
+                is_usable:
+                  type: boolean
+                  description: 'Whether the storage is marked usable.'
+              type: object
+      responses:
+        '201':
+          description: 'S3 storage created.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string, example: og888os, description: 'The UUID of the S3 storage.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/s3-storages/{uuid}':
+    get:
+      tags:
+        - 'S3 Storages'
+      summary: 'Get S3 Storage'
+      description: 'Get S3 storage by UUID.'
+      operationId: get-s3-storage-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'S3 Storage UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Get S3 storage by UUID'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                  name: { type: string }
+                  description: { type: string, nullable: true }
+                  endpoint: { type: string }
+                  bucket: { type: string }
+                  region: { type: string }
+                  is_usable: { type: boolean }
+                  team_id: { type: integer }
+                  created_at: { type: string }
+                  updated_at: { type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - 'S3 Storages'
+      summary: 'Delete S3 Storage'
+      description: 'Delete S3 storage by UUID.'
+      operationId: delete-s3-storage-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the S3 storage.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'S3 storage deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'S3 storage deleted.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'S3 Storages'
+      summary: 'Update S3 Storage'
+      description: 'Update S3 storage by UUID.'
+      operationId: update-s3-storage-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'S3 Storage UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: 'S3 storage fields to update.'
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'A friendly name for the storage.'
+                description:
+                  type: string
+                  nullable: true
+                  description: 'Optional description.'
+                endpoint:
+                  type: string
+                  description: 'S3-compatible endpoint URL.'
+                bucket:
+                  type: string
+                  description: 'S3 bucket name.'
+                region:
+                  type: string
+                  description: 'S3 region.'
+                key:
+                  type: string
+                  description: 'Access key.'
+                secret:
+                  type: string
+                  description: 'Secret key.'
+                is_usable:
+                  type: boolean
+                  description: 'Whether the storage is marked usable.'
+              type: object
+      responses:
+        '200':
+          description: 'S3 storage updated.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/s3-storages/{uuid}/validate':
+    post:
+      tags:
+        - 'S3 Storages'
+      summary: 'Validate S3 Storage'
+      description: 'Validate an S3 storage connection using ListObjectsV2.'
+      operationId: validate-s3-storage-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'S3 Storage UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'S3 storage validation result.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  valid: { type: boolean, example: true }
+                  message: { type: string, example: 'S3 storage connection is valid.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
