@@ -33,28 +33,16 @@ afterAll(async () => {
 const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
- * Backticked tokens in prompt text that are meant to be tool names. Prompt
- * prose also backticks argument names (`lines`, `page`, `instance`) and action
- * values, so the "names only real tools" check needs to know which tokens are
- * claims about the tool surface. Kept as an explicit list rather than a clever
- * heuristic: a new tool named in a prompt should have to be added here, which
- * is the moment to ask whether it exists in read-only mode.
+ * Backticked tokens in prompt text that are deliberately NOT tool names.
+ *
+ * The "names only real tools" check below flags every backticked token that is
+ * not a registered tool, so it fails closed: a prompt naming a tool that does
+ * not exist is caught by default. Prompt prose also backticks argument names,
+ * and those need listing here — which is the safer direction to be wrong in,
+ * because forgetting to list an argument fails loudly while forgetting to list
+ * a tool used to pass silently.
  */
-const TOOL_LIKE = new Set([
-  'diagnose_app',
-  'diagnose_server',
-  'logs',
-  'application_logs',
-  'env_vars',
-  'deployment',
-  'find_issues',
-  'get_infrastructure_overview',
-  'get_application',
-  'list_applications',
-  'list_deployments',
-  'control',
-  'deploy',
-]);
+const NOT_A_TOOL = new Set(['lines', 'page', 'instance']);
 
 describe('tool contract', () => {
   // The per-tool snapshots below catch a CHANGED tool, but not a REMOVED one:
@@ -156,11 +144,11 @@ describe('prompt contract', () => {
         .map((m) => (m.content.type === 'text' ? m.content.text : ''))
         .join('\n');
       // Tools are named in backticks throughout the prompt text, which is what
-      // makes this checkable rather than a guess at prose.
+      // makes this checkable rather than a guess at prose. Anything backticked
+      // that is neither a registered tool nor a known argument name is a
+      // finding, so the check fails closed on a tool that does not exist.
       for (const [, named] of text.matchAll(/`([a-z_]+)`/g)) {
-        // Argument names and action values share the backtick convention;
-        // only flag a token that looks like a tool and is not one.
-        if (!registered.has(named) && TOOL_LIKE.has(named)) {
+        if (!registered.has(named) && !NOT_A_TOOL.has(named)) {
           offenders.push(`${prompt.name} names \`${named}\``);
         }
       }
@@ -189,6 +177,14 @@ describe('resource contract', () => {
         2,
       ) + '\n',
     ).toMatchFileSnapshot('__toolsnaps__/_resources.json');
+  });
+
+  it('no two listed resources share a display title', async () => {
+    // `title` takes precedence over `name` in clients that implement it, so a
+    // shared title renders an estate of applications as N identical rows —
+    // which defeats the reason the listing makes API calls at all.
+    const titles = ctx.resourceInfo.map((r) => r.title ?? r.name);
+    expect(titles).toEqual([...new Set(titles)]);
   });
 
   it('reading an application resource returns exactly what get_application returns', async () => {

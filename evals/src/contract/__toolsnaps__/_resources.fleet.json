@@ -2,56 +2,56 @@
   "resources": [
     {
       "name": "api-gateway (default)",
-      "title": "Application detail",
+      "title": "api-gateway (default)",
       "uri": "coolify://default/application/app-api",
       "description": "exited:unhealthy — https://api.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "log-viewer (default)",
-      "title": "Application detail",
+      "title": "log-viewer (default)",
       "uri": "coolify://default/application/app-logviewer",
       "description": "running:healthy — https://logs.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "shop-frontend (default)",
-      "title": "Application detail",
+      "title": "shop-frontend (default)",
       "uri": "coolify://default/application/app-shop",
       "description": "running:healthy — https://shop.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "default overview",
-      "title": "Infrastructure overview",
+      "title": "default overview",
       "uri": "coolify://default/overview",
       "description": "Every resource on the \"default\" instance.",
       "mimeType": "application/json"
     },
     {
       "name": "api-gateway (staging)",
-      "title": "Application detail",
+      "title": "api-gateway (staging)",
       "uri": "coolify://staging/application/app-api",
       "description": "exited:unhealthy — https://api.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "log-viewer (staging)",
-      "title": "Application detail",
+      "title": "log-viewer (staging)",
       "uri": "coolify://staging/application/app-logviewer",
       "description": "running:healthy — https://logs.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "shop-frontend (staging)",
-      "title": "Application detail",
+      "title": "shop-frontend (staging)",
       "uri": "coolify://staging/application/app-shop",
       "description": "running:healthy — https://shop.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "staging overview",
-      "title": "Infrastructure overview",
+      "title": "staging overview",
       "uri": "coolify://staging/overview",
       "description": "Every resource on the \"staging\" instance.",
       "mimeType": "application/json"

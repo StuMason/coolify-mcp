@@ -86,7 +86,11 @@ describe('fleet tool contract', () => {
 describe('fleet prompt and resource contract (#371)', () => {
   it('the fleet prompt list matches its snapshot', async () => {
     await expect(
-      JSON.stringify([...ctx.promptInfo].sort((a, b) => byName(a.name, b.name)), null, 2) + '\n',
+      JSON.stringify(
+        [...ctx.promptInfo].sort((a, b) => byName(a.name, b.name)),
+        null,
+        2,
+      ) + '\n',
     ).toMatchFileSnapshot('__toolsnaps__/_prompts.fleet.json');
   });
 
@@ -158,6 +162,26 @@ describe('fleet prompt and resource contract (#371)', () => {
       summary: Record<string, number>;
     };
     expect(parsed.summary.applications).toBeGreaterThan(0);
+  });
+
+  it('an application URI reads the instance it names', async () => {
+    // The one resource path where a routing mistake serves production's
+    // configuration under a staging URI. Both instances point at the same
+    // fixture here, so the assertion is that the scoped URI resolves and
+    // returns that application rather than erroring or returning a list.
+    const read = await ctx.client.readResource({
+      uri: 'coolify://staging/application/app-api',
+    });
+    const parsed = JSON.parse((read.contents[0] as { text: string }).text) as { uuid?: string };
+    expect(parsed.uuid).toBe('app-api');
+  });
+
+  it('an application URI with no uuid is an error, not the whole application list', async () => {
+    // `GET /applications/` is Laravel's index route, so an empty uuid would
+    // return every application under a URI claiming exactly one.
+    await expect(
+      ctx.client.readResource({ uri: 'coolify://staging/application/' }),
+    ).rejects.toThrow();
   });
 
   it('an unknown instance in a URI is an error, not the default instance', async () => {

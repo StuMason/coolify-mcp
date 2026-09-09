@@ -1022,6 +1022,11 @@ export class CoolifyMcpServer extends McpServer {
     );
   }
 
+  /** Configured instance names matching what has been typed so far. */
+  private completeInstance(value: string): string[] {
+    return this.registry.names.filter((name) => name.startsWith(value));
+  }
+
   private registerPrompts(): void {
     this.definePrompt(
       'troubleshoot_application',
@@ -1065,6 +1070,24 @@ export class CoolifyMcpServer extends McpServer {
       {},
       (_args, ctx) => estateHealthPrompt(ctx),
     );
+
+    // Boot-time roster check, mirroring what `defineTool` does with
+    // TOOL_ANNOTATIONS. Adding a prompt and forgetting {@link PROMPT_NAMES}
+    // should fail on the first run rather than as a snapshot diff nobody
+    // reads. Only a full server must carry every prompt: read-only mode drops
+    // any whose tools are gone, which is the design and not a defect.
+    const unknown = [...this.registeredPrompts].filter(
+      (name) => !(PROMPT_NAMES as readonly string[]).includes(name),
+    );
+    if (unknown.length > 0) {
+      throw new Error(`Prompt(s) missing from PROMPT_NAMES: ${unknown.join(', ')}`);
+    }
+    if (!this.serverOptions.readonly) {
+      const absent = PROMPT_NAMES.filter((name) => !this.registeredPrompts.has(name));
+      if (absent.length > 0) {
+        throw new Error(`PROMPT_NAMES lists prompt(s) that never registered: ${absent.join(', ')}`);
+      }
+    }
   }
 
   // ===========================================================================
@@ -1104,10 +1127,26 @@ export class CoolifyMcpServer extends McpServer {
     // rather than reaching for `clientFor` directly, so a resource and a tool
     // targeting the same instance take the identical path to the identical
     // client (and its version + fallback caches).
-    const onInstance = <T>(name: string | undefined, body: () => Promise<T>): Promise<T> =>
-      this.instanceContext.run(this.registry.get(name), body);
+    const onInstance = <T>(name: string | undefined, body: () => Promise<T>): Promise<T> => {
+      // An empty capture must not fall through to the default instance.
+      // `registry.get('')` returns the default exactly as `get(undefined)`
+      // does, so without this a URI that matched the template while capturing
+      // nothing would serve the default instance's data under a URI naming no
+      // instance — the precise cross-instance read this whole scheme exists to
+      // prevent. Whether the SDK's UriTemplate can produce that today is an
+      // implementation detail to not depend on.
+      if (fleet && !name) throw new Error('Resource URI is missing its instance segment');
+      return this.instanceContext.run(this.registry.get(name), body);
+    };
     const first = (value: string | string[] | undefined): string =>
       Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+    /** An empty `{uuid}` would reach `GET /applications/`, which Laravel routes
+     * to the index — returning every application under a URI claiming one. */
+    const requireUuid = (value: string | string[] | undefined): string => {
+      const uuid = first(value);
+      if (!uuid) throw new Error('Resource URI is missing its application uuid');
+      return uuid;
+    };
 
     const overviewDescription =
       'Counts and current status for every server, project, application, database and service. The same snapshot `get_infrastructure_overview` returns.';
@@ -1116,6 +1155,10 @@ export class CoolifyMcpServer extends McpServer {
       this.registerResource(
         'overview',
         new ResourceTemplate('coolify://{instance}/overview', {
+          // `{instance}` is a closed set the server already knows, and
+          // completion is what makes a template usable in a client rather than
+          // something you have to know the shape of.
+          complete: { instance: (value) => this.completeInstance(value) },
           // Enumerating instances costs no API call, so every instance shows up
           // as a concrete entry in resources/list rather than a bare template
           // the human has to know how to fill in.
@@ -1123,6 +1166,7 @@ export class CoolifyMcpServer extends McpServer {
             resources: this.registry.all.map((instance) => ({
               uri: `coolify://${instance.name}/overview`,
               name: `${instance.name} overview`,
+              title: `${instance.name} overview`,
               description: `Every resource on the "${instance.name}" instance.`,
               mimeType: 'application/json',
             })),
@@ -1161,6 +1205,15 @@ export class CoolifyMcpServer extends McpServer {
      * listing: a fleet where staging is unreachable should still offer prod's
      * applications, and resources/list is a discovery surface, not a health
      * check.
+     *
+     * Known cost, deliberately unpaid for now (#393): this runs on every
+     * `resources/list`, uncached, one call per instance. On a large estate that
+     * is the whole summary payload built and discarded per listing, and a fleet
+     * with one instance down makes every listing wait out that instance's
+     * timeout before the others can return — slow as well as incomplete. A
+     * short TTL cache would fix the second call onwards but not the first, and
+     * it buys staleness on a surface whose entire job is to be current, so it
+     * wants measuring before it is built rather than guessing here.
      */
     const listApplications = async (): Promise<ListResourcesResult> => {
       const perInstance = await Promise.allSettled(
@@ -1171,6 +1224,12 @@ export class CoolifyMcpServer extends McpServer {
               ? `coolify://${instance.name}/application/${app.uuid}`
               : `coolify://application/${app.uuid}`,
             name: fleet ? `${app.name} (${instance.name})` : app.name,
+            // `title` is the display name and takes precedence over `name` in
+            // clients that implement it, so it has to be per-entry too. Left to
+            // the template's metadata every application on the estate renders
+            // as the identical row "Application detail", which defeats the only
+            // reason to make these API calls at all.
+            title: fleet ? `${app.name} (${instance.name})` : app.name,
             // Entry metadata overrides the template's, which is what keeps this
             // listing affordable: the template description is ~130 chars of
             // prose that would otherwise repeat on every application on the
@@ -1192,7 +1251,10 @@ export class CoolifyMcpServer extends McpServer {
       'application',
       new ResourceTemplate(
         fleet ? 'coolify://{instance}/application/{uuid}' : 'coolify://application/{uuid}',
-        { list: listApplications },
+        {
+          list: listApplications,
+          ...(fleet && { complete: { instance: (value: string) => this.completeInstance(value) } }),
+        },
       ),
       {
         title: 'Application detail',
@@ -1202,7 +1264,7 @@ export class CoolifyMcpServer extends McpServer {
       },
       (uri, variables) =>
         onInstance(fleet ? first(variables.instance) : undefined, async () =>
-          json(uri, await this.client.getApplication(first(variables.uuid))),
+          json(uri, await this.client.getApplication(requireUuid(variables.uuid))),
         ),
     );
   }

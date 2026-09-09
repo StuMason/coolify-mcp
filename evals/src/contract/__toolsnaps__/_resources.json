@@ -2,21 +2,21 @@
   "resources": [
     {
       "name": "api-gateway",
-      "title": "Application detail",
+      "title": "api-gateway",
       "uri": "coolify://application/app-api",
       "description": "exited:unhealthy — https://api.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "log-viewer",
-      "title": "Application detail",
+      "title": "log-viewer",
       "uri": "coolify://application/app-logviewer",
       "description": "running:healthy — https://logs.example.test",
       "mimeType": "application/json"
     },
     {
       "name": "shop-frontend",
-      "title": "Application detail",
+      "title": "shop-frontend",
       "uri": "coolify://application/app-shop",
       "description": "running:healthy — https://shop.example.test",
       "mimeType": "application/json"

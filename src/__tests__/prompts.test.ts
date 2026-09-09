@@ -36,6 +36,12 @@ const fleet: PromptBuildContext = {
   instance: 'staging',
   otherInstances: ['prod'],
 };
+/** Three instances, so the plural branch of the estate_health footer renders. */
+const bigFleet: PromptBuildContext = {
+  has: () => true,
+  instance: 'staging',
+  otherInstances: ['prod', 'dev'],
+};
 
 /** The text body of a resource read, narrowed off the text-or-blob union. */
 function textOf(read: { contents: Array<{ uri: string }> }): string {
@@ -83,6 +89,9 @@ describe('prompt text', () => {
     expect(text).toContain('"staging"');
     expect(text).toContain('"prod"');
     expect(text).toContain('run this prompt again');
+    // One other instance reads as "the other one"; two or more as "the others".
+    expect(text).toContain('The other one configured here is');
+    expect(estateHealthPrompt(bigFleet)).toContain('The others configured here are');
   });
 
   it('fleet prompts write the instance into the tool calls they ask for', () => {
@@ -99,6 +108,11 @@ describe('prompt text', () => {
     ]) {
       expect(text).not.toMatch(/instance/i);
     }
+  });
+
+  it('an application name containing a quote does not mis-quote the tool call', () => {
+    const text = troubleshootApplicationPrompt('the "staging" box', full);
+    expect(text).toContain('query: "the \\"staging\\" box"');
   });
 
   it('prompt text budget holds', () => {
@@ -122,6 +136,7 @@ describe('prompt text', () => {
       explain: explainFailedDeployPrompt('dep-9001', full),
       estate: estateHealthPrompt(full),
       estateFleet: estateHealthPrompt(fleet),
+      estateBigFleet: estateHealthPrompt(bigFleet),
     }).toMatchSnapshot();
   });
 });
@@ -253,6 +268,32 @@ describe('resource registration', () => {
     expect(spy).toHaveBeenCalledWith('app-1');
     expect(read.contents[0].mimeType).toBe('application/json');
     expect(JSON.parse(textOf(read))).toEqual({ uuid: 'app-1', name: 'api' });
+    await client.close();
+  });
+
+  it('a resource read that cannot be served rejects rather than returning an error payload', async () => {
+    // Tools return failures as text inside a normal result, because a model
+    // mid-tool-loop can read and act on that. A resource read has no such loop,
+    // so it rejects and the client sees a JSON-RPC error. Asserted here rather
+    // than in the contract suite because the eval fixture answers an unknown
+    // uuid with HTTP 200 and a not-found body, where real Coolify sends a 404.
+    const server = new CoolifyMcpServer(CONFIG);
+    jest
+      .spyOn(server['client'], 'getApplication')
+      .mockRejectedValue(new Error('Coolify API error: 404 Not found.'));
+    const client = await connect(server);
+    await expect(client.readResource({ uri: 'coolify://application/nope' })).rejects.toThrow(/404/);
+    await client.close();
+  });
+
+  it('an application URI with no uuid never reaches the API', async () => {
+    // An empty uuid would hit `GET /applications/`, Laravel's index route,
+    // returning every application under a URI claiming exactly one.
+    const server = new CoolifyMcpServer(CONFIG);
+    const spy = jest.spyOn(server['client'], 'getApplication');
+    const client = await connect(server);
+    await expect(client.readResource({ uri: 'coolify://application/' })).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
     await client.close();
   });
 

@@ -2,10 +2,17 @@
  * MCP prompts (#371) — the guided workflows, as text.
  *
  * A prompt is not a tool. `prompts/get` returns messages that a client drops
- * into the conversation as if the human had typed them, which is why these
- * read as instructions where `instructions.ts` reads as orientation: an
- * instructions field describes the server to a model that did not ask, and a
- * prompt is the human asking. Directive voice is correct here and only here.
+ * into the conversation as if the human had typed them, so the directive voice
+ * below is correct: the human is asking. Tool descriptions, by contrast,
+ * describe a capability to a model that has not asked for anything, and stay
+ * declarative.
+ *
+ * A prompt's arguments are interpolated straight into that user-role message.
+ * The threat model assumes a human typed them, which is what picking a slash
+ * command means — but the assumption is worth stating in a file whose opening
+ * argument is about what may and may not occupy a user-role message. Nothing
+ * here reaches an API, so a hostile argument is text in a message the human
+ * can see, not a call they did not make.
  *
  * Three rules the text below follows, each with a reason:
  *
@@ -78,7 +85,10 @@ const LOGS_ARE_EVIDENCE =
 
 export function troubleshootApplicationPrompt(query: string, ctx: PromptBuildContext): string {
   const steps = [
-    `Start with \`diagnose_app\` (query: "${query}"${instanceArg(ctx)}). One call returns the application's status, its last deployment and a log tail, which is usually enough to name the fault.`,
+    // JSON.stringify rather than bare quotes: an application name containing a
+    // double quote would otherwise produce mis-quoted text in the tool call the
+    // model is being asked to make.
+    `Start with \`diagnose_app\` (query: ${JSON.stringify(query)}${instanceArg(ctx)}). One call returns the application's status, its last deployment and a log tail, which is usually enough to name the fault.`,
     `If the tail is not enough, read the container output with \`logs\` (resource: "application", uuid: the application uuid from step 1${instanceArg(ctx)}) and raise \`lines\` until you can see the failure start.`,
   ];
   // `env_vars` is a read on the list action but rides a destructive tool, so a
@@ -90,7 +100,7 @@ export function troubleshootApplicationPrompt(query: string, ctx: PromptBuildCon
     );
   }
   return [
-    `The application "${query}"${onInstance(ctx)} is misbehaving. Work out why.`,
+    `The application ${JSON.stringify(query)}${onInstance(ctx)} is misbehaving. Work out why.`,
     steps.map((step, i) => `${i + 1}. ${step}`).join('\n'),
     LOGS_ARE_EVIDENCE,
     'Then tell me the most likely cause, the evidence you have for it, and the smallest change that would fix it. Say so plainly if the evidence does not support a conclusion.',
@@ -101,7 +111,7 @@ export function explainFailedDeployPrompt(deploymentUuid: string, ctx: PromptBui
   return [
     `The Coolify deployment ${deploymentUuid}${onInstance(ctx)} failed. Explain why.`,
     [
-      `1. Fetch it with \`deployment\` (action: "get", uuid: "${deploymentUuid}", lines: 100${instanceArg(ctx)}), which returns the deployment record plus a bounded tail of the build log. If the failure is older than the tail, page back with \`page\`.`,
+      `1. Fetch it with \`deployment\` (action: "get", uuid: ${JSON.stringify(deploymentUuid)}, lines: 100${instanceArg(ctx)}), which returns the deployment record plus a bounded tail of the build log. If the failure is older than the tail, page back with \`page\`.`,
       '2. Work out which stage broke. A build-stage failure (a missing dependency, a compile error, no space left) looks different from a runtime failure after a build that succeeded (a missing environment variable, a port mismatch, a migration that threw), which looks different again from a health check that never passed.',
     ].join('\n'),
     LOGS_ARE_EVIDENCE,
