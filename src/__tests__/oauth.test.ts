@@ -1359,6 +1359,94 @@ describe('Client ID Metadata Documents (#340)', () => {
     expect(((await token.json()) as { error: string }).error).toBe('invalid_client');
   });
 
+  it('rejects an identifier that starts like a URL but does not parse, before fetching', async () => {
+    const fetcher = jest.fn(async () => goodDocument());
+    const provider = makeCimdProvider(fetcher);
+    await expect(provider.resolveClient('https://[/client.json')).rejects.toThrow(
+      /not a valid URL/,
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('checks dot segments on the decoded path and tolerates a malformed escape', async () => {
+    const fetcher = jest.fn(async () => goodDocument());
+    const provider = makeCimdProvider(fetcher);
+    await expect(
+      provider.resolveClient('https://client.example.com/a/%2e%2e/client.json'),
+    ).rejects.toThrow(/dot path segments/);
+    expect(fetcher).not.toHaveBeenCalled();
+    // A segment that is not valid percent-encoding is compared as sent, not
+    // rejected outright: the document's client_id check settles it.
+    await expect(
+      provider.resolveClient('https://client.example.com/%E0%A4%A/client.json'),
+    ).rejects.toThrow(/does not match/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an unparseable redirect_uri in a document as invalid_client', async () => {
+    const provider = makeCimdProvider(async () => ({
+      ...goodDocument(),
+      redirect_uris: ['not a url'],
+    }));
+    await expect(provider.resolveClient(CLIENT_URL)).rejects.toMatchObject({
+      code: 'invalid_client',
+      description: expect.stringMatching(/unusable redirect_uri: not a valid URL/),
+    });
+  });
+
+  it('still authenticates confidential DCR clients by secret at the token endpoint', async () => {
+    const provider = makeProvider();
+    const registered = provider.registerClient({
+      redirect_uris: ['https://client.example.com/callback'],
+      token_endpoint_auth_method: 'client_secret_post',
+    });
+    const clientId = registered.client_id as string;
+    const secret = registered.client_secret as string;
+    const { verifier, challenge } = pkcePair();
+    const { code } = authorize(provider, clientId, challenge);
+    const exchange = (clientSecret?: string) =>
+      provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code,
+          redirect_uri: 'https://client.example.com/callback',
+          code_verifier: verifier,
+          ...(clientSecret === undefined ? {} : { client_secret: clientSecret }),
+        }),
+      );
+    expect(() => exchange()).toThrow(/client authentication failed/);
+    expect(() => exchange('wrong')).toThrow(/client authentication failed/);
+    expect(exchange(secret).access_token).toBeDefined();
+  });
+
+  it('rate-limits POST /authorize per IP', async () => {
+    const app = createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+    const headers = {
+      'x-forwarded-for': '203.0.113.10',
+      'content-type': 'application/x-www-form-urlencoded',
+    };
+    let last = 0;
+    for (let i = 0; i < 21; i++) {
+      const res = await app.fetch(
+        new Request(`${ISSUER}/authorize`, {
+          method: 'POST',
+          body: authorizeParams('mcp_client_nope', 'x').toString(),
+          headers,
+        }),
+      );
+      last = res.status;
+    }
+    expect(last).toBe(429);
+  });
+
   it('rate-limits GET /authorize per IP only when the client_id is a URL', async () => {
     const app = createHttpApp({
       coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
