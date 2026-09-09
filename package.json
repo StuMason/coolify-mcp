@@ -33,6 +33,7 @@
     "build:chunks": "node scripts/split-openapi-chunks.mjs",
     "check:chunk-drift": "node scripts/split-openapi-chunks.mjs --check",
     "check:tool-count": "node scripts/check-tool-count.mjs",
+    "check:tool-count:fix": "node scripts/check-tool-count.mjs --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",

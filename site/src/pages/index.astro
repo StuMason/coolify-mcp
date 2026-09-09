@@ -129,7 +129,8 @@ const OFFERS = [
           <p class="lede">
             On your machine, in Claude Desktop, Claude Code, Cursor and anything else that speaks
             MCP. Or hosted inside your own Coolify, with OAuth for claude.ai and other remote
-            clients. Either way, one token, and your Coolify never sees anything else.
+            clients. Locally the token stays on your machine; hosted, it stays in the container and
+            clients get OAuth.
           </p>
         </div>
         <figure class="code">
@@ -206,7 +207,7 @@ const OFFERS = [
         <div class="cards cards-3">
           {
             DOCS.map((d) => (
-              <a class="card card-link" href={docUrl(d.file)} rel="noopener">
+              <a class="card card-link" href={docUrl(d.file)}>
                 <h3 class="card-t">{d.t}</h3>
                 <p class="card-d">{d.d}</p>
               </a>

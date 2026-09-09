@@ -87,7 +87,7 @@ When Coolify adds new API endpoints:
 2. Add the client method in `src/lib/coolify-client.ts`
 3. Add the MCP tool in `src/lib/mcp-server.ts`
 4. Add tests in `src/__tests__/`
-5. Add the tool to the table in `docs/tools.md`, then `npm run check:tool-count -- --fix` to update the count everywhere
+5. Add the tool to the table in `docs/tools.md`, then `npm run check:tool-count:fix` to update the count everywhere (CI fails if the table misses a tool)
 6. Add changelog entry
 
 ### Code Style

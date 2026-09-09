@@ -1,7 +1,8 @@
 # Build and format-check the marketing site, separately from the MCP server.
 #
 # Deliberately its own workflow, triggered only by changes under site/ (plus
-# the one server file the build reads). The site and the published npm package
+# the repo files the build reads: README and docs for /llms-full.txt, the
+# evals roster for the tool count, package.json for the version). The site and the published npm package
 # share a repository and nothing else: site/ is excluded from the npm tarball
 # (`files: ["dist"]`), from the MCPB bundle (.mcpbignore), from root eslint and
 # from root prettier. This job is the last piece of that — before it existed,
@@ -19,6 +20,7 @@ on:
       - 'README.md'
       - 'docs/*.md'
       - 'evals/src/contract/__toolsnaps__/_roster.json'
+      - 'package.json'
       - '.github/workflows/site.yml'
   pull_request:
     paths:
@@ -27,6 +29,7 @@ on:
       - 'README.md'
       - 'docs/*.md'
       - 'evals/src/contract/__toolsnaps__/_roster.json'
+      - 'package.json'
       - '.github/workflows/site.yml'
 
 jobs:

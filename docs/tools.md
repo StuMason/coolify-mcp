@@ -6,7 +6,8 @@ listing is generated from the schema, so it is always current.
 
 The count is not hand-maintained: `npm run check:tool-count` reads the
 CI-gated tool roster (`evals/src/contract/__toolsnaps__/_roster.json`) and
-fails if the README, `package.json` or `CLAUDE.md` disagree with it.
+fails if the README, `package.json` or `CLAUDE.md` disagree with it, or if
+the table below misses a tool the roster has.
 
 ## The surface
 

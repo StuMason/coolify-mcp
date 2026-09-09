@@ -176,11 +176,11 @@ When making changes to the codebase, ensure documentation is updated:
    - Follow [Keep a Changelog](https://keepachangelog.com/) format
 
 2. **README.md / docs/tools.md** - Update if:
-   - Tool count changes (README one-liner; `npm run check:tool-count --fix`)
+   - Tool count changes (README one-liner; `npm run check:tool-count:fix`)
    - New tools or actions added (add to the category table in `docs/tools.md`)
    - New example prompts needed (README)
 
-3. **This file (CLAUDE.md)** - Update tool count if changed (currently 45 tools); `package.json`, `manifest.json`, `server.json` and README carry the same count. `npm run check:tool-count` (CI-gated) compares every claim against the evals roster snapshot; `--fix` rewrites them.
+3. **This file (CLAUDE.md)** - Update tool count if changed (currently 45 tools); `package.json`, `manifest.json`, `server.json` and README carry the same count. `npm run check:tool-count` (CI-gated) compares every claim against the evals roster snapshot and checks the `docs/tools.md` table names every tool; `npm run check:tool-count:fix` rewrites the counts.
 
 4. **docs/** is the reference; README is the front door. Detail belongs in `docs/tools.md` (surface, compatibility, gotchas), `docs/http-mode.md` (remote), `docs/fleet.md`, `docs/doctor.md`, `docs/security.md`. Keep README to one paragraph per topic plus a link. The site (`site/`) links out to these files and generates `llms.txt` from them at build.
 

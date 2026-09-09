@@ -7,7 +7,9 @@ import { DOCS, TOOL_COUNT, VERSION, rawUrl } from '../data/tools.ts';
 // cannot drift from it. /llms-full.txt carries the documents themselves.
 export const prerender = true;
 
-const SITE = 'https://coolify-mcp.stumason.dev';
+// The configured `site` from astro.config.mjs, so a domain change cannot leave
+// this file pointing at the old host.
+const SITE = import.meta.env.SITE.replace(/\/$/, '');
 
 const body = [
   '# coolify-mcp',
