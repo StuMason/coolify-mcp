@@ -2200,15 +2200,48 @@ export class CoolifyMcpServer extends McpServer {
         // On `list`, an optional `key` narrows the response to that single
         // variable. This matters most with reveal=true: without it, asking
         // for one value dumps every secret on the resource to the MCP client.
-        const filterByKey = <T extends { key: string }>(vars: T[]): T[] =>
-          key ? vars.filter((v) => v.key === key) : vars;
+        if (action === 'list' && reveal === true && !key?.trim()) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Error: reveal=true requires an exact key; refusing to return every environment variable',
+              },
+            ],
+          };
+        }
+        const hasReturnedValue = (value: unknown): boolean =>
+          value !== undefined && value !== null && value !== '***';
+        const filterByKey = <T extends { key: string; value?: string; real_value?: string }>(
+          vars: T[],
+        ): T[] => {
+          const filtered = key ? vars.filter((v) => v.key === key) : vars;
+          // `every`, not `some`: Coolify auto-creates a preview twin for each
+          // production application env var (#291), so an exact-key filter
+          // legitimately yields two rows, and one of them carrying the value
+          // is a successful read. v4.2 withholding strips every row, which
+          // this still catches.
+          if (
+            reveal === true &&
+            filtered.length > 0 &&
+            filtered.every((v) => !hasReturnedValue(v.value) && !hasReturnedValue(v.real_value))
+          ) {
+            throw new Error(
+              'Coolify did not return the requested environment variable value. The API or token does not support sensitive env-var reads; use a token with read:sensitive permission (and the required owner/admin role on newer Coolify versions).',
+            );
+          }
+          return filtered;
+        };
 
         if (resource === 'application') {
           switch (action) {
             case 'list':
               return wrap(async () =>
                 filterByKey(
-                  await this.client.listApplicationEnvVars(uuid, { summary: true, reveal }),
+                  await this.client.listApplicationEnvVars(uuid, {
+                    summary: !(reveal === true && Boolean(key?.trim())),
+                    reveal,
+                  }),
                 ),
               );
             case 'create':
