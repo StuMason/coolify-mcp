@@ -3,8 +3,8 @@
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { CoolifyMcpServer } from './lib/mcp-server.js';
 import { parseHeaders } from './lib/parse-headers.js';
-import { checkStartupConfig, mergeCfAccessHeaders } from './lib/startup-check.js';
-import type { CoolifyConfig } from './types/coolify.js';
+import { checkStartupConfig } from './lib/startup-check.js';
+import { registryFromEnv } from './lib/instances.js';
 
 async function main(): Promise<void> {
   // One image, two transports (#303): MCP_TRANSPORT=http hands over to the
@@ -26,20 +26,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // CF Access headers from env, overridable by --header flags (case-insensitively).
-  const customHeaders = mergeCfAccessHeaders(process.env, parseHeaders(process.argv));
-
-  const config: CoolifyConfig = {
-    baseUrl: process.env.COOLIFY_BASE_URL || 'http://localhost:3000',
-    accessToken: process.env.COOLIFY_ACCESS_TOKEN || '',
-    customHeaders: Object.keys(customHeaders).length > 0 ? customHeaders : undefined,
-  };
-
-  if (!config.accessToken) {
+  if (!process.env.COOLIFY_ACCESS_TOKEN && !process.env.COOLIFY_INSTANCES) {
     throw new Error('COOLIFY_ACCESS_TOKEN environment variable is required');
   }
 
-  const server = new CoolifyMcpServer(config);
+  // The instance registry (#367): the single-instance vars (with CF Access
+  // headers and --header flags merged in) define "default"; COOLIFY_INSTANCES
+  // adds more and switches on the fleet surface. Registry errors name the
+  // entry and the problem, never a value.
+  const registry = registryFromEnv(
+    {
+      ...process.env,
+      COOLIFY_BASE_URL: process.env.COOLIFY_BASE_URL || 'http://localhost:3000',
+    },
+    parseHeaders(process.argv),
+  );
+
+  const server = new CoolifyMcpServer(registry);
   const transport = new StdioServerTransport();
 
   await server.connect(transport);

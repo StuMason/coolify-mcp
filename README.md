@@ -60,6 +60,31 @@ Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (rep
 
 **Coolify behind Cloudflare Access?** Set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (a Cloudflare Access service token) and every request to `COOLIFY_BASE_URL` carries the Access headers — works in both stdio and HTTP mode. Setup in [docs/http-mode.md](docs/http-mode.md#coolify-behind-cloudflare-access).
 
+## Running a fleet
+
+One server, several Coolify instances — prod and staging, or a Coolify per region. Add `COOLIFY_INSTANCES`, a JSON array, next to your existing config:
+
+```json
+{
+  "env": {
+    "COOLIFY_BASE_URL": "https://prod.example.com",
+    "COOLIFY_ACCESS_TOKEN": "prod-token",
+    "COOLIFY_INSTANCES": "[{\"name\":\"staging\",\"url\":\"https://staging.example.com\",\"token\":\"staging-token\"}]"
+  }
+}
+```
+
+With more than one instance configured:
+
+- **Every tool takes an optional `instance`** (a name from the list). Omitted means the default — your `COOLIFY_BASE_URL` instance, or the first entry when only `COOLIFY_INSTANCES` is set. A wrong name is rejected with the list of valid names before anything is sent.
+- **`list_instances`** reports each instance's name, URL, default flag and live Coolify version. Tokens are never shown.
+- **Every destructive confirmation names the instance** — "Stop all applications on instance staging?" — because fat-fingering the wrong estate is the failure mode a second instance invents.
+- Each instance gets its own client, so a prod on 4.1 next to a staging on 4.3 each keep their own version handling.
+
+Single-instance configs are untouched: no `instance` argument, no extra tool, byte-identical `tools/list`. Entries may carry `"headers": {…}` for a proxy; `CF_ACCESS_*` applies to the default instance only.
+
+**A fleet is one trust domain.** Every instance in a `COOLIFY_INSTANCES` list is assumed to belong to the same owner, and in HTTP mode the OAuth proof-of-access check validates against the default instance only. **Agencies with a Coolify per client should run one server per client**, not one fleet — per-client isolation is the deployment, not the auth layer. Per-instance OAuth scopes are on the roadmap (#367).
+
 ## Tools
 
 | Category             | Tools                                                                                                                                                                     |

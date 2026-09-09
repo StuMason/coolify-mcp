@@ -18,9 +18,13 @@ import {
 import { CoolifyMcpServer } from './mcp-server.js';
 import { OAuthProvider, OAuthErrorResponse } from './oauth.js';
 import type { CoolifyConfig } from '../types/coolify.js';
+import type { InstanceRegistry } from './instances.js';
 
 export interface HttpServerConfig {
+  /** The default instance: what tier-2 proof of access validates against. */
   coolify: CoolifyConfig;
+  /** The full fleet (#367); omitted means `coolify` alone. */
+  instances?: InstanceRegistry;
   /** Public base URL of this container, e.g. https://mcp.example.com */
   publicUrl: string;
   accessTokenTtl: number;
@@ -234,7 +238,7 @@ export function createHttpApp(config: HttpServerConfig): {
 
   const mcpHandler: McpHttpHandler = createMcpHandler(
     () =>
-      new CoolifyMcpServer(config.coolify, {
+      new CoolifyMcpServer(config.instances ?? config.coolify, {
         readonly: config.readonly,
         requireElicitation: true,
       }),

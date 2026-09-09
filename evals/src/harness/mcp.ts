@@ -36,7 +36,16 @@ export interface EvalContext {
   close(): Promise<void>;
 }
 
-export async function createEvalContext(): Promise<EvalContext> {
+export interface EvalContextOptions {
+  /**
+   * Extra environment for the server process, computed once the fixture is
+   * listening (so it can point at `fixture.url`). Used by the fleet contract
+   * run to add COOLIFY_INSTANCES.
+   */
+  env?: (fixture: FixtureHandle) => Record<string, string>;
+}
+
+export async function createEvalContext(options: EvalContextOptions = {}): Promise<EvalContext> {
   // First command a contributor hits after editing a tool description; a clear
   // message beats an opaque stdio transport error if the build is stale.
   if (!existsSync(SERVER_ENTRY)) {
@@ -47,7 +56,7 @@ export async function createEvalContext(): Promise<EvalContext> {
 
   const fixture = await startFixture();
   try {
-    return await connectHarness(fixture);
+    return await connectHarness(fixture, options.env?.(fixture) ?? {});
   } catch (err) {
     // The fixture HTTP server is already listening; if the client fails to
     // connect (stale build, transport mismatch) leaving it open makes vitest
@@ -57,7 +66,10 @@ export async function createEvalContext(): Promise<EvalContext> {
   }
 }
 
-async function connectHarness(fixture: FixtureHandle): Promise<EvalContext> {
+async function connectHarness(
+  fixture: FixtureHandle,
+  extraEnv: Record<string, string>,
+): Promise<EvalContext> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER_ENTRY],
@@ -65,6 +77,7 @@ async function connectHarness(fixture: FixtureHandle): Promise<EvalContext> {
       ...process.env,
       COOLIFY_BASE_URL: fixture.url,
       COOLIFY_ACCESS_TOKEN: FIXTURE_TOKEN,
+      ...extraEnv,
     },
   });
   // Advertise elicitation and DECLINE every prompt — i.e. a cautious human who

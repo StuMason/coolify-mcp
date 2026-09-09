@@ -15,7 +15,7 @@ import {
   RateLimiter,
   type HttpServerConfig,
 } from '../lib/http-server.js';
-import { CoolifyMcpServer, TOOL_ANNOTATIONS } from '../lib/mcp-server.js';
+import { CoolifyMcpServer, FLEET_ONLY_TOOLS, TOOL_ANNOTATIONS } from '../lib/mcp-server.js';
 import { confirmDestructive } from '../lib/elicit.js';
 
 const ISSUER = 'https://mcp.example.com';
@@ -981,6 +981,7 @@ describe('HTTP-mode server posture (#303)', () => {
         ([, annotations]) => (annotations as { readOnlyHint?: boolean }).readOnlyHint === true,
       )
       .map(([name]) => name)
+      .filter((name) => !FLEET_ONLY_TOOLS.has(name as keyof typeof TOOL_ANNOTATIONS))
       .sort();
     expect(Object.keys(registered).sort()).toEqual(readOnlyNames);
     expect(registered['stop_all_apps']).toBeUndefined();
