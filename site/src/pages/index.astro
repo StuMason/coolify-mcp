@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import { CAPABILITIES, TOOL_COUNT } from '../data/tools.ts';
+import { CAPABILITIES, DOCS, TOOL_COUNT, docUrl } from '../data/tools.ts';
 
 export const prerender = true;
 
@@ -20,6 +20,9 @@ const CONFIG = `{
     }
   }
 }`;
+
+const DOCTOR = `COOLIFY_BASE_URL="https://coolify.example.com" COOLIFY_ACCESS_TOKEN="your-api-token" \\
+  npx @masonator/coolify-mcp doctor`;
 
 const PRINCIPLES = [
   {
@@ -69,6 +72,7 @@ const OFFERS = [
       <nav class="nav" aria-label="Primary">
         <a href="#install">Install</a>
         <a href="#tools">Tools</a>
+        <a href="#docs">Docs</a>
         <a href="#hire">Work with me</a>
         <a href="https://github.com/StuMason/coolify-mcp" rel="noopener">GitHub</a>
       </nav>
@@ -123,8 +127,10 @@ const OFFERS = [
         <div class="split">
           <h2 class="h2">One config block and an API token.</h2>
           <p class="lede">
-            Works in Claude Desktop, Claude Code, Cursor and anything else that speaks MCP. Nothing
-            to host. Your token never leaves your machine.
+            On your machine, in Claude Desktop, Claude Code, Cursor and anything else that speaks
+            MCP. Or hosted inside your own Coolify, with OAuth for claude.ai and other remote
+            clients. Locally the token stays on your machine; hosted, it stays in the container and
+            clients get OAuth.
           </p>
         </div>
         <figure class="code">
@@ -134,6 +140,35 @@ const OFFERS = [
           </figcaption>
           <pre><code>{CONFIG}</code></pre>
         </figure>
+        <ul class="ways">
+          <li>
+            <span class="key">Remote</span>
+            <p>
+              Run it as a container next to the Coolify it manages and connect claude.ai, Claude
+              Desktop or Claude Code to <code>/mcp</code>. Your token stays server-side; clients get
+              OAuth 2.1. <a class="ul" href={docUrl('docs/http-mode.md')}>Five-minute setup</a>.
+            </p>
+          </li>
+          <li>
+            <span class="key">Several Coolifys</span>
+            <p>
+              Add <code>COOLIFY_INSTANCES</code> and every tool takes an instance name.
+              <a class="ul" href={docUrl('docs/fleet.md')}>Fleet guide</a>.
+            </p>
+          </li>
+        </ul>
+        <figure class="code">
+          <figcaption>
+            <span class="code-file">then run doctor</span>
+            <span class="code-dim">config · reachability · token · version · abilities</span>
+          </figcaption>
+          <pre><code>{DOCTOR}</code></pre>
+        </figure>
+        <p class="foot-note">
+          Whatever you configured, doctor checks it end to end and prints a one-line fix for each
+          failure. It never prints a secret.
+          <a class="ul" href={docUrl('docs/doctor.md')}>What it checks</a>.
+        </p>
       </section>
 
       <!-- ── 02 what it can do ────────────────────────────────── -->
@@ -142,8 +177,9 @@ const OFFERS = [
         <div class="split">
           <h2 class="h2">{TOOL_COUNT} tools, covering the whole platform.</h2>
           <p class="lede">
-            The full list lives in the README, where it stays current. What matters here is the
-            shape of it.
+            The full list lives in the
+            <a class="ul" href={docUrl('docs/tools.md')}>tool reference</a>, where it stays current.
+            What matters here is the shape of it.
           </p>
         </div>
         <div class="groups">
@@ -158,9 +194,31 @@ const OFFERS = [
         </div>
       </section>
 
-      <!-- ── 03 safety ────────────────────────────────────────── -->
+      <!-- ── 03 docs ──────────────────────────────────────────── -->
+      <section id="docs" class="sec">
+        <p class="eyebrow"><i>03</i> Docs</p>
+        <div class="split">
+          <h2 class="h2">The reference lives in the repo, next to the code.</h2>
+          <p class="lede">
+            One page here. The detail sits where contributors keep it honest, and it is all in
+            <a class="ul" href="/llms.txt">/llms.txt</a> for anything reading this on your behalf.
+          </p>
+        </div>
+        <div class="cards cards-3">
+          {
+            DOCS.map((d) => (
+              <a class="card card-link" href={docUrl(d.file)}>
+                <h3 class="card-t">{d.t}</h3>
+                <p class="card-d">{d.d}</p>
+              </a>
+            ))
+          }
+        </div>
+      </section>
+
+      <!-- ── 04 safety ────────────────────────────────────────── -->
       <section id="safety" class="sec sec-idle">
-        <p class="eyebrow"><i>03</i> Why you can point it at production</p>
+        <p class="eyebrow"><i>04</i> Why you can point it at production</p>
         <div class="split">
           <h2 class="h2">It stops and asks a person before it does anything it cannot undo.</h2>
           <p class="lede">
@@ -182,7 +240,7 @@ const OFFERS = [
 
       <!-- ── 05 hire ──────────────────────────────────────────── -->
       <section id="hire" class="sec">
-        <p class="eyebrow"><i>04</i> Work with me</p>
+        <p class="eyebrow"><i>05</i> Work with me</p>
         <div class="split">
           <h2 class="h2">Your clients want AI. You need someone who actually ships it.</h2>
           <p class="lede">
@@ -211,7 +269,7 @@ const OFFERS = [
       <section id="contact" class="sec sec-idle">
         <div class="contact">
           <div>
-            <p class="eyebrow"><i>05</i> Get in touch</p>
+            <p class="eyebrow"><i>06</i> Get in touch</p>
             <h2 class="h2 h2-sm">Tell me what you are trying to build.</h2>
             <p class="lede lede-wide">
               A rough paragraph is enough to start. You will get a straight answer from a person,
@@ -255,6 +313,7 @@ const OFFERS = [
       <nav class="foot-nav" aria-label="Footer">
         <a href="https://github.com/StuMason/coolify-mcp" rel="noopener">GitHub</a>
         <a href="https://www.npmjs.com/package/@masonator/coolify-mcp" rel="noopener">npm</a>
+        <a href="/llms.txt">llms.txt</a>
         <a href="https://stumason.dev" rel="noopener">Built by stumason.dev</a>
       </nav>
     </footer>
@@ -536,11 +595,38 @@ const OFFERS = [
     color: var(--code-ink);
   }
 
+  /* ── install: the other ways in ── */
+  .ways {
+    margin-top: clamp(22px, 3vw, 32px);
+    display: grid;
+    gap: 0;
+  }
+  .ways li {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 22px;
+    padding: 16px 0;
+    border-top: 1px solid var(--rule-2);
+    align-items: baseline;
+  }
+  .ways p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink-60);
+    max-width: 70ch;
+  }
+  .ways code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--idle-fill);
+    padding: 2px 6px;
+  }
+
   /* ── tools ── */
-  /* Explicit column counts, not auto-fit: there are five groups, and auto-fit
-     resolved to four columns at this width, which stranded the fifth alone
-     across the full page. Three columns puts the remainder as a deliberate
-     3 + 2, with the fifth still one column wide. */
+  /* Explicit column counts, not auto-fit: with five groups, auto-fit resolved
+     to four columns at this width and stranded the fifth alone across the full
+     page. Three columns keeps every group one column wide (six groups is a
+     clean 3 + 3; a seventh would sit alone on a third row, which is fine). */
   .groups {
     margin-top: clamp(38px, 5vw, 60px);
     display: grid;
@@ -600,6 +686,17 @@ const OFFERS = [
     margin-top: 9px;
     line-height: 1.6;
     max-width: 34ch;
+  }
+  .card-link {
+    display: block;
+    text-decoration: none;
+    transition: border-color 0.14s;
+  }
+  .card-link:hover {
+    border-top-color: var(--signal);
+  }
+  .card-link:hover .card-t {
+    color: var(--signal);
   }
 
   .foot-note {
@@ -720,7 +817,8 @@ const OFFERS = [
     }
   }
   @media (max-width: 560px) {
-    .demo-row {
+    .demo-row,
+    .ways li {
       grid-template-columns: minmax(0, 1fr);
       gap: 8px;
     }

@@ -1,4 +1,6 @@
 ---
+import { VERSION } from '../data/tools.ts';
+
 interface Props {
   title: string;
   description: string;
@@ -25,7 +27,7 @@ const jsonLd = {
       description,
       url: canonical,
       downloadUrl: 'https://www.npmjs.com/package/@masonator/coolify-mcp',
-      softwareVersion: '2.17.0',
+      softwareVersion: VERSION,
       license: 'https://opensource.org/licenses/MIT',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'GBP' },
       author: { '@id': `${site}/#person` },
@@ -64,7 +66,7 @@ const jsonLd = {
           name: 'Which AI clients does it work with?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Any client that speaks the Model Context Protocol, including Claude Desktop, Claude Code, Cursor and VS Code Copilot. Installation is one configuration block and a Coolify API token.',
+            text: 'Any client that speaks the Model Context Protocol, including Claude Desktop, Claude Code, Cursor and VS Code Copilot. Installation is one configuration block and a Coolify API token. It can also run as a container inside Coolify, where claude.ai and other remote clients connect over OAuth 2.1.',
           },
         },
         {

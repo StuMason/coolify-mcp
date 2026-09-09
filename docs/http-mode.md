@@ -161,7 +161,7 @@ token, one with `MCP_READONLY=true`.
 
 ## Destructive operations require a human
 
-In HTTP mode the elicitation guard fails closed. Destructive tools
+In HTTP mode the [elicitation guard](security.md#ask-before-it-hurts) fails closed. Destructive tools
 (`stop_all_apps`, deletes, key overwrites) refuse unless the client supports
 elicitation, so a human can confirm in client UI. Clients without elicitation
 (claude.ai and Claude Desktop today) get the read surface and routine
@@ -172,31 +172,32 @@ internet-facing service.
 
 ## Configuration reference
 
-| Variable                  | Default                  | Purpose                                               |
-| ------------------------- | ------------------------ | ----------------------------------------------------- |
-| `MCP_TRANSPORT`           | stdio                    | `http` selects HTTP mode                              |
-| `COOLIFY_BASE_URL`        | required                 | The Coolify instance to manage                        |
-| `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                     |
-| `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                    |
-| `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                           |
-| `MCP_READONLY`            | `false`                  | Register only read-only tools                         |
-| `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                        |
-| `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                       |
-| `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence                               |
-| `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL  |
-| `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)    |
-| `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)    |
-| `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances (fleet mode, see below) |
+| Variable                  | Default                  | Purpose                                                |
+| ------------------------- | ------------------------ | ------------------------------------------------------ |
+| `MCP_TRANSPORT`           | stdio                    | `http` selects HTTP mode                               |
+| `COOLIFY_BASE_URL`        | required                 | The Coolify instance to manage                         |
+| `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                      |
+| `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                     |
+| `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                            |
+| `MCP_READONLY`            | `false`                  | Register only read-only tools                          |
+| `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                         |
+| `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                        |
+| `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence                                |
+| `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL   |
+| `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)     |
+| `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)     |
+| `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md)) |
 
 ### Running a fleet over HTTP
 
-`COOLIFY_INSTANCES` works in HTTP mode exactly as in stdio (see the README's
-"Running a fleet"). One rule matters more here: **a fleet is one trust
-domain.** Proof of access at authorize time is validated against the
-default instance only — proving you belong to the default proves you belong
-to the fleet. Every instance in the list must therefore belong to the same
-owner. An agency with a Coolify per client runs one container per client;
-the isolation is the deployment, not the OAuth layer.
+`COOLIFY_INSTANCES` works in HTTP mode exactly as in stdio; the
+[fleet guide](fleet.md) covers the format and what changes. One rule matters
+more here: **a fleet is one trust domain.** Proof of access at authorize time
+is validated against the default instance only — proving you belong to the
+default proves you belong to the fleet. Every instance in the list must
+therefore belong to the same owner. An agency with a Coolify per client runs
+one container per client; the isolation is the deployment, not the OAuth
+layer.
 
 ## Troubleshooting: every one of these happened to us
 

@@ -41,6 +41,9 @@ jobs:
       - name: Check openapi-chunks drift
         run: npm run check:chunk-drift
 
+      - name: Check tool-count claims against the roster
+        run: npm run check:tool-count
+
       - name: Build
         run: npm run build
 

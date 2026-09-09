@@ -7,19 +7,17 @@
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 consolidated tools for deploying, debugging, and operating your self-hosted PaaS in plain English.
+Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 tools for deploying, debugging, and operating your self-hosted PaaS in plain English. Destructive operations ask a human first; secrets stay masked.
 
-📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)**: what it does, how to install it, and why it is safe to point at production.
-
-This README is the full reference: every tool, every gotcha, every parameter.
+📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** · [Tool reference](docs/tools.md) · [Remote / HTTP mode](docs/http-mode.md) · [Fleet](docs/fleet.md) · [Doctor](docs/doctor.md) · [Safety and security](docs/security.md) · [Changelog](CHANGELOG.md)
 
 ## Install
 
-You need a running Coolify v4 instance and an API token (Coolify → Settings → API).
+You need a running Coolify v4 instance and an API token (Coolify → Keys & Tokens → API tokens). Pick one of three ways to run the server.
 
-**Claude Desktop, one-click:** download [`coolify-mcp.mcpb`](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) and drag it into **Settings → Extensions**. You'll be prompted for your Coolify URL and token. No Node install, no JSON editing.
+**Claude Desktop, one-click.** Download [`coolify-mcp.mcpb`](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb) and drag it into **Settings → Extensions**. You are prompted for your Coolify URL and token. No Node install, no JSON editing.
 
-**Claude Code:**
+**Locally, in any MCP client.** Claude Code:
 
 ```bash
 claude mcp add coolify \
@@ -28,16 +26,7 @@ claude mcp add coolify \
   -- npx @masonator/coolify-mcp@latest
 ```
 
-**Codex CLI:**
-
-```bash
-codex mcp add coolify \
-  --env COOLIFY_BASE_URL="https://your-coolify-instance.com" \
-  --env COOLIFY_ACCESS_TOKEN="your-api-token" \
-  -- npx -y @masonator/coolify-mcp@latest
-```
-
-**Any MCP client (JSON config):**
+Codex CLI is the same with `codex mcp add` and `--env`. For Cursor, Claude Desktop or anything that takes a JSON config:
 
 ```json
 {
@@ -54,128 +43,45 @@ codex mcp add coolify \
 }
 ```
 
-Behind Cloudflare Access or an auth proxy? Add `--header "Key: Value"` args (repeatable). The same config works in Cursor, Claude Code and any other MCP client, and can be repeated for multiple Coolify instances.
+**Remotely, as a container inside your Coolify.** Deploy the server next to the Coolify it manages and connect claude.ai, Claude Desktop or Claude Code to `https://your-domain/mcp`. Your Coolify token stays server-side; clients authenticate with OAuth 2.1. Five-minute setup in [docs/http-mode.md](docs/http-mode.md).
 
-**Remote (HTTP + OAuth, v3):** deploy the server as a container inside your own Coolify and connect claude.ai or any remote MCP client to `https://your-domain/mcp`. Your Coolify token stays server-side; clients authenticate with OAuth 2.1. See [docs/http-mode.md](docs/http-mode.md).
+### Then run doctor
 
-**Coolify behind Cloudflare Access?** Set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (a Cloudflare Access service token) and every request to `COOLIFY_BASE_URL` carries the Access headers — works in both stdio and HTTP mode. Setup in [docs/http-mode.md](docs/http-mode.md#coolify-behind-cloudflare-access).
-
-**Then run doctor.** Whatever client you configured, verify the setup in one command:
+Whatever you configured, verify it in one command:
 
 ```bash
 COOLIFY_BASE_URL="https://your-coolify-instance.com" COOLIFY_ACCESS_TOKEN="your-api-token" \
   npx @masonator/coolify-mcp doctor
 ```
 
-It checks your config for the classic traps (unexpanded `${VAR}` placeholders, pasted whitespace, a doubled `/api/v1`), that Coolify is reachable (naming Cloudflare Access interception when that's the wall), that your token is accepted and whether it can deploy (probed side-effect-free; `write` has no safe probe, so doctor says "undetermined" rather than guessing), and whether your Coolify version is in the tested range — each failure with a one-line fix. `--header "Key: Value"` flags are honoured the same as the server honours them; network probes time out after 10s each. Add `--json` for machine-readable output. It never prints a secret.
+It checks the config for the classic traps (unexpanded `${VAR}`, pasted whitespace, a doubled `/api/v1`), that Coolify is reachable and not hidden behind a Cloudflare Access login, that the token is accepted and can deploy, and that your Coolify version is in the tested range. Each failure comes with a one-line fix. Add `--json` for scripts. It never prints a secret. Every check is described in the [doctor guide](docs/doctor.md).
 
-## Running a fleet
+### Behind a proxy or Cloudflare Access
 
-One server, several Coolify instances — prod and staging, or a Coolify per region. Add `COOLIFY_INSTANCES`, a JSON array, next to your existing config:
+Add `--header "Key: Value"` args (repeatable) for a generic auth proxy. For Cloudflare Access, set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` (an Access service token) and every request to Coolify carries them, in both local and remote mode. [Setup](docs/http-mode.md#coolify-behind-cloudflare-access).
 
-```json
-{
-  "env": {
-    "COOLIFY_BASE_URL": "https://prod.example.com",
-    "COOLIFY_ACCESS_TOKEN": "prod-token",
-    "COOLIFY_INSTANCES": "[{\"name\":\"staging\",\"url\":\"https://staging.example.com\",\"token\":\"staging-token\"}]"
-  }
-}
-```
+## What it does
 
-With more than one instance configured:
+Every tool takes an `action`; run one with no arguments and it lists what it accepts. The [tool reference](docs/tools.md) has the full table. In short:
 
-- **Every tool takes an optional `instance`** (a name from the list). Omitted means the default — your `COOLIFY_BASE_URL` instance, or the first entry when only `COOLIFY_INSTANCES` is set. A wrong name is rejected with the list of valid names before anything is sent.
-- **`list_instances`** reports each instance's name, URL, default flag and live Coolify version. Tokens are never shown.
-- **Every destructive confirmation names the instance** — "Stop all applications on instance staging?" — because fat-fingering the wrong estate is the failure mode a second instance invents.
-- Each instance gets its own client, so a prod on 4.1 next to a staging on 4.3 each keep their own version handling.
+- **Work out what is wrong.** `diagnose_app` and `diagnose_server` take a name, domain, IP or UUID; `find_issues` scans the estate; `logs` reads any container.
+- **Deploy and roll back.** `deploy` waits for a terminal status and returns the log tail on failure. Start, stop and restart anything with `control`.
+- **Create and destroy.** Applications, databases (8 engines), services, projects and environments, with `environments verify_app` to prove a binding before you mutate it.
+- **Handle the configuration.** Env vars, storages, scheduled tasks, backups, tags, private keys, GitHub apps, cloud tokens. Secrets come back masked unless you ask for one exact key.
+- **Move across the whole estate.** `bulk_env_update`, `redeploy_project`, `stop_all_apps`, each behind a human confirmation that states the blast radius.
+- **Search the Coolify docs** with `search_docs`.
 
-Single-instance configs are untouched: no `instance` argument, no extra tool, byte-identical `tools/list`. Entries may carry `"headers": {…}` for a proxy; `CF_ACCESS_*` applies to the default instance only.
+Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 6,600 tokens of context.
 
-**A fleet is one trust domain.** Every instance in a `COOLIFY_INSTANCES` list is assumed to belong to the same owner, and in HTTP mode the OAuth proof-of-access check validates against the default instance only. **Agencies with a Coolify per client should run one server per client**, not one fleet — per-client isolation is the deployment, not the auth layer. Per-instance OAuth scopes are on the roadmap (#367).
+## Several Coolify instances
 
-## Tools
+Set `COOLIFY_INSTANCES` to a JSON array of `{ name, url, token }` alongside your default config. Every tool then takes an optional `instance`, `list_instances` reports what is configured, and every destructive confirmation names the instance it targets. Single-instance installs are byte-identical. A fleet is one trust domain; agencies with a Coolify per client should run one server per client. [Fleet guide](docs/fleet.md).
 
-| Category             | Tools                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`, `system` (health, list_resources, enable/disable API)                                                    |
-| **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                                                                          |
-| **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                                                            |
-| **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`, `list_destinations`                                                                |
-| **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                           |
-| **Environments**     | `environments` (list, get, create, delete, verify_app — prove an app is bound to an exact project environment — via action param)                                         |
-| **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                                                             |
-| **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, update incl. public port, delete), `database_backups` (CRUD schedules, executions incl. delete)             |
-| **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers; per-container `update_application` + `start/stop/restart_application`, Coolify v4.2+) |
-| **Control**          | `control` (start/stop/restart for apps, databases, services)                                                                                                              |
-| **Logs**             | `logs` (container logs for app, database, service; services need `container`), `application_logs` (superseded by `logs`)                                                  |
-| **Tags**             | `tags` (list, attach, detach for apps, databases, services; tag resources then `deploy` them together; Coolify v4.2+)                                                     |
-| **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                                                           |
-| **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services)                                                                          |
-| **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                                                         |
-| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                                                                    |
-| **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                                                       |
-| **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                                                              |
-| **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                        |
-| **Cloud Tokens**     | `cloud_tokens` (Hetzner/DigitalOcean: list, get, create, update, delete, validate)                                                                                        |
-| **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                                                                  |
-| **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                                                      |
+## Safe to point at production
 
-Every tool takes an `action` parameter; run one with no arguments and it lists what it accepts.
+Destructive operations stop and ask **you**, in your own client, before anything happens, on clients that support elicitation (Claude Code, VS Code Copilot). In remote mode the guard fails closed. Secrets are masked at the API boundary, log output is wrapped as untrusted data so a poisoned log line cannot issue instructions, and an eval suite red-teams both claims on every change. [Details](docs/security.md).
 
-## Design
-
-- **Token-optimized.** Consolidated action-param tools keep the tool list at ~6,600 tokens instead of ~43,000, so the server doesn't eat your context window before you've asked anything.
-- **Summaries by default.** `list_*` tools return `uuid`/`name`/`status` projections, 90–99% smaller than the raw API measured against a real 21-app estate. `get_*` tools fetch full detail for one resource.
-- **Smart lookup.** `diagnose_app` takes a UUID, name, or domain; `diagnose_server` takes a UUID, name, or IP.
-- **Actionable responses.** Results carry `_actions` hints (view logs, restart, next page) so the assistant knows the logical next step without extra tokens.
-- **Verified deploys.** `deploy` with `wait: true` polls to a terminal status and returns a log tail on failure, instead of "the site returns 200 so it probably worked".
-
-## Ask before it hurts
-
-Destructive operations pause and ask **you**, not the model, on clients that support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog): Claude Code and VS Code Copilot today. The prompt states the blast radius before you answer:
-
-```text
-EMERGENCY STOP: take down 12 running applications
-(api, worker, cockpit, umami, scheduler, mailer, search, billing and 4 more)
-across 3 servers?
-```
-
-Confirmation is asked for on `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, application / database / service / project / environment deletes, the credential deletes (`private_keys`, `cloud_tokens`, `github_apps`, none recoverable from Coolify once gone), and `bulk_env_update` across more than three apps. Routine deletes (storages, scheduled tasks, individual env vars, backup schedules) deliberately stay unprompted: a dialog on every delete is how dialogs stop being read. Deleting a resource spells out whether its **persistent volumes** go with it. `delete_volumes` defaults to `true` upstream, so leaving the flag unset is the destructive choice, not the cautious one.
-
-Prompts are skipped where there is nothing to confirm: an emergency stop on an idle estate, or a redeploy of an empty project, just runs.
-
-This is progressive enhancement, not a new requirement: clients without elicitation support (Claude Desktop, claude.ai) behave exactly as before. Once a client does advertise support, a decline, a cancel or a timeout all abort the call.
-
-These tools also carry the MCP `destructiveHint` annotation, so on a client that honours annotations **and** supports elicitation you may answer two dialogs in a row: the client's own permission prompt, then this one. That is the client's prompt plus the server's, not a bug. Allowlisting the tool in your client removes the first and leaves this one as the gate.
-
-Set `COOLIFY_MCP_ELICITATION=off` to turn the confirmations off entirely. It exists for the case where a client advertises elicitation support but does not actually implement it. Without it, every guarded tool would return `could not confirm with the user` with no way to recover. It is an escape hatch, not a normal setting.
-
-> **If confirmations time out before you can answer them**, raise your client's MCP tool timeout. The prompt runs inside the tool call, and the MCP SDK's default request timeout is 60 seconds. The server aborts cleanly when the client gives up (nothing runs behind your back), but you will see the call fail rather than the dialog you were reading.
-
-## Secure by default
-
-Secrets are masked at the API boundary. A client granted "list" access never sees plaintext credentials unless you explicitly opt in with `reveal: true`:
-
-- **`env_vars`**: variable values return as `***`. `reveal: true` is accepted only with an exact `key`; the tool then returns only that matching row. Coolify exposes env vars through a collection endpoint, not a per-variable GET or a `reveal` query flag, so the token must have `read:sensitive` access (and the required owner/admin role on newer versions). If the API omits both value fields, the tool returns a capability error instead of claiming the value was revealed.
-- **`system list_resources` (full mode)**: webhook HMAC secrets, basic-auth and database passwords, `internal/external_db_url` connection strings, compose bodies, Traefik labels, nested env vars
-- **`get_database` / `get_service`**: the same credential fields are masked on the detail endpoints, and any embedded server row is projected down to uuid/name/ip so its sentinel token and log-drain config never leave the client
-- **`get_server`**: sentinel and log-drain credentials are always masked, with no reveal
-- **`private_keys`**: key material is never returned, with no reveal; name, fingerprint and public key identify a key
-- **`deployment get`**: the raw upstream payload (server settings, log-drain tokens, webhook secrets) never leaves the client; responses are projected
-
-Log output (`logs`, `application_logs`, deployment logs) is wrapped in a tamper-evident untrusted-data boundary so a poisoned log line reads as data, not instructions.
-
-Destructive operations also ask a human first; see [Ask before it hurts](#ask-before-it-hurts) above.
-
-## Coolify version compatibility
-
-Works against Coolify v4.0 through v4.2+. Two v4.2 changes are worth knowing about:
-
-- **Secrets are hidden by default.** From v4.2 Coolify strips sensitive fields from API responses unless the token has sensitive-read scope. For `env_vars`, the exact-key `reveal: true` path reports a capability error when the server withholds the value; issue a token with sensitive-read scope if you need plaintext back.
-- **Member-role tokens are read-only.** From v4.2 a token belonging to a Member-role user can view resources but cannot deploy, start, stop, create, update or delete. Those calls return 403. Promote the user or use a token from a role with write access.
-
-State-changing endpoints also moved from GET to POST in v4.2. The client handles this for you across both eras, so no action is needed.
+Works against Coolify v4.0 through v4.3. The v4.2 GET-to-POST change and the v4.2 secrets and Member-role restrictions are handled; see [compatibility](docs/tools.md#coolify-version-compatibility).
 
 ## Example prompts
 
@@ -185,8 +91,7 @@ Diagnose my stuartmason.co.uk app
 Find any issues in my infrastructure
 Deploy application {uuid} and wait for it to finish
 Update the DATABASE_URL env var for application {uuid}
-Create a staging environment in project {uuid}
-Restart all applications in project {uuid}
+Restart all applications in project {uuid} on instance staging
 How do I fix a 502 Bad Gateway error in Coolify?
 ```
 
@@ -200,11 +105,7 @@ npm run build && npm test
 COOLIFY_BASE_URL="https://your-coolify.com" COOLIFY_ACCESS_TOKEN="token" node dist/index.js
 ```
 
-### Evals & red teaming
-
-Because tool descriptions are prompts, `evals/` measures whether a model picks the right tool from this surface and whether attacker-controlled tool output can make it misbehave. Deterministic contract snapshots gate every PR; tool-selection and prompt-injection evals run a real model against a mock Coolify backend; a promptfoo red-team battery runs on a schedule. Nothing touches production. See [evals/README.md](evals/README.md).
-
-Contributions welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and the architecture notes in [CLAUDE.md](CLAUDE.md).
+Tool descriptions are prompts, so `evals/` measures whether a model picks the right tool and whether attacker-controlled output can make it misbehave; contract snapshots gate every PR. See [evals/README.md](evals/README.md). Contributions welcome: [CONTRIBUTING.md](CONTRIBUTING.md) and the architecture and API-gotcha notes in [CLAUDE.md](CLAUDE.md).
 
 ## Work with me
 

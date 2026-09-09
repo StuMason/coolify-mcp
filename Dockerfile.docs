@@ -4,10 +4,12 @@
 # contact form to SES and needs a server. The landing page itself is
 # prerendered, so it is served as flat HTML with no per-request render.
 #
-# Preserves the repo layout (/app/site + /app/src) because the build reads
-# src/lib/mcp-server.ts to count the tools — see countTools() in
-# site/astro.config.mjs. Hardcoding that number is how the old site ended up
-# claiming 42 and 44 on the same page.
+# Preserves the repo layout (/app/site next to the repo files it reads) because
+# the build derives the tool count from the evals roster snapshot and the
+# version from package.json — see countTools()/readVersion() in
+# site/astro.config.mjs — and inlines README.md and docs/*.md into
+# /llms-full.txt. Hardcoding the number is how the old site ended up claiming
+# 42 and 44 on the same page.
 
 FROM node:22-alpine AS builder
 WORKDIR /app/site
@@ -15,8 +17,10 @@ COPY site/package.json site/package-lock.json ./
 RUN npm ci
 
 WORKDIR /app
-# The tool count is derived from this at build time.
-COPY src/lib/mcp-server.ts ./src/lib/mcp-server.ts
+# Read at build time: tool count, version, and the docs behind /llms-full.txt.
+COPY package.json README.md ./
+COPY docs/*.md ./docs/
+COPY evals/src/contract/__toolsnaps__/_roster.json ./evals/src/contract/__toolsnaps__/_roster.json
 COPY site/ ./site/
 
 WORKDIR /app/site
