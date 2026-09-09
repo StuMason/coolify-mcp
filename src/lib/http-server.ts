@@ -291,6 +291,7 @@ export function createHttpApp(config: HttpServerConfig): {
 
     if (path === '/authorize' && request.method === 'GET') {
       try {
+        await provider.resolveClient(url.searchParams.get('client_id') ?? '');
         const validated = provider.validateAuthorizationRequest(url.searchParams);
         return html(
           authorizePage(url.searchParams, validated.client.client_name ?? 'An MCP client'),
@@ -315,6 +316,7 @@ export function createHttpApp(config: HttpServerConfig): {
       const form = new URLSearchParams(await request.text());
       let validated;
       try {
+        await provider.resolveClient(form.get('client_id') ?? '');
         validated = provider.validateAuthorizationRequest(form);
       } catch (error) {
         if (error instanceof OAuthErrorResponse) {
@@ -361,6 +363,7 @@ export function createHttpApp(config: HttpServerConfig): {
       }
       try {
         const body = new URLSearchParams(await request.text());
+        await provider.resolveClient(body.get('client_id') ?? '');
         return json(provider.exchange(body));
       } catch (error) {
         if (error instanceof OAuthErrorResponse) return oauthError(error);

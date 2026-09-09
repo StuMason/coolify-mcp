@@ -1012,3 +1012,269 @@ describe('HTTP-mode server posture (#303)', () => {
     expect(open.approved).toBe(true);
   });
 });
+
+describe('Client ID Metadata Documents (#340)', () => {
+  const CLIENT_URL = 'https://client.example.com/oauth/client.json';
+  const CALLBACK = 'https://client.example.com/callback';
+  const goodDocument = (): Record<string, unknown> => ({
+    client_id: CLIENT_URL,
+    client_name: 'Example Client',
+    redirect_uris: [CALLBACK],
+    token_endpoint_auth_method: 'none',
+  });
+
+  function makeCimdProvider(
+    fetchClientMetadata: (url: string) => Promise<unknown>,
+    overrides: { clientMetadataTtl?: number; stateFile?: string } = {},
+  ): OAuthProvider {
+    return new OAuthProvider({
+      issuer: ISSUER,
+      resource: RESOURCE,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: overrides.stateFile ?? '',
+      fetchClientMetadata,
+      clientMetadataTtl: overrides.clientMetadataTtl,
+    });
+  }
+
+  function authorizeParams(clientId: string, challenge: string): URLSearchParams {
+    return new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: CALLBACK,
+      response_type: 'code',
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      resource: RESOURCE,
+    });
+  }
+
+  it('advertises the flag alongside token_endpoint_auth_method none', () => {
+    const metadata = makeProvider().authorizationServerMetadata();
+    expect(metadata.client_id_metadata_document_supported).toBe(true);
+    expect(metadata.token_endpoint_auth_methods_supported).toContain('none');
+    // DCR stays as the fallback for clients that predate the document.
+    expect(metadata.registration_endpoint).toBe(`${ISSUER}/register`);
+  });
+
+  it('resolves a URL client_id from its document and runs the whole code flow on it', async () => {
+    const fetcher = jest.fn(async (url: string) => {
+      expect(url).toBe(CLIENT_URL);
+      return goodDocument();
+    });
+    const provider = makeCimdProvider(fetcher);
+    const { verifier, challenge } = pkcePair();
+
+    await provider.resolveClient(CLIENT_URL);
+    const validated = provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, challenge));
+    // The consent page shows where the registration came from, not only a chosen name.
+    expect(validated.client.client_name).toBe('Example Client (client.example.com)');
+    expect(validated.client.token_endpoint_auth_method).toBe('none');
+
+    const { redirectTo } = provider.completeAuthorization(validated);
+    const code = new URL(redirectTo).searchParams.get('code')!;
+
+    await provider.resolveClient(CLIENT_URL);
+    const tokens = provider.exchange(
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: CLIENT_URL,
+        code,
+        redirect_uri: CALLBACK,
+        code_verifier: verifier,
+      }),
+    );
+    await expect(provider.verifyAccessToken(tokens.access_token as string)).resolves.toMatchObject({
+      clientId: CLIENT_URL,
+    });
+    // One fetch served both the authorize and the token leg.
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op for registered ids and for ids that are not URLs', async () => {
+    const fetcher = jest.fn(async () => goodDocument());
+    const provider = makeCimdProvider(fetcher);
+    const registered = registerTestClient(provider);
+    await provider.resolveClient(registered);
+    await provider.resolveClient('mcp_client_does_not_exist');
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(() =>
+      provider.validateAuthorizationRequest(authorizeParams('mcp_client_does_not_exist', 'x')),
+    ).toThrow(/unknown client_id/);
+  });
+
+  it.each([
+    ['http://client.example.com/client.json', 'must use https'],
+    ['https://user:pw@client.example.com/client.json', 'userinfo'],
+    ['https://client.example.com', 'path component'],
+    ['https://client.example.com/', 'path component'],
+    ['https://client.example.com/a/../client.json', 'dot path segments'],
+    ['https://client.example.com/client.json#frag', 'fragment'],
+  ])('rejects the client identifier URL %s before fetching', async (clientId, reason) => {
+    const fetcher = jest.fn(async () => goodDocument());
+    const provider = makeCimdProvider(fetcher);
+    await expect(provider.resolveClient(clientId)).rejects.toThrow(reason);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'client_id mismatch',
+      { ...goodDocument(), client_id: 'https://client.example.com/other.json' },
+      'does not match',
+    ],
+    ['no redirect_uris', { ...goodDocument(), redirect_uris: [] }, 'redirect_uris'],
+    [
+      'non-https redirect',
+      { ...goodDocument(), redirect_uris: ['http://client.example.com/cb'] },
+      'https',
+    ],
+    [
+      'secret-based auth',
+      { ...goodDocument(), token_endpoint_auth_method: 'client_secret_post' },
+      '"none"',
+    ],
+    ['embedded secret', { ...goodDocument(), client_secret: 'nope' }, 'client_secret'],
+    ['not an object', ['nope'], 'JSON object'],
+  ])(
+    'rejects a document with %s and does not cache the failure',
+    async (_label, document, reason) => {
+      const fetcher = jest.fn(async () => document);
+      const provider = makeCimdProvider(fetcher);
+      await expect(provider.resolveClient(CLIENT_URL)).rejects.toThrow(reason);
+      await expect(provider.resolveClient(CLIENT_URL)).rejects.toThrow(reason);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(() => provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x'))).toThrow(
+        /unknown client_id/,
+      );
+    },
+  );
+
+  it('surfaces a fetch failure as invalid_client and retries next time', async () => {
+    const fetcher = jest
+      .fn<(url: string) => Promise<unknown>>()
+      .mockRejectedValueOnce(
+        new Error('client.example.com answered 302; redirects are not followed'),
+      )
+      .mockResolvedValueOnce(goodDocument());
+    const provider = makeCimdProvider(fetcher);
+    await expect(provider.resolveClient(CLIENT_URL)).rejects.toMatchObject({
+      code: 'invalid_client',
+      status: 401,
+    });
+    await expect(provider.resolveClient(CLIENT_URL)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-fetches once the cache entry expires, so a client can change its redirect URIs', async () => {
+    const fetcher = jest
+      .fn<(url: string) => Promise<unknown>>()
+      .mockResolvedValueOnce(goodDocument())
+      .mockResolvedValueOnce({
+        ...goodDocument(),
+        redirect_uris: ['https://client.example.com/v2'],
+      });
+    const provider = makeCimdProvider(fetcher, { clientMetadataTtl: 30 });
+    await provider.resolveClient(CLIENT_URL);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    await provider.resolveClient(CLIENT_URL);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(() => provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x'))).toThrow(
+      /redirect_uri not registered/,
+    );
+  });
+
+  it('rejects a redirect_uri the document does not list, exactly as DCR does', async () => {
+    const provider = makeCimdProvider(async () => goodDocument());
+    await provider.resolveClient(CLIENT_URL);
+    const params = authorizeParams(CLIENT_URL, 'x');
+    params.set('redirect_uri', 'https://client.example.com/callback/'); // trailing slash: not an exact match
+    expect(() => provider.validateAuthorizationRequest(params)).toThrow(
+      /redirect_uri not registered/,
+    );
+  });
+
+  it('never writes a metadata-document client to the state file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-cimd-'));
+    const stateFile = join(dir, 'state.json');
+    try {
+      const provider = makeCimdProvider(async () => goodDocument(), { stateFile });
+      await provider.resolveClient(CLIENT_URL);
+      const { verifier, challenge } = pkcePair();
+      const validated = provider.validateAuthorizationRequest(
+        authorizeParams(CLIENT_URL, challenge),
+      );
+      const code = new URL(provider.completeAuthorization(validated).redirectTo).searchParams.get(
+        'code',
+      )!;
+      provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: CLIENT_URL,
+          code,
+          redirect_uri: CALLBACK,
+          code_verifier: verifier,
+        }),
+      );
+      provider.flush();
+      const state = JSON.parse(readFileSync(stateFile, 'utf8')) as { clients: unknown[] };
+      expect(state.clients).toEqual([]);
+      // Tokens issued to it persist as usual (they only carry the id string).
+      expect(readFileSync(stateFile, 'utf8')).toContain(CLIENT_URL);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the SSRF-guarded fetch by default: a private-address client_id is refused without a socket', async () => {
+    const provider = makeProvider();
+    await expect(provider.resolveClient('https://127.0.0.1/client.json')).rejects.toThrow(
+      /could not be fetched/,
+    );
+    await expect(
+      provider.resolveClient('https://169.254.169.254/latest/client.json'),
+    ).rejects.toThrow(/could not be fetched/);
+  });
+
+  it('runs the resolve step on every HTTP leg that takes a client_id', async () => {
+    const app = createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+    // No fetcher injected here, so the real guard answers: a loopback
+    // identifier is rejected on the page, never redirected, never fetched.
+    const bad = 'https://127.0.0.1/client.json';
+    const get = await app.fetch(
+      new Request(`${ISSUER}/authorize?${authorizeParams(bad, 'x').toString()}`),
+    );
+    expect(get.status).toBe(400);
+    expect(await get.text()).toContain('could not be fetched');
+
+    const post = await app.fetch(
+      new Request(`${ISSUER}/authorize`, {
+        method: 'POST',
+        body: authorizeParams(bad, 'x').toString(),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    expect(post.status).toBe(400);
+
+    const token = await app.fetch(
+      new Request(`${ISSUER}/token`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: bad,
+          code: 'x',
+        }).toString(),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    expect(token.status).toBe(401);
+    expect(((await token.json()) as { error: string }).error).toBe('invalid_client');
+  });
+});

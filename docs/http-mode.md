@@ -124,8 +124,11 @@ After a new release, tell it to redeploy the app.
 ## Connect your clients
 
 Add `https://mcp.example.com/mcp` as a remote MCP server. The client
-discovers the OAuth endpoints itself and registers dynamically. There is
-nothing to pre-configure.
+discovers the OAuth endpoints itself and registers by whichever mechanism it
+speaks: a Client ID Metadata Document (the client's `client_id` is an https
+URL and the server fetches its registration from there, through the same
+SSRF guard as every other outbound fetch) or, for older clients, dynamic
+registration at `/register`. There is nothing to pre-configure.
 
 - **Claude Desktop / claude.ai:** Settings → Connectors → Add custom
   connector → paste the `/mcp` URL. Your browser opens the authorize page.
@@ -152,8 +155,10 @@ nothing to pre-configure.
 - The client ends up holding a short-lived, revocable MCP token bound to this
   server. Access tokens last 1 hour and refresh silently. Refresh tokens last
   8 hours, so someone removed from Coolify loses MCP access within hours.
-- There is **no secrets database.** The `/data` volume holds registered
-  clients and token hashes, nothing else.
+- There is **no secrets database.** The `/data` volume holds dynamically
+  registered clients and token hashes, nothing else. Clients registered by
+  metadata document are cached in memory for an hour and never written to
+  disk, so the volume no longer grows by one client per fresh connection.
 
 Everyone who authorizes against a container gets that container's token
 privileges. For a privilege split, run two containers: one with a read-write
