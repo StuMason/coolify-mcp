@@ -2,7 +2,10 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # Once per PR, not on every push: re-reviewing each fix commit produced
+    # an author↔reviewer loop (PR #375: four rounds on five files). Ask for
+    # another pass with an @claude comment when you actually want one.
+    types: [opened, reopened]
     # Optional: Only run on specific file changes
     # paths:
     #   - "src/**/*.ts"
