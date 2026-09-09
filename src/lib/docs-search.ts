@@ -1,18 +1,14 @@
 import MiniSearch from 'minisearch';
 import { createRequire } from 'node:module';
+import { parseDocsIndex, countUnparsedLinkLines } from './docs-index-parse.mjs';
+
+export { parseDocsIndex };
 
 const DOCS_INDEX_URL = 'https://coolify.io/docs/llms.txt';
-const DOCS_BASE_URL = 'https://coolify.io/docs';
 /** A background refresh is best effort; it must never hold a search up. */
 const REFRESH_TIMEOUT_MS = 5_000;
 
-interface DocEntry {
-  id: number;
-  title: string;
-  url: string;
-  description: string;
-  section: string;
-}
+type DocEntry = ReturnType<typeof parseDocsIndex>[number];
 
 export interface DocSearchResult {
   title: string;
@@ -28,19 +24,22 @@ export interface DocsBundle {
   fetched_at: string;
   entries: number;
   text: string;
+  /** Sent as If-None-Match on the background refresh; a 304 means the bundle is current. */
+  etag?: string | null;
+  last_modified?: string | null;
 }
 
 export interface DocsSearchStatus {
   /** Where the entries currently being served came from. */
   source: 'bundled' | 'live';
   entries: number;
-  /** When the bundled copy was fetched from coolify.io. */
+  /** When the bundled copy was fetched from coolify.io; empty if the bundle could not be read. */
   bundledAt: string;
 }
 
 export interface DocsSearchOptions {
-  /** The bundled index; defaults to the copy shipped in the package. */
-  bundle?: DocsBundle;
+  /** Loads the bundled index; defaults to the copy shipped in the package. */
+  loadBundle?: () => DocsBundle;
   /** Set false to never touch the network (tests, air-gapped installs). */
   refresh?: boolean;
 }
@@ -53,6 +52,8 @@ function loadShippedBundle(): DocsBundle {
   return require('../data/coolify-docs.json') as DocsBundle;
 }
 
+const REBUILD_HINT = 'rebuild it with `npm run docs:index`';
+
 /**
  * Search over the official Coolify docs index (llms.txt).
  *
@@ -64,6 +65,11 @@ function loadShippedBundle(): DocsBundle {
  * succeeds and parses, the fresher entries replace the bundled ones for the
  * rest of the process. A search never waits on the network.
  *
+ * The one exception: a bundle that is missing or parses to nothing is a
+ * broken build, and then the live index is tried once, synchronously, so an
+ * install that can heal itself does. Failing that, every search throws
+ * with the rebuild command, never a silently empty result.
+ *
  * Why llms.txt and not the full-content dump: ~46KB, a stable spec'd shape
  * (a markdown link list), and every page comes with a human-written one-line
  * description. The tool's job is routing the model to the right page, not
@@ -73,38 +79,59 @@ export class DocsSearchEngine {
   private index: MiniSearch<DocEntry> | null = null;
   private entries: DocEntry[] = [];
   private source: DocsSearchStatus['source'] = 'bundled';
+  private bundle: DocsBundle | null = null;
   private refreshStarted = false;
-  private readonly bundle: DocsBundle;
+  private readonly loadBundle: () => DocsBundle;
   private readonly refresh: boolean;
 
   constructor(options: DocsSearchOptions = {}) {
-    this.bundle = options.bundle ?? loadShippedBundle();
+    // Nothing is read here: the bundle is loaded on first use so a packaging
+    // mistake breaks search_docs, not the construction of every tool.
+    this.loadBundle = options.loadBundle ?? loadShippedBundle;
     this.refresh = options.refresh ?? true;
   }
 
-  /**
-   * Build the index from the bundle if it is not built yet. Synchronous by
-   * design: there is nothing to wait for. Kept as a Promise-returning method
-   * so callers that awaited the old network load keep working.
-   */
   async ensureLoaded(): Promise<void> {
-    if (!this.index) {
-      const entries = parseDocsIndex(this.bundle.text);
-      // A bundle that parses to nothing is a broken build, not an empty
-      // corpus. Fail loudly — a silently empty index is exactly the failure
-      // mode that let an earlier implementation stay broken in production.
-      if (entries.length === 0) {
-        throw new Error(
-          'The bundled Coolify docs index parsed to zero entries — rebuild it with `npm run docs:index`',
-        );
-      }
-      this.install(entries, 'bundled');
+    if (this.index) {
+      this.startBackgroundRefresh();
+      return;
     }
+
+    let problem: string | null = null;
+    try {
+      this.bundle = this.loadBundle();
+      const entries = parseDocsIndex(this.bundle.text);
+      if (entries.length === 0) {
+        problem = 'the bundled Coolify docs index parsed to zero entries';
+      } else {
+        this.install(entries, 'bundled');
+      }
+    } catch (error) {
+      problem = `the bundled Coolify docs index could not be read (${error instanceof Error ? error.message : String(error)})`;
+    }
+
+    if (problem === null) {
+      this.startBackgroundRefresh();
+      return;
+    }
+
+    // Broken build. Try the live index once, in the foreground, so the
+    // recovery path exists; a silently empty index is exactly the failure
+    // mode that let an earlier implementation stay broken in production.
     if (this.refresh && !this.refreshStarted) {
       this.refreshStarted = true;
-      // Fire and forget: outcome is reflected in status(), never in a search.
-      void this.refreshFromLive();
+      await this.refreshFromLive();
     }
+    if (!this.index) {
+      throw new Error(`${problem} — ${REBUILD_HINT}`);
+    }
+  }
+
+  private startBackgroundRefresh(): void {
+    if (!this.refresh || this.refreshStarted) return;
+    this.refreshStarted = true;
+    // Fire and forget: outcome is reflected in status(), never in a search.
+    void this.refreshFromLive();
   }
 
   private install(entries: DocEntry[], source: DocsSearchStatus['source']): void {
@@ -126,33 +153,37 @@ export class DocsSearchEngine {
   /**
    * Replace the bundled entries with the live index when it can be fetched
    * and parsed. Every failure is swallowed on purpose (the bundle is the
-   * answer), except that a live file which parses to zero entries is logged
-   * once: that is a format change upstream, which the next `docs:index`
-   * refresh would otherwise carry into the bundle unnoticed.
+   * answer), except that a live file which parses to nothing, or only
+   * partly, is logged once: that is a format change upstream, which the
+   * next `docs:index` refresh would refuse and the operator should know.
    */
   private async refreshFromLive(): Promise<void> {
+    const controller = new AbortController();
+    // Armed across headers AND body, so a server that answers promptly and
+    // then stalls the body cannot hold the socket past the budget.
+    const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
-      let response: Response;
-      try {
-        // Deliberately no headers: this is the one request the server makes
-        // off-estate, and CF Access credentials must never ride on it (#373).
-        response = await fetch(DOCS_INDEX_URL, { signal: controller.signal });
-      } finally {
-        clearTimeout(timeout);
-      }
+      // Only a cache validator travels: CF Access credentials ride on
+      // Coolify base-URL requests and must never leave the estate (#373).
+      const headers: Record<string, string> = {};
+      if (this.bundle?.etag) headers['if-none-match'] = this.bundle.etag;
+      const response = await fetch(DOCS_INDEX_URL, { signal: controller.signal, headers });
+      if (response.status === 304) return; // the bundle is the live index
       if (!response.ok) return;
-      const entries = parseDocsIndex(await response.text());
-      if (entries.length === 0) {
+      const text = await response.text();
+      const entries = parseDocsIndex(text);
+      const unparsed = countUnparsedLinkLines(text);
+      if (entries.length === 0 || unparsed > 0) {
         console.error(
-          'search_docs: live llms.txt parsed to zero entries (format change upstream?); serving the bundled index',
+          `search_docs: live llms.txt parsed to ${entries.length} entries with ${unparsed} unparsed link lines (format change upstream?); serving the bundled index`,
         );
         return;
       }
       this.install(entries, 'live');
     } catch {
       // Offline, egress-blocked, slow, or coolify.io down: the bundle serves.
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -176,52 +207,10 @@ export class DocsSearchEngine {
   }
 
   status(): DocsSearchStatus {
-    return { source: this.source, entries: this.entries.length, bundledAt: this.bundle.fetched_at };
+    return {
+      source: this.source,
+      entries: this.entries.length,
+      bundledAt: this.bundle?.fetched_at ?? '',
+    };
   }
-}
-
-/**
- * Parse llms.txt — a markdown link list — into doc entries.
- * Exported for testing.
- *
- * The shape, per the llms.txt convention:
- *   - Plain list items and bold items ("- Get Started", "  - **Setup**") are
- *     section labels for the links nested under them.
- *   - Link items carry the page: "- [Title](/path): one-line description".
- *     The description after the colon is optional; paths are relative to the
- *     docs root (the site serves them under /docs), and absolute URLs pass
- *     through untouched.
- */
-export function parseDocsIndex(text: string): DocEntry[] {
-  const entries: DocEntry[] = [];
-  let section = '';
-
-  for (const line of text.split('\n')) {
-    const link = line.match(/^\s*-\s*\[([^\]]+)\]\(([^)\s]+)\)(?::\s*(.*))?\s*$/);
-    if (link) {
-      const [, title, path, description] = link;
-      entries.push({
-        id: entries.length,
-        title: title.trim(),
-        url: buildUrl(path.trim()),
-        description: (description ?? '').trim(),
-        section,
-      });
-      continue;
-    }
-    // A list item that is not a link is a section label; so is a heading.
-    const label =
-      line.match(/^\s*-\s*\*\*(.+?)\*\*\s*$/) ??
-      line.match(/^\s*-\s+([^[\s].*?)\s*$/) ??
-      line.match(/^#+\s+(.+?)\s*$/);
-    if (label) section = label[1];
-  }
-
-  return entries;
-}
-
-function buildUrl(path: string): string {
-  if (/^https?:\/\//.test(path)) return path;
-  if (path.startsWith('/docs/') || path === '/docs') return `https://coolify.io${path}`;
-  return `${DOCS_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
 }

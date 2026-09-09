@@ -73,8 +73,10 @@ describe('DocsSearchEngine', () => {
     source: 'test',
     fetched_at: '2026-09-09T00:00:00.000Z',
     entries: 9,
+    etag: '"bundle-etag"',
     text: SAMPLE_INDEX,
   };
+  const loadBundle = () => bundle;
   const okResponse = (body: string) =>
     ({ ok: true, text: async () => body }) as unknown as Response;
   /** A refresh that never resolves: proves searches do not wait on it. */
@@ -91,7 +93,7 @@ describe('DocsSearchEngine', () => {
 
   it('serves from the bundle immediately, without waiting on the network', async () => {
     mockFetch.mockImplementation(hangingFetch);
-    const engine = new DocsSearchEngine({ bundle });
+    const engine = new DocsSearchEngine({ loadBundle });
 
     const results = await engine.search('install');
 
@@ -102,7 +104,7 @@ describe('DocsSearchEngine', () => {
   it('starts exactly one background refresh, and swaps in the live index when it parses', async () => {
     const live = SAMPLE_INDEX + '- [Brand New Page](/new-page): Added upstream after the bundle.\n';
     mockFetch.mockResolvedValue(okResponse(live));
-    const engine = new DocsSearchEngine({ bundle });
+    const engine = new DocsSearchEngine({ loadBundle });
 
     await engine.search('install');
     await engine.search('compose');
@@ -115,15 +117,16 @@ describe('DocsSearchEngine', () => {
 
   it('never sends credential headers off-estate, even with CF Access configured (#373)', async () => {
     // The CF Access service token rides only on Coolify base-URL requests.
-    // The refresh goes to coolify.io — assert it carries no headers at all.
+    // The refresh goes to coolify.io — the only header it may carry is the
+    // cache validator for the bundle it already has.
     process.env.CF_ACCESS_CLIENT_ID = 'id.access';
     process.env.CF_ACCESS_CLIENT_SECRET = 'cf-secret';
     try {
       mockFetch.mockResolvedValue(okResponse(SAMPLE_INDEX));
-      await new DocsSearchEngine({ bundle }).search('install');
+      await new DocsSearchEngine({ loadBundle }).search('install');
       await settle();
       const init = mockFetch.mock.calls[0][1] as RequestInit;
-      expect(init.headers).toBeUndefined();
+      expect(init.headers).toEqual({ 'if-none-match': '"bundle-etag"' });
     } finally {
       delete process.env.CF_ACCESS_CLIENT_ID;
       delete process.env.CF_ACCESS_CLIENT_SECRET;
@@ -131,7 +134,7 @@ describe('DocsSearchEngine', () => {
   });
 
   it('ranks the obviously right page first', async () => {
-    const engine = new DocsSearchEngine({ bundle, refresh: false });
+    const engine = new DocsSearchEngine({ loadBundle, refresh: false });
 
     const results = await engine.search('installation');
 
@@ -142,7 +145,7 @@ describe('DocsSearchEngine', () => {
   });
 
   it('respects the limit parameter', async () => {
-    const results = await new DocsSearchEngine({ bundle, refresh: false }).search('coolify', 2);
+    const results = await new DocsSearchEngine({ loadBundle, refresh: false }).search('coolify', 2);
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
@@ -157,7 +160,7 @@ describe('DocsSearchEngine', () => {
     mockFetch.mockImplementation(impl as typeof fetch);
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const engine = new DocsSearchEngine({ bundle });
+      const engine = new DocsSearchEngine({ loadBundle });
       const results = await engine.search('install');
       await settle();
       expect(results[0].title).toBe('Installation');
@@ -174,10 +177,33 @@ describe('DocsSearchEngine', () => {
     mockFetch.mockResolvedValue(okResponse('# nothing here\n'));
     const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await new DocsSearchEngine({ bundle }).search('install');
+      await new DocsSearchEngine({ loadBundle }).search('install');
       await settle();
       expect(stderr).toHaveBeenCalledTimes(1);
-      expect(String(stderr.mock.calls[0][0])).toMatch(/zero entries/);
+      expect(String(stderr.mock.calls[0][0])).toMatch(/parsed to 0 entries/);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it('treats a 304 as "the bundle is the live index"', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 304 } as unknown as Response);
+    const engine = new DocsSearchEngine({ loadBundle });
+    await engine.search('install');
+    await settle();
+    expect(engine.status().source).toBe('bundled');
+    expect(engine.getEntryCount()).toBeGreaterThan(5);
+  });
+
+  it('logs and keeps the bundle when the live file has link lines the parser rejects', async () => {
+    mockFetch.mockResolvedValue(okResponse(SAMPLE_INDEX.replace(/\): /g, ') — ')));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const engine = new DocsSearchEngine({ loadBundle });
+      await engine.search('install');
+      await settle();
+      expect(engine.status().source).toBe('bundled');
+      expect(String(stderr.mock.calls[0][0])).toMatch(/unparsed link lines/);
     } finally {
       stderr.mockRestore();
     }
@@ -185,10 +211,44 @@ describe('DocsSearchEngine', () => {
 
   it('treats a bundle that parses to zero entries as a broken build, not an empty corpus', async () => {
     const engine = new DocsSearchEngine({
-      bundle: { ...bundle, text: '# empty\n' },
+      loadBundle: () => ({ ...bundle, text: '# empty\n' }),
       refresh: false,
     });
-    await expect(engine.search('anything')).rejects.toThrow(/zero entries/);
+    await expect(engine.search('anything')).rejects.toThrow(/zero entries.*npm run docs:index/);
+  });
+
+  it('heals a broken or missing bundle from the live index once, in the foreground', async () => {
+    mockFetch.mockResolvedValue(okResponse(SAMPLE_INDEX));
+    const missing = new DocsSearchEngine({
+      loadBundle: () => {
+        throw new Error("Cannot find module '../data/coolify-docs.json'");
+      },
+    });
+    expect((await missing.search('install'))[0].title).toBe('Installation');
+    expect(missing.status()).toMatchObject({ source: 'live', bundledAt: '' });
+
+    const empty = new DocsSearchEngine({ loadBundle: () => ({ ...bundle, text: '' }) });
+    expect((await empty.search('install'))[0].title).toBe('Installation');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the rebuild command when the bundle is broken and live is unreachable', async () => {
+    mockFetch.mockRejectedValue(new Error('ENETUNREACH'));
+    const engine = new DocsSearchEngine({
+      loadBundle: () => {
+        throw new Error('MODULE_NOT_FOUND');
+      },
+    });
+    await expect(engine.search('x')).rejects.toThrow(/could not be read.*npm run docs:index/);
+    // Not retried on every search: one foreground attempt per process.
+    await expect(engine.search('x')).rejects.toThrow(/could not be read/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('constructs without touching the bundle, so a packaging mistake breaks search, not the server', () => {
+    const loader = jest.fn(() => bundle);
+    new DocsSearchEngine({ loadBundle: loader });
+    expect(loader).not.toHaveBeenCalled();
   });
 
   it('ships a real bundle that answers real questions offline', async () => {
