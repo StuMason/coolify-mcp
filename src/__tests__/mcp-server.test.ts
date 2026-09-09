@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import {
   CoolifyMcpServer,
+  FLEET_ONLY_TOOLS,
   TOOL_ANNOTATIONS,
   VERSION,
   truncateLogs,
@@ -2131,8 +2132,13 @@ describe('tool annotations (#260)', () => {
 
   it('keeps the annotations table and the registered tools exactly in step', () => {
     // Either direction is a bug: a table entry with no tool is dead config, a
-    // tool with no entry cannot register at all (defineTool throws).
-    expect(Object.keys(TOOL_ANNOTATIONS).sort()).toEqual(Object.keys(registered).sort());
+    // tool with no entry cannot register at all (defineTool throws). Fleet-only
+    // tools are absent on a single-instance server by design (#367); the
+    // fleet suite checks the table against a fleet-mode server.
+    const expected = Object.keys(TOOL_ANNOTATIONS).filter(
+      (name) => !FLEET_ONLY_TOOLS.has(name as keyof typeof TOOL_ANNOTATIONS),
+    );
+    expect(expected.sort()).toEqual(Object.keys(registered).sort());
   });
 
   it('never marks a tool both read-only and destructive', () => {
@@ -2250,7 +2256,7 @@ describe('tool annotations (#260)', () => {
     it('delivers annotations to the client, not just to the registry', async () => {
       const tools = await listTools();
 
-      expect(tools).toHaveLength(Object.keys(TOOL_ANNOTATIONS).length);
+      expect(tools).toHaveLength(Object.keys(TOOL_ANNOTATIONS).length - FLEET_ONLY_TOOLS.size);
       const unannotated = tools.filter((t) => !t.annotations).map((t) => t.name);
       expect(unannotated).toEqual([]);
 

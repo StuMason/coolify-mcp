@@ -10,7 +10,8 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createHttpApp, normalizePublicUrl } from './lib/http-server.js';
-import { checkStartupConfig, cfAccessHeaders } from './lib/startup-check.js';
+import { checkStartupConfig } from './lib/startup-check.js';
+import { registryFromEnv, type InstanceRegistry } from './lib/instances.js';
 import type { CoolifyConfig } from './types/coolify.js';
 
 /**
@@ -118,19 +119,26 @@ function main(): void {
     process.exit(1);
   }
 
-  const coolify: CoolifyConfig = {
-    baseUrl,
-    accessToken,
-    // Cloudflare Access service token (#373): rides on every Coolify API
-    // request, including the tier-2 proof-of-access fetch. Never on any
-    // other fetch this server makes.
-    customHeaders: cfAccessHeaders(process.env),
-  };
+  // The instance registry (#367). The default instance carries the CF Access
+  // service token (#373) on every Coolify API request, including the tier-2
+  // proof-of-access fetch — never on any other fetch this server makes.
+  // Proof of access validates against the default instance ONLY: a fleet is
+  // one trust domain, so proving membership of the default proves the fleet.
+  let registry: InstanceRegistry;
+  try {
+    registry = registryFromEnv(process.env);
+  } catch (error) {
+    console.error('coolify-mcp http mode cannot start:');
+    console.error(`  - ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+  const coolify: CoolifyConfig = registry.default;
   const port = Number(process.env.MCP_PORT || process.env.PORT || 8080);
   const readonly = process.env.MCP_READONLY === 'true';
 
   const app = createHttpApp({
     coolify,
+    instances: registry,
     publicUrl,
     accessTokenTtl: Number(process.env.MCP_ACCESS_TOKEN_TTL || 3600),
     // Short by design: "removed from Coolify" should mean "loses MCP access"

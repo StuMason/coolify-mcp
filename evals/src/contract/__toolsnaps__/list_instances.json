@@ -1,0 +1,12 @@
+{
+  "name": "list_instances",
+  "description": "The configured Coolify instances. Every tool takes an optional `instance` (one of these names); omitted means the default. Reports each instance's live Coolify version, or the error reaching it. Tokens are never shown.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
+  }
+}

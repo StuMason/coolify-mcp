@@ -5,6 +5,7 @@
 
 import { createRequire } from 'module';
 import { randomBytes } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { McpServer } from '@modelcontextprotocol/server';
 import type { Transport, ToolAnnotations, ToolCallback } from '@modelcontextprotocol/server';
 import { z } from 'zod';
@@ -35,6 +36,7 @@ import type {
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
+import { DEFAULT_INSTANCE_NAME, InstanceRegistry, type InstanceDefinition } from './instances.js';
 
 /**
  * Database credential fields whose change on `update` is guarded — usernames
@@ -487,6 +489,8 @@ export const TOOL_ANNOTATIONS = {
   get_version: READ_ONLY,
   // Local constant, no API call — the one tool that touches nothing external.
   get_mcp_version: { readOnlyHint: true, openWorldHint: false },
+  // Fleet mode only (#367): registered when more than one instance is configured.
+  list_instances: READ_ONLY,
   get_infrastructure_overview: READ_ONLY,
   list_servers: READ_ONLY,
   list_applications: READ_ONLY,
@@ -553,6 +557,9 @@ export const TOOL_ANNOTATIONS = {
  */
 export type ToolName = keyof typeof TOOL_ANNOTATIONS;
 
+/** Tools that exist only when more than one instance is configured (#367). */
+export const FLEET_ONLY_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>(['list_instances']);
+
 export interface CoolifyMcpServerOptions {
   /**
    * Register only tools annotated read-only (#303). The mutating tools do not
@@ -567,10 +574,46 @@ export interface CoolifyMcpServerOptions {
   requireElicitation?: boolean;
 }
 
+/**
+ * The per-tool `instance` argument, present only in fleet mode. One word of
+ * description on purpose: 45 copies of it ride on every tools/list, and the
+ * semantics live once, in `list_instances`.
+ */
+const INSTANCE_ARG = z.string().optional().describe('Instance name');
+
 export class CoolifyMcpServer extends McpServer {
-  private readonly client: CoolifyClient;
+  private readonly registry: InstanceRegistry;
+  /**
+   * One CoolifyClient per instance is load-bearing, not a style choice (#367):
+   * the GET/POST legacy-fallback cache, the version cache and the sanitizer
+   * all live at client scope, and prod on 4.1.2 next to staging on 4.3 need
+   * different cached answers for the same endpoint.
+   */
+  private readonly clients = new Map<string, CoolifyClient>();
+  /**
+   * The instance a tool call is executing against, established per call in
+   * {@link defineTool}. Request-scoped context rather than a swapped field so
+   * concurrent calls against different instances cannot cross — AsyncLocalStorage
+   * follows the call through every await, promise and timer.
+   */
+  private readonly instanceContext = new AsyncLocalStorage<InstanceDefinition>();
   private readonly serverOptions: CoolifyMcpServerOptions;
   private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
+
+  /** The client for the instance the current tool call targets (default outside any call). */
+  private get client(): CoolifyClient {
+    return this.clientFor(this.currentInstance);
+  }
+
+  private get currentInstance(): InstanceDefinition {
+    return this.instanceContext.getStore() ?? this.registry.default;
+  }
+
+  private clientFor(instance: InstanceDefinition): CoolifyClient {
+    const client = this.clients.get(instance.name);
+    if (!client) throw new Error(`No client for instance "${instance.name}"`);
+    return client;
+  }
 
   /**
    * Register a tool, attaching its annotations from {@link TOOL_ANNOTATIONS}.
@@ -602,7 +645,43 @@ export class CoolifyMcpServer extends McpServer {
     // Call sites keep the raw-shape ergonomics; the z.object wrap happens here
     // because SDK v2 deprecates the raw-shape registerTool overload and this
     // is the one place all 45 registrations pass through.
-    this.registerTool(name, { description, inputSchema: z.object(inputSchema), annotations }, cb);
+    //
+    // Fleet mode (#367) adds the optional `instance` argument here, once for
+    // every tool — and only when there is more than one instance to choose
+    // between, so single-instance configs pay nothing on tools/list.
+    // Fleet-only tools (list_instances) are about the fleet, not an instance
+    // of it: no `instance` argument, so a wrong name can never break the one
+    // tool whose job is to correct wrong names.
+    const takesInstance = this.registry.isFleet && !FLEET_ONLY_TOOLS.has(name);
+    const shape = takesInstance ? { ...inputSchema, instance: INSTANCE_ARG } : inputSchema;
+    const scoped: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
+      if (!takesInstance) return cb(args, extra);
+      // `instance` is routing, not payload. Several handlers rest-spread their
+      // args straight into a Coolify request body (application update,
+      // database, github_apps, database_backups), and upstream 422s on
+      // unknown fields — so it is stripped here, once, before any handler
+      // sees it, rather than trusted to every future `...rest`.
+      const { instance: requested, ...forwarded } = args as { instance?: string };
+      let instance: InstanceDefinition;
+      try {
+        instance = this.registry.get(requested);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+      return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
+    };
+    this.registerTool(
+      name,
+      { description, inputSchema: z.object(shape), annotations },
+      scoped as unknown as ToolCallback<z.ZodObject<typeof shape>>,
+    );
   }
 
   /**
@@ -635,7 +714,18 @@ export class CoolifyMcpServer extends McpServer {
     summarize: () => string | null | Promise<string | null>,
     operation: () => Promise<T>,
   ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
-    const outcome = await confirmDestructive(this.server, label, summarize, signal, {
+    // Fleet mode (#367): every confirmation names the instance. Cross-instance
+    // fat-fingering is the failure mode a second instance invents, and the
+    // prompt is where it gets caught — "Delete api-server on prod?".
+    const instance = this.currentInstance;
+    const scopedLabel = this.registry.isFleet ? `${label} on instance "${instance.name}"` : label;
+    const scopedSummarize = this.registry.isFleet
+      ? async (): Promise<string | null> => {
+          const summary = await summarize();
+          return summary === null ? null : `Instance: ${instance.name}\n${summary}`;
+        }
+      : summarize;
+    const outcome = await confirmDestructive(this.server, scopedLabel, scopedSummarize, signal, {
       requireHuman: this.serverOptions.requireElicitation,
     });
     if (!outcome.approved) {
@@ -644,9 +734,15 @@ export class CoolifyMcpServer extends McpServer {
     return wrap(operation);
   }
 
-  constructor(config: CoolifyConfig, options?: CoolifyMcpServerOptions) {
+  constructor(config: CoolifyConfig | InstanceRegistry, options?: CoolifyMcpServerOptions) {
     super({ name: 'coolify', version: VERSION });
-    this.client = new CoolifyClient(config);
+    this.registry =
+      config instanceof InstanceRegistry
+        ? config
+        : new InstanceRegistry([{ name: DEFAULT_INSTANCE_NAME, ...config }]);
+    for (const instance of this.registry.all) {
+      this.clients.set(instance.name, new CoolifyClient(instance));
+    }
     this.serverOptions = options ?? {};
     this.registerTools();
   }
@@ -765,6 +861,34 @@ export class CoolifyMcpServer extends McpServer {
         },
       ],
     }));
+
+    // Fleet mode only (#367). This is where the `instance` argument's
+    // semantics are documented, once, rather than 45 times.
+    if (this.registry.isFleet) {
+      this.defineTool(
+        'list_instances',
+        "The configured Coolify instances. Every tool takes an optional `instance` (one of these names); omitted means the default. Reports each instance's live Coolify version, or the error reaching it. Tokens are never shown.",
+        {},
+        async () =>
+          wrap(async () =>
+            Promise.all(
+              this.registry.all.map(async (instance) => {
+                const base = {
+                  name: instance.name,
+                  url: instance.baseUrl,
+                  default: instance.name === this.registry.default.name,
+                };
+                try {
+                  const { version } = await this.clientFor(instance).getVersion();
+                  return { ...base, version };
+                } catch (error) {
+                  return { ...base, error: error instanceof Error ? error.message : String(error) };
+                }
+              }),
+            ),
+          ),
+      );
+    }
 
     // =========================================================================
     // Infrastructure Overview (1 tool)

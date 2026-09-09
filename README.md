@@ -69,6 +69,31 @@ COOLIFY_BASE_URL="https://your-coolify-instance.com" COOLIFY_ACCESS_TOKEN="your-
 
 It checks your config for the classic traps (unexpanded `${VAR}` placeholders, pasted whitespace, a doubled `/api/v1`), that Coolify is reachable (naming Cloudflare Access interception when that's the wall), that your token is accepted and whether it can deploy (probed side-effect-free; `write` has no safe probe, so doctor says "undetermined" rather than guessing), and whether your Coolify version is in the tested range — each failure with a one-line fix. `--header "Key: Value"` flags are honoured the same as the server honours them; network probes time out after 10s each. Add `--json` for machine-readable output. It never prints a secret.
 
+## Running a fleet
+
+One server, several Coolify instances — prod and staging, or a Coolify per region. Add `COOLIFY_INSTANCES`, a JSON array, next to your existing config:
+
+```json
+{
+  "env": {
+    "COOLIFY_BASE_URL": "https://prod.example.com",
+    "COOLIFY_ACCESS_TOKEN": "prod-token",
+    "COOLIFY_INSTANCES": "[{\"name\":\"staging\",\"url\":\"https://staging.example.com\",\"token\":\"staging-token\"}]"
+  }
+}
+```
+
+With more than one instance configured:
+
+- **Every tool takes an optional `instance`** (a name from the list). Omitted means the default — your `COOLIFY_BASE_URL` instance, or the first entry when only `COOLIFY_INSTANCES` is set. A wrong name is rejected with the list of valid names before anything is sent.
+- **`list_instances`** reports each instance's name, URL, default flag and live Coolify version. Tokens are never shown.
+- **Every destructive confirmation names the instance** — "Stop all applications on instance staging?" — because fat-fingering the wrong estate is the failure mode a second instance invents.
+- Each instance gets its own client, so a prod on 4.1 next to a staging on 4.3 each keep their own version handling.
+
+Single-instance configs are untouched: no `instance` argument, no extra tool, byte-identical `tools/list`. Entries may carry `"headers": {…}` for a proxy; `CF_ACCESS_*` applies to the default instance only.
+
+**A fleet is one trust domain.** Every instance in a `COOLIFY_INSTANCES` list is assumed to belong to the same owner, and in HTTP mode the OAuth proof-of-access check validates against the default instance only. **Agencies with a Coolify per client should run one server per client**, not one fleet — per-client isolation is the deployment, not the auth layer. Per-instance OAuth scopes are on the roadmap (#367).
+
 ## Tools
 
 | Category             | Tools                                                                                                                                                                     |
