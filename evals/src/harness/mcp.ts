@@ -23,6 +23,29 @@ export interface McpToolInfo {
   annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
 }
 
+export interface McpPromptInfo {
+  name: string;
+  title?: string;
+  description?: string;
+  arguments?: Array<{ name: string; description?: string; required?: boolean }>;
+}
+
+export interface McpResourceInfo {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface McpResourceTemplateInfo {
+  uriTemplate: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+}
+
 export interface EvalContext {
   fixture: FixtureHandle;
   client: Client;
@@ -30,6 +53,12 @@ export interface EvalContext {
   toolInfo: McpToolInfo[];
   /** The server `instructions` field from `initialize` (#339); undefined if unset. */
   instructions?: string;
+  /** Raw prompts/list entries (#371). Their own list, with their own budget. */
+  promptInfo: McpPromptInfo[];
+  /** Raw resources/list entries (#371) — the concrete URIs a client can attach. */
+  resourceInfo: McpResourceInfo[];
+  /** Raw resources/templates/list entries (#371). */
+  resourceTemplateInfo: McpResourceTemplateInfo[];
   /** The same tools as an AI SDK ToolSet whose execute() round-trips through the server. */
   toolSet: ToolSet;
   /** Tool names the server marks read-only / destructive — derived, never hand-listed. */
@@ -101,6 +130,15 @@ async function connectHarness(
   const listed = await client.listTools();
   const toolInfo = listed.tools as unknown as McpToolInfo[];
 
+  // Prompts and resources are separate lists over separate methods, which is
+  // the point of the acceptance criterion on #371: adding them must not move
+  // the tools/list budget by a byte. Listing them here lets the contract tests
+  // snapshot all three surfaces from one boot.
+  const promptInfo = (await client.listPrompts()).prompts as unknown as McpPromptInfo[];
+  const resourceInfo = (await client.listResources()).resources as unknown as McpResourceInfo[];
+  const resourceTemplateInfo = (await client.listResourceTemplates())
+    .resourceTemplates as unknown as McpResourceTemplateInfo[];
+
   const toolSet: ToolSet = Object.fromEntries(
     toolInfo.map((t) => [
       t.name,
@@ -126,6 +164,9 @@ async function connectHarness(
     client,
     instructions: client.getInstructions(),
     toolInfo,
+    promptInfo,
+    resourceInfo,
+    resourceTemplateInfo,
     toolSet,
     readOnlyTools: toolInfo.filter((t) => t.annotations?.readOnlyHint === true).map((t) => t.name),
     destructiveTools: toolInfo

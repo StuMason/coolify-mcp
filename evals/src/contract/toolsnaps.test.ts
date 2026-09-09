@@ -12,6 +12,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FIXTURE_WEBHOOK_SECRET } from '../fixture/data.js';
 import { createEvalContext, type EvalContext } from '../harness/mcp.js';
 
 let ctx: EvalContext;
@@ -30,6 +31,30 @@ afterAll(async () => {
 // on the CI runner — a phantom `_roster.json` diff on the check that gates
 // merge. This is deterministic everywhere.
 const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Backticked tokens in prompt text that are meant to be tool names. Prompt
+ * prose also backticks argument names (`lines`, `page`, `instance`) and action
+ * values, so the "names only real tools" check needs to know which tokens are
+ * claims about the tool surface. Kept as an explicit list rather than a clever
+ * heuristic: a new tool named in a prompt should have to be added here, which
+ * is the moment to ask whether it exists in read-only mode.
+ */
+const TOOL_LIKE = new Set([
+  'diagnose_app',
+  'diagnose_server',
+  'logs',
+  'application_logs',
+  'env_vars',
+  'deployment',
+  'find_issues',
+  'get_infrastructure_overview',
+  'get_application',
+  'list_applications',
+  'list_deployments',
+  'control',
+  'deploy',
+]);
 
 describe('tool contract', () => {
   // The per-tool snapshots below catch a CHANGED tool, but not a REMOVED one:
@@ -93,5 +118,121 @@ describe('tool contract', () => {
     // description edit quietly doubles what every session pays to connect.
     const chars = JSON.stringify(ctx.toolInfo).length;
     expect(chars / 4).toBeLessThan(8000);
+  });
+});
+
+/**
+ * Layer 1, prompts and resources (#371).
+ *
+ * Same argument as the tool contract: `prompts/list` and `resources/list` are
+ * read by a client and, for prompts, by the human picking a slash command.
+ * They are the product surface, so a change to them belongs in review as a
+ * snapshot diff.
+ */
+describe('prompt contract', () => {
+  it('the prompt list matches its snapshot', async () => {
+    await expect(
+      JSON.stringify(
+        [...ctx.promptInfo].sort((a, b) => byName(a.name, b.name)),
+        null,
+        2,
+      ) + '\n',
+    ).toMatchFileSnapshot('__toolsnaps__/_prompts.json');
+  });
+
+  it('every prompt names only tools this server actually registered', async () => {
+    // The whole reason `definePrompt` takes `requires` and the builders take
+    // `has()`. A prompt that walks the model to a tool which is not registered
+    // is worse than no prompt, and read-only mode (#303) plus consolidation
+    // make "which tools exist" a per-mode fact rather than a constant.
+    const registered = new Set(ctx.toolInfo.map((t) => t.name));
+    const offenders: string[] = [];
+    for (const prompt of ctx.promptInfo) {
+      const args = Object.fromEntries(
+        (prompt.arguments ?? []).map((arg) => [arg.name, `fixture-${arg.name}`]),
+      );
+      const { messages } = await ctx.client.getPrompt({ name: prompt.name, arguments: args });
+      const text = messages
+        .map((m) => (m.content.type === 'text' ? m.content.text : ''))
+        .join('\n');
+      // Tools are named in backticks throughout the prompt text, which is what
+      // makes this checkable rather than a guess at prose.
+      for (const [, named] of text.matchAll(/`([a-z_]+)`/g)) {
+        // Argument names and action values share the backtick convention;
+        // only flag a token that looks like a tool and is not one.
+        if (!registered.has(named) && TOOL_LIKE.has(named)) {
+          offenders.push(`${prompt.name} names \`${named}\``);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('prompt list token budget holds', () => {
+    // Its own budget, deliberately separate from the tools'. Prompts are a
+    // much smaller surface and should stay one.
+    expect(JSON.stringify(ctx.promptInfo).length / 4).toBeLessThan(400);
+  });
+});
+
+describe('resource contract', () => {
+  it('the resource list matches its snapshot', async () => {
+    await expect(
+      JSON.stringify(
+        {
+          resources: [...ctx.resourceInfo].sort((a, b) => byName(a.uri, b.uri)),
+          templates: [...ctx.resourceTemplateInfo].sort((a, b) =>
+            byName(a.uriTemplate, b.uriTemplate),
+          ),
+        },
+        null,
+        2,
+      ) + '\n',
+    ).toMatchFileSnapshot('__toolsnaps__/_resources.json');
+  });
+
+  it('reading an application resource returns exactly what get_application returns', async () => {
+    // The masking eval #371 asks for. Resource reads go through CoolifyClient,
+    // so the central sanitizer applies — but "so it should be fine" is not a
+    // test. Byte equality with the tool is, and it holds whatever the field
+    // list grows into, because both sides read the same sanitized payload.
+    const uuid = 'app-api';
+    const viaResource = await ctx.client.readResource({
+      uri: `coolify://application/${uuid}`,
+    });
+    const viaTool = await ctx.client.callTool({
+      name: 'get_application',
+      arguments: { uuid },
+    });
+    const resourceText = (viaResource.contents[0] as { text: string }).text;
+    const toolText = (viaTool.content as Array<{ text: string }>)[0].text;
+    // The tool wraps its payload with `_actions` — next-call affordances for a
+    // model mid-tool-loop. A resource is an attachment, not a turn in that
+    // loop, so it carries the payload bare. The payload itself must match
+    // exactly, which is the masking claim under test.
+    const toolPayload = JSON.parse(toolText) as { data?: unknown };
+    expect(JSON.parse(resourceText)).toEqual(toolPayload.data);
+  });
+
+  it('an application resource never carries a plaintext credential', async () => {
+    // The paired positive: equality above would also pass if BOTH leaked. The
+    // fixture app carries a webhook secret precisely so this can fail.
+    const read = await ctx.client.readResource({ uri: 'coolify://application/app-api' });
+    const text = (read.contents[0] as { text: string }).text;
+    expect(text).toContain('manual_webhook_secret_github');
+    expect(text).not.toContain(FIXTURE_WEBHOOK_SECRET);
+    expect(JSON.parse(text).manual_webhook_secret_github).toBe('***');
+  });
+
+  it('there is no way to ask a resource for plaintext', () => {
+    // A resource URI is a durable handle a client may cache, re-read or paste,
+    // which is the last place to put an opt-in to secrets. `get_application`
+    // has `reveal` because a caller justifies it in the moment; no URI here
+    // takes one, and that asymmetry is deliberate rather than an oversight.
+    const uris = [
+      ...ctx.resourceInfo.map((r) => r.uri),
+      ...ctx.resourceTemplateInfo.map((r) => r.uriTemplate),
+    ];
+    expect(uris.filter((uri) => /reveal/i.test(uri))).toEqual([]);
   });
 });

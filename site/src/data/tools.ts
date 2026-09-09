@@ -57,6 +57,11 @@ export const DOCS: { t: string; d: string; file: string }[] = [
     file: 'docs/http-mode.md',
   },
   {
+    t: 'Prompts and resources',
+    d: 'Guided workflows you start as slash commands, and reads a client can attach. Why a prompt never fetches, and why a resource can never bypass masking.',
+    file: 'docs/prompts-and-resources.md',
+  },
+  {
     t: 'Fleet',
     d: 'Several Coolify instances from one server: COOLIFY_INSTANCES, the instance argument, and why a fleet is one trust domain.',
     file: 'docs/fleet.md',

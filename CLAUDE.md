@@ -51,7 +51,8 @@ When adding new Coolify API endpoints, follow this order:
 
 - **src/index.ts** - Entry point, starts MCP server
 - **src/lib/coolify-client.ts** - HTTP client wrapping Coolify REST API
-- **src/lib/mcp-server.ts** - MCP tool definitions and handlers
+- **src/lib/mcp-server.ts** - MCP tool definitions and handlers, plus prompt and resource registration
+- **src/lib/prompts.ts** - the prompt workflows as pure text builders. They never call the API: `prompts/get` has no error channel a human can act on, and embedding build output in the returned message would put attacker-influenceable text in a user-role message, outside the `asUntrustedLogs` boundary. A prompt may only name tools that are registered in the current mode — `definePrompt`'s `requires` drops the whole prompt, `ctx.has()` drops a single step. See `docs/prompts-and-resources.md`
 - **src/types/coolify.ts** - All Coolify API type definitions
 - **src/data/coolify-docs.json** - the bundled Coolify docs index `search_docs` serves (#372). **Generated** — `npm run docs:index` refreshes it from coolify.io/docs/llms.txt, the publish workflow refreshes it at release time, and a weekly workflow opens a PR when it falls behind. Never hand-edit.
 - **docs/coolify-openapi.yaml** - vendored upstream OpenAPI spec; ground truth for "does Coolify support X"

@@ -9,7 +9,7 @@
 
 Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 tools for deploying, debugging, and operating your self-hosted PaaS in plain English. Destructive operations ask a human first; secrets stay masked.
 
-📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** · [Tool reference](docs/tools.md) · [Remote / HTTP mode](docs/http-mode.md) · [Fleet](docs/fleet.md) · [Doctor](docs/doctor.md) · [Safety and security](docs/security.md) · [Changelog](CHANGELOG.md)
+📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** · [Tool reference](docs/tools.md) · [Prompts and resources](docs/prompts-and-resources.md) · [Remote / HTTP mode](docs/http-mode.md) · [Fleet](docs/fleet.md) · [Doctor](docs/doctor.md) · [Safety and security](docs/security.md) · [Changelog](CHANGELOG.md)
 
 ## Install
 
@@ -72,6 +72,10 @@ Every tool takes an `action`; run one with no arguments and it lists what it acc
 - **Search the Coolify docs** with `search_docs`.
 
 Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 6,600 tokens of context.
+
+## Workflows, not just tools
+
+Three prompts ship as slash commands: `troubleshoot_application`, `explain_failed_deploy` and `estate_health`. Pick one and the model walks the workflow with the tools it already has. Two resources, `coolify://overview` and `coolify://application/{uuid}`, are reads your client can attach; both go through the same masking as every tool call, and neither offers a way to ask for plaintext. A prompt whose tools are not registered is not listed, so read-only mode never offers a dead end. [Prompts and resources](docs/prompts-and-resources.md).
 
 ## Several Coolify instances
 

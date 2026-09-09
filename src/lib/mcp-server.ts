@@ -6,8 +6,14 @@
 import { createRequire } from 'module';
 import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { McpServer } from '@modelcontextprotocol/server';
-import type { Transport, ToolAnnotations, ToolCallback } from '@modelcontextprotocol/server';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import type {
+  Transport,
+  ToolAnnotations,
+  ToolCallback,
+  ListResourcesResult,
+  ReadResourceResult,
+} from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
   CoolifyClient,
@@ -38,6 +44,12 @@ import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 import { DEFAULT_INSTANCE_NAME, InstanceRegistry, type InstanceDefinition } from './instances.js';
 import { buildInstructions } from './instructions.js';
+import {
+  estateHealthPrompt,
+  explainFailedDeployPrompt,
+  troubleshootApplicationPrompt,
+  type PromptBuildContext,
+} from './prompts.js';
 
 /**
  * Database credential fields whose change on `update` is guarded — usernames
@@ -561,6 +573,20 @@ export type ToolName = keyof typeof TOOL_ANNOTATIONS;
 /** Tools that exist only when more than one instance is configured (#367). */
 export const FLEET_ONLY_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>(['list_instances']);
 
+/**
+ * The prompt surface (#371). Kept as a named list, not inferred from the
+ * registration calls, so `prompts/list` has a single place to audit the same
+ * way {@link TOOL_ANNOTATIONS} is for tools — and so a test can assert the
+ * registered prompts and this list stay 1:1.
+ */
+export const PROMPT_NAMES = [
+  'troubleshoot_application',
+  'explain_failed_deploy',
+  'estate_health',
+] as const;
+
+export type PromptName = (typeof PROMPT_NAMES)[number];
+
 export interface CoolifyMcpServerOptions {
   /**
    * Register only tools annotated read-only (#303). The mutating tools do not
@@ -599,6 +625,17 @@ export class CoolifyMcpServer extends McpServer {
    */
   private readonly instanceContext = new AsyncLocalStorage<InstanceDefinition>();
   private readonly serverOptions: CoolifyMcpServerOptions;
+  /**
+   * The tools that actually got registered on this instance. Read-only mode
+   * (#303) drops every mutating tool and fleet mode adds one, so "which tools
+   * exist" is a per-instance fact — and the prompts (#371) describe workflows
+   * in terms of those tools. Recording it as `defineTool` runs makes the
+   * prompt layer's "name only tools that exist" rule structural rather than a
+   * list somebody has to remember to update.
+   */
+  private readonly registeredTools = new Set<ToolName>();
+  /** Prompts that survived the `requires` check — see {@link definePrompt}. */
+  private readonly registeredPrompts = new Set<PromptName>();
   private readonly docsSearch: DocsSearchEngine = new DocsSearchEngine();
 
   /** The client for the instance the current tool call targets (default outside any call). */
@@ -678,6 +715,7 @@ export class CoolifyMcpServer extends McpServer {
       }
       return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
     };
+    this.registeredTools.add(name);
     this.registerTool(
       name,
       { description, inputSchema: z.object(shape), annotations },
@@ -759,6 +797,10 @@ export class CoolifyMcpServer extends McpServer {
     }
     this.serverOptions = options ?? {};
     this.registerTools();
+    // Order matters: prompts describe workflows in terms of the tools that
+    // actually registered above, and `definePrompt` reads that set.
+    this.registerPrompts();
+    this.registerResources();
   }
 
   async connect(transport: Transport): Promise<void> {
@@ -859,6 +901,312 @@ export class CoolifyMcpServer extends McpServer {
     return result;
   }
 
+  /**
+   * The estate snapshot behind both `get_infrastructure_overview` and the
+   * `coolify://overview` resource (#371). One implementation on purpose: a
+   * resource that answered differently from the tool of the same name would be
+   * a second source of truth, and the reason to expose it as a resource at all
+   * is that it is the same answer in a form a client can attach.
+   *
+   * `allSettled` rather than `all` because a partial estate view beats none:
+   * one 403 on services (a token scoped to part of the estate) should not blank
+   * the servers and applications the caller can see. Failures come back under
+   * `errors` so the gap is visible rather than silently read as zero.
+   */
+  private async infrastructureOverview(): Promise<{
+    summary: Record<string, number>;
+    servers: ServerSummary[];
+    projects: ProjectSummary[];
+    applications: ApplicationSummary[];
+    databases: DatabaseSummary[];
+    services: ServiceSummary[];
+    errors?: string[];
+  }> {
+    const results = await Promise.allSettled([
+      this.client.listServers({ summary: true }),
+      this.client.listProjects({ summary: true }),
+      this.client.listApplications({ summary: true }),
+      this.client.listDatabases({ summary: true }),
+      this.client.listServices({ summary: true }),
+    ]);
+    const extract = <T>(r: PromiseSettledResult<T>): T | [] =>
+      r.status === 'fulfilled' ? r.value : [];
+    const [servers, projects, applications, databases, services] = [
+      extract(results[0]) as ServerSummary[],
+      extract(results[1]) as ProjectSummary[],
+      extract(results[2]) as ApplicationSummary[],
+      extract(results[3]) as DatabaseSummary[],
+      extract(results[4]) as ServiceSummary[],
+    ];
+    const errors = results
+      .map((r, i) =>
+        r.status === 'rejected'
+          ? `${['servers', 'projects', 'applications', 'databases', 'services'][i]}: ${r.reason}`
+          : null,
+      )
+      .filter((entry): entry is string => entry !== null);
+    return {
+      summary: {
+        servers: servers.length,
+        projects: projects.length,
+        applications: applications.length,
+        databases: databases.length,
+        services: services.length,
+      },
+      servers,
+      projects,
+      applications,
+      databases,
+      services,
+      ...(errors.length > 0 && { errors }),
+    };
+  }
+
+  // ===========================================================================
+  // Prompts (#371)
+  // ===========================================================================
+
+  /**
+   * Register a prompt, but only if this server has the tools its workflow needs.
+   *
+   * `requires` is the load-bearing part. Read-only mode (#303) drops every
+   * mutating tool, and two of the reads a workflow needs — `env_vars` list and
+   * `deployment` get — ride destructive tools because of consolidation. A
+   * prompt that walked a model to a tool which is not registered would be
+   * worse than no prompt: the human clicks a slash command and the model
+   * flails. So a prompt whose workflow cannot run does not appear in
+   * `prompts/list` at all, the same bargain `defineTool` makes.
+   *
+   * Steps that are merely *nice to have* are not listed in `requires`; the
+   * builder asks `ctx.has()` and drops those individually.
+   *
+   * Fleet mode adds the same optional `instance` argument the tools take. It
+   * is not routing here — a prompt makes no API call — it selects which name
+   * gets written into the sentences and into the tool calls the text asks for,
+   * which is the only way those downstream calls reach the chosen instance.
+   */
+  private definePrompt(
+    name: PromptName,
+    config: { title: string; description: string; requires: readonly ToolName[] },
+    argsSchema: z.ZodRawShape,
+    build: (args: Record<string, string | undefined>, ctx: PromptBuildContext) => string,
+  ): void {
+    if (config.requires.some((tool) => !this.registeredTools.has(tool))) return;
+    this.registeredPrompts.add(name);
+    const shape = this.registry.isFleet ? { ...argsSchema, instance: INSTANCE_ARG } : argsSchema;
+    this.registerPrompt(
+      name,
+      {
+        title: config.title,
+        description: config.description,
+        argsSchema: z.object(shape),
+      },
+      ((args: Record<string, string | undefined>) => {
+        // An unknown instance throws rather than returning prose. `prompts/get`
+        // has no error channel inside the result, and a client renders a thrown
+        // error next to the slash command the human just ran — which is where
+        // "Unknown instance "prd". Configured instances: prod, staging" belongs.
+        const instance = this.registry.isFleet ? this.registry.get(args.instance) : null;
+        const ctx: PromptBuildContext = {
+          has: (tool) => this.registeredTools.has(tool),
+          instance: instance === null ? null : instance.name,
+          otherInstances:
+            instance === null ? [] : this.registry.names.filter((other) => other !== instance.name),
+        };
+        return {
+          messages: [
+            { role: 'user' as const, content: { type: 'text' as const, text: build(args, ctx) } },
+          ],
+        };
+      }) as never,
+    );
+  }
+
+  private registerPrompts(): void {
+    this.definePrompt(
+      'troubleshoot_application',
+      {
+        title: 'Troubleshoot an application',
+        description:
+          'Diagnose an application that is down, unhealthy or behaving oddly: status and log tail first, then configuration, ending in a most-likely cause and the smallest fix.',
+        // `logs` is the only unconditional way to see container output, and
+        // `diagnose_app` is the one call that opens the workflow. Without
+        // either there is no troubleshooting to guide.
+        requires: ['diagnose_app', 'logs'],
+      },
+      { query: z.string().describe('Application name, UUID or domain') },
+      (args, ctx) => troubleshootApplicationPrompt(args.query ?? '', ctx),
+    );
+
+    this.definePrompt(
+      'explain_failed_deploy',
+      {
+        title: 'Explain a failed deployment',
+        description:
+          'Read a failed deployment’s build log and say which stage broke, quoting the evidence and naming the fix.',
+        // The deployment build log is reachable only through `deployment`
+        // (get), which is destructive-annotated because of its cancel action.
+        // On a read-only server this prompt therefore does not exist — the
+        // honest outcome, rather than a workflow with its middle removed.
+        requires: ['deployment'],
+      },
+      { deployment_uuid: z.string().describe('UUID of the failed deployment') },
+      (args, ctx) => explainFailedDeployPrompt(args.deployment_uuid ?? '', ctx),
+    );
+
+    this.definePrompt(
+      'estate_health',
+      {
+        title: 'Estate health check',
+        description:
+          'A morning check of the whole Coolify estate: known issues plus a status sweep across servers, projects, applications, databases and services, worst first.',
+        requires: ['find_issues', 'get_infrastructure_overview'],
+      },
+      {},
+      (_args, ctx) => estateHealthPrompt(ctx),
+    );
+  }
+
+  // ===========================================================================
+  // Resources (#371)
+  // ===========================================================================
+
+  /**
+   * Resources are reads that a client can attach, and nothing else.
+   *
+   * Two properties make them safe to expose without new gating. First, every
+   * read goes through `CoolifyClient`, so the central sanitizer masks
+   * credentials on the way out exactly as it does for a tool response — a
+   * resource read can never be a masking bypass. Second, there is deliberately
+   * no `reveal` in any URI: `get_application` takes `reveal: true` because a
+   * caller can be asked to justify it in the moment, whereas a resource URI is
+   * a durable handle a client may re-read, cache or paste, which is the last
+   * place to put an opt-in to plaintext secrets.
+   *
+   * URI shape mirrors the tools' fleet bargain: `coolify://overview` with one
+   * instance configured, `coolify://<instance>/overview` with several. Single
+   * -instance users never see a segment naming a concept they do not have, and
+   * fleet users cannot read prod's overview while believing it is staging's.
+   */
+  private registerResources(): void {
+    const fleet = this.registry.isFleet;
+    const json = (uri: URL, value: unknown): ReadResourceResult => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(value, null, 2),
+        },
+      ],
+    });
+    // Resource reads happen outside any tool call, so nothing has established
+    // the AsyncLocalStorage context `this.client` reads. Run the body inside it
+    // rather than reaching for `clientFor` directly, so a resource and a tool
+    // targeting the same instance take the identical path to the identical
+    // client (and its version + fallback caches).
+    const onInstance = <T>(name: string | undefined, body: () => Promise<T>): Promise<T> =>
+      this.instanceContext.run(this.registry.get(name), body);
+    const first = (value: string | string[] | undefined): string =>
+      Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+
+    const overviewDescription =
+      'Counts and current status for every server, project, application, database and service. The same snapshot `get_infrastructure_overview` returns.';
+
+    if (fleet) {
+      this.registerResource(
+        'overview',
+        new ResourceTemplate('coolify://{instance}/overview', {
+          // Enumerating instances costs no API call, so every instance shows up
+          // as a concrete entry in resources/list rather than a bare template
+          // the human has to know how to fill in.
+          list: (): ListResourcesResult => ({
+            resources: this.registry.all.map((instance) => ({
+              uri: `coolify://${instance.name}/overview`,
+              name: `${instance.name} overview`,
+              description: `Every resource on the "${instance.name}" instance.`,
+              mimeType: 'application/json',
+            })),
+          }),
+        }),
+        {
+          title: 'Infrastructure overview',
+          description: overviewDescription,
+          mimeType: 'application/json',
+        },
+        (uri, variables) =>
+          onInstance(first(variables.instance), async () =>
+            json(uri, await this.infrastructureOverview()),
+          ),
+      );
+    } else {
+      this.registerResource(
+        'overview',
+        'coolify://overview',
+        {
+          title: 'Infrastructure overview',
+          description: overviewDescription,
+          mimeType: 'application/json',
+        },
+        async (uri) => json(uri, await this.infrastructureOverview()),
+      );
+    }
+
+    /**
+     * Every application, as attachable resource entries.
+     *
+     * A template with no `list` is close to invisible in real clients, and
+     * discoverability is the whole reason to ship resources — so this makes
+     * the one summary call per instance that `list_applications` makes. It
+     * degrades to "the instances that answered" rather than failing the whole
+     * listing: a fleet where staging is unreachable should still offer prod's
+     * applications, and resources/list is a discovery surface, not a health
+     * check.
+     */
+    const listApplications = async (): Promise<ListResourcesResult> => {
+      const perInstance = await Promise.allSettled(
+        this.registry.all.map(async (instance) => {
+          const apps = await this.clientFor(instance).listApplications({ summary: true });
+          return apps.map((app) => ({
+            uri: fleet
+              ? `coolify://${instance.name}/application/${app.uuid}`
+              : `coolify://application/${app.uuid}`,
+            name: fleet ? `${app.name} (${instance.name})` : app.name,
+            // Entry metadata overrides the template's, which is what keeps this
+            // listing affordable: the template description is ~130 chars of
+            // prose that would otherwise repeat on every application on the
+            // estate. Status and domain are both shorter and far more useful
+            // to whoever is picking one off a list.
+            description: [app.status, app.fqdn].filter(Boolean).join(' — ') || undefined,
+            mimeType: 'application/json',
+          }));
+        }),
+      );
+      return {
+        resources: perInstance.flatMap((result) =>
+          result.status === 'fulfilled' ? result.value : [],
+        ),
+      };
+    };
+
+    this.registerResource(
+      'application',
+      new ResourceTemplate(
+        fleet ? 'coolify://{instance}/application/{uuid}' : 'coolify://application/{uuid}',
+        { list: listApplications },
+      ),
+      {
+        title: 'Application detail',
+        description:
+          'Full configuration and status for one application. Credentials are masked, as they are on `get_application` without `reveal`.',
+        mimeType: 'application/json',
+      },
+      (uri, variables) =>
+        onInstance(fleet ? first(variables.instance) : undefined, async () =>
+          json(uri, await this.client.getApplication(first(variables.uuid))),
+        ),
+    );
+  }
+
   private registerTools(): void {
     // =========================================================================
     // Meta (2 tools)
@@ -911,47 +1259,7 @@ export class CoolifyMcpServer extends McpServer {
       'get_infrastructure_overview',
       'Overview of all resources with counts',
       {},
-      async () =>
-        wrap(async () => {
-          const results = await Promise.allSettled([
-            this.client.listServers({ summary: true }),
-            this.client.listProjects({ summary: true }),
-            this.client.listApplications({ summary: true }),
-            this.client.listDatabases({ summary: true }),
-            this.client.listServices({ summary: true }),
-          ]);
-          const extract = <T>(r: PromiseSettledResult<T>): T | [] =>
-            r.status === 'fulfilled' ? r.value : [];
-          const [servers, projects, applications, databases, services] = [
-            extract(results[0]) as ServerSummary[],
-            extract(results[1]) as ProjectSummary[],
-            extract(results[2]) as ApplicationSummary[],
-            extract(results[3]) as DatabaseSummary[],
-            extract(results[4]) as ServiceSummary[],
-          ];
-          const errors = results
-            .map((r, i) =>
-              r.status === 'rejected'
-                ? `${['servers', 'projects', 'applications', 'databases', 'services'][i]}: ${r.reason}`
-                : null,
-            )
-            .filter(Boolean);
-          return {
-            summary: {
-              servers: servers.length,
-              projects: projects.length,
-              applications: applications.length,
-              databases: databases.length,
-              services: services.length,
-            },
-            servers,
-            projects,
-            applications,
-            databases,
-            services,
-            ...(errors.length > 0 && { errors }),
-          };
-        }),
+      async () => wrap(() => this.infrastructureOverview()),
     );
 
     // =========================================================================

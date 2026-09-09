@@ -82,3 +82,87 @@ describe('fleet tool contract', () => {
     expect(chars / 4).toBeLessThan(9000);
   });
 });
+
+describe('fleet prompt and resource contract (#371)', () => {
+  it('the fleet prompt list matches its snapshot', async () => {
+    await expect(
+      JSON.stringify([...ctx.promptInfo].sort((a, b) => byName(a.name, b.name)), null, 2) + '\n',
+    ).toMatchFileSnapshot('__toolsnaps__/_prompts.fleet.json');
+  });
+
+  it('every prompt takes an optional `instance`, exactly as the tools do', () => {
+    const missing = ctx.promptInfo
+      .filter((p) => !(p.arguments ?? []).some((arg) => arg.name === 'instance'))
+      .map((p) => p.name);
+    expect(missing).toEqual([]);
+    // Optional, never required: an omitted instance means the default here as
+    // it does everywhere else, so a fleet does not make the common case worse.
+    const required = ctx.promptInfo
+      .filter((p) => (p.arguments ?? []).some((a) => a.name === 'instance' && a.required === true))
+      .map((p) => p.name);
+    expect(required).toEqual([]);
+  });
+
+  it('a prompt written for one instance names that instance in its text', async () => {
+    const { messages } = await ctx.client.getPrompt({
+      name: 'estate_health',
+      arguments: { instance: 'staging' },
+    });
+    const text = messages.map((m) => (m.content.type === 'text' ? m.content.text : '')).join('\n');
+    // Not decoration: a prompt makes no API call, so writing the instance into
+    // the tool calls it asks for is the ONLY thing that routes the work the
+    // model then does to the instance the human picked.
+    expect(text).toContain('instance: "staging"');
+    // And it says which instance it did not cover, so "estate" is not silently
+    // read as "the whole fleet".
+    expect(text).toContain('"default"');
+  });
+
+  it('an unknown instance fails the prompt loudly rather than answering for the default', async () => {
+    await expect(
+      ctx.client.getPrompt({ name: 'estate_health', arguments: { instance: 'stagng' } }),
+    ).rejects.toThrow(/Unknown instance/);
+  });
+
+  it('the fleet resource list matches its snapshot', async () => {
+    await expect(
+      JSON.stringify(
+        {
+          resources: [...ctx.resourceInfo].sort((a, b) => byName(a.uri, b.uri)),
+          templates: [...ctx.resourceTemplateInfo].sort((a, b) =>
+            byName(a.uriTemplate, b.uriTemplate),
+          ),
+        },
+        null,
+        2,
+      ) + '\n',
+    ).toMatchFileSnapshot('__toolsnaps__/_resources.fleet.json');
+  });
+
+  it('every resource URI names its instance', () => {
+    // The failure this prevents: reading prod's overview while believing it is
+    // staging's. With more than one instance configured there is no unscoped
+    // URI to get that wrong with.
+    const uris = [
+      ...ctx.resourceInfo.map((r) => r.uri),
+      ...ctx.resourceTemplateInfo.map((r) => r.uriTemplate),
+    ];
+    expect(uris).not.toHaveLength(0);
+    const unscoped = uris.filter((uri) => /^coolify:\/\/(overview|application)/.test(uri));
+    expect(unscoped).toEqual([]);
+  });
+
+  it('reading an instance-scoped resource returns that instance', async () => {
+    const read = await ctx.client.readResource({ uri: 'coolify://staging/overview' });
+    const parsed = JSON.parse((read.contents[0] as { text: string }).text) as {
+      summary: Record<string, number>;
+    };
+    expect(parsed.summary.applications).toBeGreaterThan(0);
+  });
+
+  it('an unknown instance in a URI is an error, not the default instance', async () => {
+    await expect(ctx.client.readResource({ uri: 'coolify://stagng/overview' })).rejects.toThrow(
+      /Unknown instance/,
+    );
+  });
+});

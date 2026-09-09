@@ -1,0 +1,48 @@
+[
+  {
+    "name": "estate_health",
+    "title": "Estate health check",
+    "description": "A morning check of the whole Coolify estate: known issues plus a status sweep across servers, projects, applications, databases and services, worst first.",
+    "arguments": [
+      {
+        "name": "instance",
+        "description": "Instance name",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "explain_failed_deploy",
+    "title": "Explain a failed deployment",
+    "description": "Read a failed deployment’s build log and say which stage broke, quoting the evidence and naming the fix.",
+    "arguments": [
+      {
+        "name": "deployment_uuid",
+        "description": "UUID of the failed deployment",
+        "required": true
+      },
+      {
+        "name": "instance",
+        "description": "Instance name",
+        "required": false
+      }
+    ]
+  },
+  {
+    "name": "troubleshoot_application",
+    "title": "Troubleshoot an application",
+    "description": "Diagnose an application that is down, unhealthy or behaving oddly: status and log tail first, then configuration, ending in a most-likely cause and the smallest fix.",
+    "arguments": [
+      {
+        "name": "query",
+        "description": "Application name, UUID or domain",
+        "required": true
+      },
+      {
+        "name": "instance",
+        "description": "Instance name",
+        "required": false
+      }
+    ]
+  }
+]
