@@ -84,6 +84,7 @@ describe('CoolifyMcpServer v2', () => {
       // Application operations
       expect(typeof client.listApplications).toBe('function');
       expect(typeof client.getApplication).toBe('function');
+      expect(typeof client.verifyApplicationEnvironment).toBe('function');
       expect(typeof client.createApplicationPublic).toBe('function');
       expect(typeof client.createApplicationPrivateGH).toBe('function');
       expect(typeof client.createApplicationPrivateKey).toBe('function');
@@ -2192,6 +2193,50 @@ describe('truncateLogs', () => {
   });
 });
 
+describe('environments verify_app (#345)', () => {
+  it('passes exact anchors to the client and returns the proof', async () => {
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+    const proof = {
+      verified: true as const,
+      application_uuid: 'app-exact-uuid',
+      environment: { id: 17, uuid: 'environment-exact-uuid', name: 'staging' },
+    };
+    const spy = jest
+      .spyOn(server['client'], 'verifyApplicationEnvironment')
+      .mockResolvedValue(proof);
+    const registered = (
+      server as unknown as {
+        _registeredTools: Record<
+          string,
+          { handler: (args: Record<string, unknown>, extra: unknown) => Promise<unknown> }
+        >;
+      }
+    )._registeredTools;
+
+    const result = (await registered['environments'].handler(
+      {
+        action: 'verify_app',
+        application_uuid: 'app-exact-uuid',
+        project_uuid: 'project-exact-uuid',
+        name: 'staging',
+      },
+      {},
+    )) as { content: Array<{ text: string }> };
+
+    expect(spy).toHaveBeenCalledWith('app-exact-uuid', 'project-exact-uuid', 'staging');
+    expect(JSON.parse(result.content[0].text)).toEqual(proof);
+
+    const missing = (await registered['environments'].handler(
+      { action: 'verify_app', project_uuid: 'project-exact-uuid' },
+      {},
+    )) as { content: Array<{ text: string }> };
+    expect(missing.content[0].text).toContain('name and application_uuid required');
+  });
+});
+
 // =============================================================================
 // Action Generators Tests
 // =============================================================================
@@ -2388,7 +2433,7 @@ describe('tool annotations (#260)', () => {
  *
  * Google's `generateContent` requires every `enum` entry to be a string and
  * rejects the entire request when one is not — not the offending tool, the
- * request, so all 44 go with it. `@ai-sdk/google` rewrites a JSON Schema
+ * request, so all 45 go with it. `@ai-sdk/google` rewrites a JSON Schema
  * `const` into `enum: [const]` on the way out, and zod emits `z.literal(true)`
  * as `const: true`, which is how a single confirmation parameter on
  * `stop_all_apps` made every Gemini model unusable while Anthropic and the
