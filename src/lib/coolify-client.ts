@@ -119,6 +119,7 @@ import type {
   Tag,
   AttachTagsRequest,
 } from '../types/coolify.js';
+import { isRoutingCatchAllBody } from './api-shape.js';
 
 // =============================================================================
 // List Options & Summary Types
@@ -267,23 +268,12 @@ export class CoolifyApiError extends Error {
 }
 
 /**
- * Was this 404 produced by Coolify's routing catch-all rather than a controller?
- *
- * `routes/api.php` ends with `Route::any('/{any}', ...)` returning
- * `{ message: 'Not found.', docs: 'https://coolify.io/docs' }`. That `docs` key
- * is the signature — no controller 404 carries it — so it distinguishes "this
- * method/path is not routed" from "the resource does not exist", which matters
- * because only the former is safe and useful to retry with a different method.
+ * Was this 404 produced by Coolify's routing catch-all rather than a
+ * controller? Body signature shared with doctor — see api-shape.ts. Only a
+ * routing miss is safe and useful to retry with a different method.
  */
 function isRoutingCatchAll(error: CoolifyApiError): boolean {
-  if (error.status !== 404) return false;
-  const body = error.body;
-  if (typeof body !== 'object' || body === null) return false;
-  // `docs` is the strongest signal, but a proxy or a future Coolify could drop
-  // it. The catch-all's exact wording is a cheap second discriminator — a
-  // controller says "<Resource> not found.", never a bare "Not found.".
-  if ('docs' in body) return true;
-  return (body as { message?: unknown }).message === 'Not found.';
+  return error.status === 404 && isRoutingCatchAllBody(error.body);
 }
 
 /**
