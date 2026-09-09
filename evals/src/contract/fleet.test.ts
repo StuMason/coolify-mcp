@@ -18,7 +18,9 @@ let ctx: EvalContext;
 beforeAll(async () => {
   ctx = await createEvalContext({
     env: (fixture) => ({
-      COOLIFY_INSTANCES: JSON.stringify([{ name: 'staging', url: fixture.url, token: FIXTURE_TOKEN }]),
+      COOLIFY_INSTANCES: JSON.stringify([
+        { name: 'staging', url: fixture.url, token: FIXTURE_TOKEN },
+      ]),
     }),
   });
 });
