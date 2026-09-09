@@ -38,8 +38,10 @@ describe('fleet tool contract', () => {
     ).toMatchFileSnapshot('__toolsnaps__/_roster.fleet.json');
   });
 
-  it('every tool takes an optional string `instance`', () => {
+  it('every instance-scoped tool takes an optional string `instance`', () => {
+    // list_instances is about the fleet, not an instance of it — no argument.
     const missing = ctx.toolInfo
+      .filter((t) => t.name !== 'list_instances')
       .filter((t) => {
         const schema = t.inputSchema as { properties?: Record<string, { type?: string }> };
         return schema.properties?.instance?.type !== 'string';

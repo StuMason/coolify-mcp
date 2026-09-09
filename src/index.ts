@@ -37,7 +37,13 @@ async function main(): Promise<void> {
   const registry = registryFromEnv(
     {
       ...process.env,
-      COOLIFY_BASE_URL: process.env.COOLIFY_BASE_URL || 'http://localhost:3000',
+      // The historical localhost default applies only to a pure single-instance
+      // config. With COOLIFY_INSTANCES set, a lingering COOLIFY_ACCESS_TOKEN
+      // must not conjure a phantom "default" pointing at localhost — and then
+      // become the instance every un-qualified call goes to.
+      COOLIFY_BASE_URL:
+        process.env.COOLIFY_BASE_URL ||
+        (process.env.COOLIFY_INSTANCES ? undefined : 'http://localhost:3000'),
     },
     parseHeaders(process.argv),
   );

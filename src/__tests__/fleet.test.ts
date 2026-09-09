@@ -205,6 +205,7 @@ describe('fleet mode (#367)', () => {
     const tools = await h.listTools();
     expect(tools.some((t) => t.name === 'list_instances')).toBe(true);
     for (const tool of tools) {
+      if (FLEET_ONLY_TOOLS.has(tool.name as keyof typeof TOOL_ANNOTATIONS)) continue;
       expect(tool.inputSchema.properties?.instance).toMatchObject({ type: 'string' });
     }
     await h.close();
@@ -273,12 +274,52 @@ describe('fleet mode (#367)', () => {
     await h.close();
   });
 
+  it('never forwards `instance` into a Coolify request body', async () => {
+    // Several handlers rest-spread their args into the request body
+    // (application update, database, github_apps, database_backups) and
+    // upstream 422s on unknown fields — so `instance` must be stripped at
+    // the chokepoint, not trusted to each handler.
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      const method = (init as RequestInit | undefined)?.method ?? 'GET';
+      if (method === 'POST') return jsonResponse({ uuid: 'backup-1' }, 201);
+      return jsonResponse({ message: 'Not found.', docs: 'x' }, 404);
+    });
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    const text = await h.call('database_backups', {
+      action: 'create',
+      database_uuid: 'db-1',
+      frequency: '0 0 * * *',
+      instance: 'staging',
+    });
+    expect(text).toContain('backup-1');
+    const post = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(String(post?.[0])).toBe(`${STAGING}/api/v1/databases/db-1/backups`);
+    const body = JSON.parse(String((post?.[1] as RequestInit).body)) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('instance');
+    expect(body.frequency).toBe('0 0 * * *');
+    await h.close();
+  });
+
+  it('list_instances takes no instance argument, so a wrong name can never break it', async () => {
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    const tools = await h.listTools();
+    const listInstances = tools.find((t) => t.name === 'list_instances');
+    expect(listInstances?.inputSchema.properties?.instance).toBeUndefined();
+    // An unknown key is dropped by the schema rather than rejected.
+    const text = await h.call('list_instances', { instance: 'nope' });
+    expect(text).toContain('"prod"');
+    await h.close();
+  });
+
   it('read-only fleet servers still carry the instance argument and list_instances', async () => {
     const h = await connect(new CoolifyMcpServer(fleetRegistry(), { readonly: true }));
     const tools = await h.listTools();
     expect(tools.some((t) => t.name === 'list_instances')).toBe(true);
     expect(tools.some((t) => t.name === 'stop_all_apps')).toBe(false);
     for (const tool of tools) {
+      if (FLEET_ONLY_TOOLS.has(tool.name as keyof typeof TOOL_ANNOTATIONS)) continue;
       expect(tool.inputSchema.properties?.instance).toBeDefined();
     }
     await h.close();

@@ -6,12 +6,7 @@
   },
   "inputSchema": {
     "type": "object",
-    "properties": {
-      "instance": {
-        "description": "Instance name",
-        "type": "string"
-      }
-    },
+    "properties": {},
     "$schema": "https://json-schema.org/draft/2020-12/schema"
   }
 }

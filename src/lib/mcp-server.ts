@@ -649,11 +649,22 @@ export class CoolifyMcpServer extends McpServer {
     // Fleet mode (#367) adds the optional `instance` argument here, once for
     // every tool — and only when there is more than one instance to choose
     // between, so single-instance configs pay nothing on tools/list.
-    const shape = this.registry.isFleet ? { ...inputSchema, instance: INSTANCE_ARG } : inputSchema;
+    // Fleet-only tools (list_instances) are about the fleet, not an instance
+    // of it: no `instance` argument, so a wrong name can never break the one
+    // tool whose job is to correct wrong names.
+    const takesInstance = this.registry.isFleet && !FLEET_ONLY_TOOLS.has(name);
+    const shape = takesInstance ? { ...inputSchema, instance: INSTANCE_ARG } : inputSchema;
     const scoped: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
+      if (!takesInstance) return cb(args, extra);
+      // `instance` is routing, not payload. Several handlers rest-spread their
+      // args straight into a Coolify request body (application update,
+      // database, github_apps, database_backups), and upstream 422s on
+      // unknown fields — so it is stripped here, once, before any handler
+      // sees it, rather than trusted to every future `...rest`.
+      const { instance: requested, ...forwarded } = args as { instance?: string };
       let instance: InstanceDefinition;
       try {
-        instance = this.registry.get((args as { instance?: string }).instance);
+        instance = this.registry.get(requested);
       } catch (error) {
         return {
           content: [
@@ -664,7 +675,7 @@ export class CoolifyMcpServer extends McpServer {
           ],
         };
       }
-      return this.instanceContext.run(instance, () => cb(args, extra));
+      return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
     };
     this.registerTool(
       name,
