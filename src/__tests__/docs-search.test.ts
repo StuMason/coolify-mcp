@@ -68,10 +68,20 @@ describe('parseDocsIndex', () => {
 
 describe('DocsSearchEngine', () => {
   let mockFetch: jest.Spied<typeof fetch>;
-  let engine: DocsSearchEngine;
+
+  const bundle = {
+    source: 'test',
+    fetched_at: '2026-09-09T00:00:00.000Z',
+    entries: 9,
+    text: SAMPLE_INDEX,
+  };
+  const okResponse = (body: string) =>
+    ({ ok: true, text: async () => body }) as unknown as Response;
+  /** A refresh that never resolves: proves searches do not wait on it. */
+  const hangingFetch = () => new Promise<Response>(() => {});
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   beforeEach(() => {
-    engine = new DocsSearchEngine();
     mockFetch = jest.spyOn(global, 'fetch');
   });
 
@@ -79,27 +89,39 @@ describe('DocsSearchEngine', () => {
     mockFetch.mockRestore();
   });
 
-  const okResponse = (body: string) =>
-    ({ ok: true, text: async () => body }) as unknown as Response;
+  it('serves from the bundle immediately, without waiting on the network', async () => {
+    mockFetch.mockImplementation(hangingFetch);
+    const engine = new DocsSearchEngine({ bundle });
 
-  it('fetches and indexes the docs index on first search only', async () => {
-    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
+    const results = await engine.search('install');
+
+    expect(results[0].title).toBe('Installation');
+    expect(engine.status()).toMatchObject({ source: 'bundled', bundledAt: bundle.fetched_at });
+  });
+
+  it('starts exactly one background refresh, and swaps in the live index when it parses', async () => {
+    const live = SAMPLE_INDEX + '- [Brand New Page](/new-page): Added upstream after the bundle.\n';
+    mockFetch.mockResolvedValue(okResponse(live));
+    const engine = new DocsSearchEngine({ bundle });
 
     await engine.search('install');
     await engine.search('compose');
+    await settle();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(engine.getEntryCount()).toBeGreaterThan(5);
+    expect(engine.status().source).toBe('live');
+    expect((await engine.search('brand new'))[0].title).toBe('Brand New Page');
   });
 
   it('never sends credential headers off-estate, even with CF Access configured (#373)', async () => {
     // The CF Access service token rides only on Coolify base-URL requests.
-    // This fetch goes to coolify.io — assert it carries no headers at all.
+    // The refresh goes to coolify.io — assert it carries no headers at all.
     process.env.CF_ACCESS_CLIENT_ID = 'id.access';
     process.env.CF_ACCESS_CLIENT_SECRET = 'cf-secret';
     try {
-      mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
-      await engine.search('install');
+      mockFetch.mockResolvedValue(okResponse(SAMPLE_INDEX));
+      await new DocsSearchEngine({ bundle }).search('install');
+      await settle();
       const init = mockFetch.mock.calls[0][1] as RequestInit;
       expect(init.headers).toBeUndefined();
     } finally {
@@ -109,43 +131,77 @@ describe('DocsSearchEngine', () => {
   });
 
   it('ranks the obviously right page first', async () => {
-    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
+    const engine = new DocsSearchEngine({ bundle, refresh: false });
 
     const results = await engine.search('installation');
 
     expect(results[0].title).toBe('Installation');
     expect(results[0].url).toBe('https://coolify.io/docs/get-started/installation');
     expect(results[0].score).toBeGreaterThan(0);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('respects the limit parameter', async () => {
-    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
-
-    const results = await engine.search('coolify', 2);
-
+    const results = await new DocsSearchEngine({ bundle, refresh: false }).search('coolify', 2);
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
-  it('throws when the fetch fails, and recovers on the next call', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('network down'));
-    await expect(engine.search('install')).rejects.toThrow('network down');
-
-    mockFetch.mockResolvedValueOnce(okResponse(SAMPLE_INDEX));
-    const results = await engine.search('install');
-    expect(results.length).toBeGreaterThan(0);
+  it.each([
+    ['a network error', () => Promise.reject(new Error('network down'))],
+    ['a non-OK response', () => Promise.resolve({ ok: false, status: 404 } as unknown as Response)],
+    [
+      'a live file that parses to zero entries',
+      () => Promise.resolve(okResponse('---\nurl: /docs/x.md\n---\n\n# Old format\n')),
+    ],
+  ])('keeps serving the bundle when the refresh meets %s', async (_label, impl) => {
+    mockFetch.mockImplementation(impl as typeof fetch);
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const engine = new DocsSearchEngine({ bundle });
+      const results = await engine.search('install');
+      await settle();
+      expect(results[0].title).toBe('Installation');
+      expect(engine.status().source).toBe('bundled');
+      // No retry storm: one attempt per process.
+      await engine.search('install');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
-  it('throws on a non-OK response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
-    await expect(engine.search('install')).rejects.toThrow('HTTP 404');
+  it('logs once when the live file parses to zero entries, so a format change is not silent', async () => {
+    mockFetch.mockResolvedValue(okResponse('# nothing here\n'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await new DocsSearchEngine({ bundle }).search('install');
+      await settle();
+      expect(stderr).toHaveBeenCalledTimes(1);
+      expect(String(stderr.mock.calls[0][0])).toMatch(/zero entries/);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
-  it('treats an index that parses to zero entries as an error, not an empty result', async () => {
-    // This is the regression test for the silent failure: the previous
-    // implementation indexed zero chunks from a changed upstream format and
-    // returned [] for every query, indefinitely, with no error.
-    mockFetch.mockResolvedValueOnce(okResponse('---\nurl: /docs/x.md\n---\n\n# Old format\n'));
-
+  it('treats a bundle that parses to zero entries as a broken build, not an empty corpus', async () => {
+    const engine = new DocsSearchEngine({
+      bundle: { ...bundle, text: '# empty\n' },
+      refresh: false,
+    });
     await expect(engine.search('anything')).rejects.toThrow(/zero entries/);
+  });
+
+  it('ships a real bundle that answers real questions offline', async () => {
+    // The default constructor loads src/data/coolify-docs.json. This is the
+    // acceptance test from #372: results with no network at all.
+    mockFetch.mockImplementation(() => Promise.reject(new Error('ENETUNREACH')));
+    const engine = new DocsSearchEngine();
+
+    const results = await engine.search('docker compose');
+
+    expect(engine.getEntryCount()).toBeGreaterThan(200);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].url).toMatch(/^https:\/\/coolify\.io\/docs\//);
+    expect(engine.status().bundledAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

@@ -21,7 +21,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && shx chmod +x dist/*.js",
+    "build": "tsc && shx mkdir -p dist/data && shx cp src/data/*.json dist/data/ && shx chmod +x dist/*.js",
     "dev": "tsc --watch",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns=integration",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch --testPathIgnorePatterns=integration",
@@ -34,6 +34,8 @@
     "check:chunk-drift": "node scripts/split-openapi-chunks.mjs --check",
     "check:tool-count": "node scripts/check-tool-count.mjs",
     "check:tool-count:fix": "node scripts/check-tool-count.mjs --fix",
+    "docs:index": "node scripts/build-docs-index.mjs",
+    "docs:index:check": "node scripts/build-docs-index.mjs --check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",

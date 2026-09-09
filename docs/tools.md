@@ -34,7 +34,7 @@ the table below misses a tool the roster has.
 | **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                        |
 | **Cloud Tokens**     | `cloud_tokens` (Hetzner/DigitalOcean: list, get, create, update, delete, validate)                                                                                        |
 | **Hetzner Cloud**    | `hetzner` (list_locations, list_server_types, list_images, list_ssh_keys, create_server)                                                                                  |
-| **Documentation**    | `search_docs` (full-text search across Coolify docs)                                                                                                                      |
+| **Documentation**    | `search_docs` (search across the Coolify docs index, bundled so it works offline)                                                                                         |
 
 With two or more instances configured ([fleet mode](fleet.md)) every tool
 also takes an optional `instance`, and one extra tool, `list_instances`,
