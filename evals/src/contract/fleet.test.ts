@@ -67,6 +67,13 @@ describe('fleet tool contract', () => {
     ).toMatchFileSnapshot('__toolsnaps__/list_instances.json');
   });
 
+  it('the fleet instructions match their snapshot (#339)', async () => {
+    expect(ctx.instructions).toContain('`instance`');
+    await expect(ctx.instructions + '\n').toMatchFileSnapshot(
+      '__toolsnaps__/_instructions.fleet.txt',
+    );
+  });
+
   it('fleet tool list token budget holds', () => {
     // The fleet surface costs ~46 copies of the `instance` property on top of
     // the single-instance ~7.7k. Fleet users opt into that; the single-instance

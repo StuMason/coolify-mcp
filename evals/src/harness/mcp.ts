@@ -27,6 +27,8 @@ export interface EvalContext {
   fixture: FixtureHandle;
   client: Client;
   /** Raw tools/list entries, annotations included. */
+  /** The server `instructions` field from `initialize` (#339); undefined if unset. */
+  instructions?: string;
   toolInfo: McpToolInfo[];
   /** The same tools as an AI SDK ToolSet whose execute() round-trips through the server. */
   toolSet: ToolSet;
@@ -122,6 +124,7 @@ async function connectHarness(
   return {
     fixture,
     client,
+    instructions: client.getInstructions(),
     toolInfo,
     toolSet,
     readOnlyTools: toolInfo.filter((t) => t.annotations?.readOnlyHint === true).map((t) => t.name),
