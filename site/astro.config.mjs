@@ -8,30 +8,43 @@ import { fileURLToPath } from 'node:url';
 const SITE = 'https://coolify-mcp.stumason.dev';
 
 /**
- * Tool count, read from the server source at build time and inlined.
+ * Tool count and version, read from the repo at build time and inlined.
  *
- * Never hardcode this on the page. The old site said "42 consolidated tools"
- * in one block and "44" in the hero of the same page, and the star count was
- * quoted three different ways across the repo. Anything a human has to remember
+ * Never hardcode these on the page. The old site said "42 consolidated tools"
+ * in one block and "44" in the hero of the same page, and the JSON-LD carried
+ * `softwareVersion: '2.17.0'` well into 3.x. Anything a human has to remember
  * to update is wrong within a release or two.
+ *
+ * The count comes from the evals roster snapshot — the tool names a default
+ * install exposes, gated by the contract test in CI — rather than from
+ * counting registrations in the source: since 3.1 the source also registers
+ * fleet-only tools that a single-instance install never sees, and the number
+ * on this page is the number a visitor will get. The same file drives
+ * `npm run check:tool-count` at the repo root.
  *
  * Done here rather than in a module the page imports, because that module gets
  * bundled into dist/ and `import.meta.url` no longer points anywhere near the
  * repo root at runtime. Here it runs exactly once, at build, in the site dir.
  */
+const repoFile = (rel) => fileURLToPath(new URL(`../${rel}`, import.meta.url));
+
 function countTools() {
-  const src = readFileSync(
-    fileURLToPath(new URL('../src/lib/mcp-server.ts', import.meta.url)),
-    'utf8',
+  const roster = JSON.parse(
+    readFileSync(repoFile('evals/src/contract/__toolsnaps__/_roster.json'), 'utf8'),
   );
-  const n = (src.match(/this\.defineTool\(/g) ?? []).length;
-  if (n < 20) {
+  if (!Array.isArray(roster) || roster.length < 20) {
     throw new Error(
-      `Counted only ${n} tools in src/lib/mcp-server.ts — the registration shape has probably ` +
-        `changed. Fix that rather than shipping a wrong number on the marketing site.`,
+      `The tool roster has ${roster?.length ?? 'no'} entries — its shape has probably changed. ` +
+        `Fix that rather than shipping a wrong number on the marketing site.`,
     );
   }
-  return n;
+  return roster.length;
+}
+
+function readVersion() {
+  const { version } = JSON.parse(readFileSync(repoFile('package.json'), 'utf8'));
+  if (!/^\d+\.\d+\.\d+/.test(version)) throw new Error(`Unexpected version "${version}"`);
+  return version;
 }
 
 export default defineConfig({
@@ -70,6 +83,7 @@ export default defineConfig({
     '/roadmap/v3-vision': 'https://github.com/StuMason/coolify-mcp/issues/259',
     '/changelog': 'https://github.com/StuMason/coolify-mcp/blob/main/CHANGELOG.md',
     '/hire': '/#hire',
+    '/docs': 'https://github.com/StuMason/coolify-mcp/tree/main/docs',
   },
   // Astro's built-in checkOrigin rejected same-origin browser submissions to
   // /api/contact with a 403 — verified with a real browser fetch, and with the
@@ -79,7 +93,14 @@ export default defineConfig({
   security: { checkOrigin: false },
   build: { inlineStylesheets: 'always' },
   vite: {
-    define: { __TOOL_COUNT__: JSON.stringify(countTools()) },
+    define: {
+      __TOOL_COUNT__: JSON.stringify(countTools()),
+      __VERSION__: JSON.stringify(readVersion()),
+    },
     build: { assetsInlineLimit: 4096 },
+    // /llms-full.txt imports README.md and docs/*.md from the repo root with
+    // `?raw`; the dev server refuses to serve files outside the site dir
+    // unless told otherwise. Build is unaffected either way.
+    server: { fs: { allow: [repoFile('.')] } },
   },
 });

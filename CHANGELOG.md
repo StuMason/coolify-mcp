@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Docs restructured for 3.x.** The README is now the front door only: three install paths (one-click, local, remote), "then run doctor", what it does, fleet and safety in a paragraph each, every one linking out. The reference moved into `docs/`: `tools.md` (the full table, how the surface is shaped, version compatibility, the gotchas the tools absorb), `fleet.md`, `doctor.md`, `security.md` (the elicitation and masking write-ups, verbatim from the old README), alongside the existing `http-mode.md`. The v2-era `## Design` token pitch is gone from the README; `docs/V3.md` retired to `docs/history/`. Less prose, more structure.
+- **Tool count has one source of truth.** `npm run check:tool-count` (CI-gated; `--fix` rewrites) compares every "N tools" claim in README, CLAUDE.md, `package.json`, `server.json` and `manifest.json` against the evals roster snapshot — the tools a default install actually exposes. The site's count now reads the same roster instead of counting `defineTool` registrations, which since 3.1 would have advertised the fleet-only `list_instances` to single-instance visitors.
+- **Site** (coolify-mcp.stumason.dev): Install covers remote/OAuth and fleet and ends with doctor; a Docs section links the reference; JSON-LD `softwareVersion` is read from `package.json` at build (it said 2.17.0); `/llms.txt` and `/llms-full.txt` are generated from README and `docs/` at build for clients reading the site on someone's behalf.
+
+### Added
+
+- `SECURITY.md`, and private vulnerability reporting enabled on the repository.
+
 ## [3.1.0] - 2026-09-09
 
 The fleet release. One server can now manage several Coolify instances, with every tool taking an `instance` and every destructive confirmation naming the one it targets — and a `doctor` command that turns "it's broken" into a one-line fix, because most reports of a broken MCP were the environment, not the server. Cloudflare Access service tokens, a startup self-check, and two contributor fixes round it out.

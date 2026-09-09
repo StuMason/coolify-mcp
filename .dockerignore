@@ -9,7 +9,11 @@ dist
 .github
 .vscode
 .claude
-docs
+# docs/*.md stay in: Dockerfile.docs inlines them into the site's /llms-full.txt.
+docs/coolify-openapi.yaml
+docs/openapi-chunks
+docs/assets
+docs/history
 *.md
 !README.md
 !CHANGELOG.md

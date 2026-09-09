@@ -16,13 +16,17 @@ on:
     paths:
       - 'site/**'
       - 'Dockerfile.docs'
-      - 'src/lib/mcp-server.ts'
+      - 'README.md'
+      - 'docs/*.md'
+      - 'evals/src/contract/__toolsnaps__/_roster.json'
       - '.github/workflows/site.yml'
   pull_request:
     paths:
       - 'site/**'
       - 'Dockerfile.docs'
-      - 'src/lib/mcp-server.ts'
+      - 'README.md'
+      - 'docs/*.md'
+      - 'evals/src/contract/__toolsnaps__/_roster.json'
       - '.github/workflows/site.yml'
 
 jobs:
@@ -60,8 +64,9 @@ jobs:
         run: npm test
 
       - name: Build
-        # Also exercises the tool count read from src/lib/mcp-server.ts, which
-        # throws if the registration shape changes.
+        # Also exercises the tool count read from the evals roster snapshot and
+        # the version read from package.json, both of which throw on a shape
+        # they do not recognise.
         run: npm run build
 
       - name: Check the built page carries its SEO surface
@@ -84,4 +89,8 @@ jobs:
           test -f dist/client/robots.txt || { echo "::error::robots.txt missing"; exit 1; }
           test -f dist/client/sitemap-index.xml || { echo "::error::sitemap missing"; exit 1; }
           test -f dist/client/og.png || { echo "::error::og.png missing"; exit 1; }
+          test -f dist/client/llms.txt || { echo "::error::llms.txt missing"; exit 1; }
+          grep -q '^# Tool reference' dist/client/llms-full.txt || { echo "::error::llms-full.txt is missing docs/tools.md"; exit 1; }
+          VERSION=$(node -p "require('../package.json').version")
+          grep -q "\"softwareVersion\":\"$VERSION\"" "$PAGE" || { echo "::error::JSON-LD softwareVersion is not $VERSION"; exit 1; }
           echo "SEO surface present."
