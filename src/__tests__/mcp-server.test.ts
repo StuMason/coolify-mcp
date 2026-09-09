@@ -2107,15 +2107,16 @@ describe('truncateLogs', () => {
   });
 });
 
-describe('verify_app_environment', () => {
-  it('passes exact anchors to the client and returns only the proof projection', async () => {
+describe('environments verify_app (#345)', () => {
+  it('passes exact anchors to the client and returns the proof', async () => {
     const server = new CoolifyMcpServer({
       baseUrl: 'http://localhost:3000',
       accessToken: 'test-token',
     });
     const proof = {
-      identity: '17',
-      name: 'staging',
+      verified: true as const,
+      application_uuid: 'app-exact-uuid',
+      environment: { id: 17, uuid: 'environment-exact-uuid', name: 'staging' },
     };
     const spy = jest
       .spyOn(server['client'], 'verifyApplicationEnvironment')
@@ -2129,17 +2130,24 @@ describe('verify_app_environment', () => {
       }
     )._registeredTools;
 
-    const result = (await registered['verify_app_environment'].handler(
+    const result = (await registered['environments'].handler(
       {
+        action: 'verify_app',
         application_uuid: 'app-exact-uuid',
         project_uuid: 'project-exact-uuid',
-        expected_environment: 'staging',
+        name: 'staging',
       },
       {},
     )) as { content: Array<{ text: string }> };
 
     expect(spy).toHaveBeenCalledWith('app-exact-uuid', 'project-exact-uuid', 'staging');
     expect(JSON.parse(result.content[0].text)).toEqual(proof);
+
+    const missing = (await registered['environments'].handler(
+      { action: 'verify_app', project_uuid: 'project-exact-uuid' },
+      {},
+    )) as { content: Array<{ text: string }> };
+    expect(missing.content[0].text).toContain('name and application_uuid required');
   });
 });
 
@@ -2215,7 +2223,6 @@ describe('tool annotations (#260)', () => {
         'server_domains',
         'server_resources',
         'teams',
-        'verify_app_environment',
       ].sort(),
     );
   });

@@ -499,7 +499,6 @@ export const TOOL_ANNOTATIONS = {
   list_deployments: READ_ONLY,
   get_server: READ_ONLY,
   get_application: READ_ONLY,
-  verify_app_environment: READ_ONLY,
   get_database: READ_ONLY,
   get_service: READ_ONLY,
   server_resources: READ_ONLY,
@@ -1119,17 +1118,28 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'environments',
-      'Manage environments: list/get/create/delete (get includes dragonfly/keydb/clickhouse DBs missing from API; when the project has exactly one environment, get may omit name)',
+      'Manage environments: list/get/create/delete/verify_app (get includes dragonfly/keydb/clickhouse DBs missing from API; when the project has exactly one environment, get may omit name; verify_app proves application_uuid is bound to environment `name` of project_uuid using only exact endpoints, a pre-mutation guard)',
       {
-        action: z.enum(['list', 'get', 'create', 'delete']),
+        action: z.enum(['list', 'get', 'create', 'delete', 'verify_app']),
         project_uuid: z.string(),
         name: z.string().optional(),
         description: z.string().optional(),
+        application_uuid: z.string().optional(),
       },
-      async ({ action, project_uuid, name, description }, extra) => {
+      async ({ action, project_uuid, name, description, application_uuid }, extra) => {
         switch (action) {
           case 'list':
             return wrap(() => this.client.listProjectEnvironments(project_uuid));
+          case 'verify_app':
+            if (!name || !application_uuid)
+              return {
+                content: [
+                  { type: 'text' as const, text: 'Error: name and application_uuid required' },
+                ],
+              };
+            return wrap(() =>
+              this.client.verifyApplicationEnvironment(application_uuid, project_uuid, name),
+            );
           case 'get':
             // The schema has always marked name optional here, but the handler
             // rejected without it (#336). Default to the sole environment when
@@ -1203,24 +1213,6 @@ export class CoolifyMcpServer extends McpServer {
         wrapWithActions(
           () => this.client.getApplication(uuid, { reveal }),
           (app) => getApplicationActions(app.uuid, app.status),
-        ),
-    );
-
-    this.defineTool(
-      'verify_app_environment',
-      'Verify one exact application belongs to one exact project environment without list calls',
-      {
-        application_uuid: z.string().min(1),
-        project_uuid: z.string().min(1),
-        expected_environment: z.string().min(1),
-      },
-      async ({ application_uuid, project_uuid, expected_environment }) =>
-        wrap(() =>
-          this.client.verifyApplicationEnvironment(
-            application_uuid,
-            project_uuid,
-            expected_environment,
-          ),
         ),
     );
 

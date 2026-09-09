@@ -103,7 +103,7 @@ Single-instance configs are untouched: no `instance` argument, no extra tool, by
 | **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                                                            |
 | **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`, `list_destinations`                                                                |
 | **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                           |
-| **Environments**     | `environments` (list, get, create, delete via action param)                                                                                                               |
+| **Environments**     | `environments` (list, get, create, delete, verify_app — prove an app is bound to an exact project environment — via action param)                                         |
 | **Applications**     | `list_applications`, `get_application`, `application` (CRUD + delete_preview)                                                                                             |
 | **Databases**        | `list_databases`, `get_database`, `database` (create 8 types, update incl. public port, delete), `database_backups` (CRUD schedules, executions incl. delete)             |
 | **Services**         | `list_services`, `get_service`, `service` (create, update, delete, list_containers; per-container `update_application` + `start/stop/restart_application`, Coolify v4.2+) |

@@ -303,8 +303,9 @@ export interface Application {
  * need a project or environment enumeration to bind the two identities.
  */
 export interface ApplicationEnvironmentVerification {
-  identity: string;
-  name: string;
+  verified: true;
+  application_uuid: string;
+  environment: { id: number; uuid: string; name: string };
 }
 
 export interface CreateApplicationPublicRequest {

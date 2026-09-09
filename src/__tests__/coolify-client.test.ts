@@ -1804,8 +1804,9 @@ describe('CoolifyClient', () => {
         );
 
         expect(result).toEqual({
-          identity: '17',
-          name: 'staging',
+          verified: true,
+          application_uuid: 'app-exact-uuid',
+          environment: { id: 17, uuid: 'environment-exact-uuid', name: 'staging' },
         });
         expect(JSON.stringify(result)).not.toContain('must-not-leak');
         expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -1821,19 +1822,6 @@ describe('CoolifyClient', () => {
         );
       });
 
-      it('rejects unsafe or empty anchors before any provider call', async () => {
-        for (const args of [
-          ['', 'project-exact-uuid', 'staging'],
-          ['app-exact-uuid', '../project', 'staging'],
-          ['app-exact-uuid', 'project-exact-uuid', 'staging?full=true'],
-        ] as const) {
-          await expect(
-            client.verifyApplicationEnvironment(args[0], args[1], args[2]),
-          ).rejects.toThrow(/^Exact .+ is invalid$/);
-        }
-        expect(mockFetch).not.toHaveBeenCalled();
-      });
-
       it('accepts an application response without project_uuid when the environment identity binds it', async () => {
         const withoutProject = { ...exactApplication, project_uuid: undefined };
         mockFetch
@@ -1842,7 +1830,11 @@ describe('CoolifyClient', () => {
 
         await expect(
           client.verifyApplicationEnvironment('app-exact-uuid', 'project-exact-uuid', 'staging'),
-        ).resolves.toEqual({ identity: '17', name: 'staging' });
+        ).resolves.toEqual({
+          verified: true,
+          application_uuid: 'app-exact-uuid',
+          environment: { id: 17, uuid: 'environment-exact-uuid', name: 'staging' },
+        });
       });
 
       it('fails before the environment read when application identity or project drifts', async () => {

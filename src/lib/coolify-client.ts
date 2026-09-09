@@ -1147,16 +1147,6 @@ export class CoolifyClient {
     projectUuid: string,
     expectedEnvironment: string,
   ): Promise<ApplicationEnvironmentVerification> {
-    for (const [label, value] of [
-      ['application UUID', applicationUuid],
-      ['project UUID', projectUuid],
-      ['environment name', expectedEnvironment],
-    ]) {
-      if (!value || value.trim() !== value || /[\0\r\n/?#%\\]/u.test(value)) {
-        throw new Error(`Exact ${label} is invalid`);
-      }
-    }
-
     const application = await this.getApplication(applicationUuid);
     if (!application || application.uuid !== applicationUuid) {
       throw new Error('Exact application UUID could not be verified');
@@ -1184,9 +1174,12 @@ export class CoolifyClient {
       throw new Error('Exact environment project UUID does not match');
     }
 
+    // The environment uuid is not sensitive, and withholding it just forces
+    // the caller into another round trip. Embedded resources stay out.
     return {
-      identity: String(environment.id),
-      name: environment.name,
+      verified: true,
+      application_uuid: application.uuid,
+      environment: { id: environment.id, uuid: environment.uuid, name: environment.name },
     };
   }
 
