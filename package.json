@@ -3,7 +3,7 @@
   "scope": "@masonator",
   "version": "3.1.0",
   "mcpName": "io.github.StuMason/coolify",
-  "description": "MCP server for Coolify — 45 optimized tools for infrastructure management, diagnostics, and documentation search",
+  "description": "MCP server for Coolify \u2014 45 optimized tools for infrastructure management, diagnostics, and documentation search",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -110,7 +110,8 @@
     "brace-expansion": "^5.0.6",
     "picomatch": "^4.0.4",
     "js-yaml": "^4.3.1",
-    "markdown-it": "^14.2.0"
+    "markdown-it": "^14.2.0",
+    "smol-toml": "^1.8.0"
   },
   "lint-staged": {
     "*.{ts,js,json,md,yaml,yml}": "prettier --write",
