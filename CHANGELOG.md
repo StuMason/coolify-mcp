@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.0] - 2026-09-09
+
+The fleet release. One server can now manage several Coolify instances, with every tool taking an `instance` and every destructive confirmation naming the one it targets — and a `doctor` command that turns "it's broken" into a one-line fix, because most reports of a broken MCP were the environment, not the server. Cloudflare Access service tokens, a startup self-check, and two contributor fixes round it out.
+
+Thanks to the people whose reports and PRs shaped this release: @Tchorizo (#364), @ninelhodzic (#345), @mediafill (#164, the original fleet ask), @StreamlinedStartup (the #292 audit doctor now runs itself), the hospital-reunioes, Clawith and herdctl teams whose failure stories became doctor's checks, and @ubranch, @daniel-rudaev, @follox42, @kashik0i and @rudo50647 whose estates set the bar for fleet mode.
+
+### Upgrading from 3.0
+
+- **Drop-in.** Single-instance configs are byte-identical on `tools/list`; no config changes, no new arguments, no new tools until you add `COOLIFY_INSTANCES`.
+- **One behaviour change:** `env_vars` with `reveal: true` now requires a `key`. Bulk plaintext reads of every variable are rejected — read one variable at a time.
+- **New commands:** `npx @masonator/coolify-mcp doctor` (add `--json`) verifies a setup end to end. Run it first when anything looks wrong.
 
 ### Added
 
