@@ -128,7 +128,10 @@ discovers the OAuth endpoints itself and registers by whichever mechanism it
 speaks: a Client ID Metadata Document (the client's `client_id` is an https
 URL and the server fetches its registration from there, through the same
 SSRF guard as every other outbound fetch) or, for older clients, dynamic
-registration at `/register`. There is nothing to pre-configure.
+registration at `/register`. There is nothing to pre-configure. If you ship
+a client with a metadata document, its URL has to stay up: the server
+re-fetches it hourly, tolerates a day of the host being down by keeping the
+last good copy, and after that clients re-authorize.
 
 - **Claude Desktop / claude.ai:** Settings → Connectors → Add custom
   connector → paste the `/mcp` URL. Your browser opens the authorize page.

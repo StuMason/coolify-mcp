@@ -135,9 +135,20 @@ export interface OAuthProviderOptions {
   clientMetadataTtl?: number;
 }
 
-/** Per the draft, a metadata document is a few hundred bytes; 5 KB is the recommended cap. */
+/** The draft recommends a 5 KB cap; 8 KB leaves room for a logo_uri and a few extra members. */
 const CLIENT_METADATA_MAX_BYTES = 8 * 1024;
 const CLIENT_METADATA_TTL = 60 * 60 * 1000;
+/**
+ * How long a previously fetched document keeps a client working after its
+ * host stops answering. A refresh should not force a re-authorization
+ * because the client's static host had a bad five minutes; a dead host
+ * should not keep a registration alive forever either.
+ */
+const CLIENT_METADATA_GRACE = 24 * 60 * 60 * 1000;
+/** Refresh this close to expiry, so the synchronous lookup that follows never sees a lapsed entry. */
+const CLIENT_METADATA_EXPIRY_MARGIN = 5_000;
+/** Distinct document clients held in memory; oldest evicted beyond this. */
+const CLIENT_METADATA_MAX = 512;
 
 /**
  * Parse a Client Identifier URL, applying the draft's constraints:
@@ -160,7 +171,14 @@ function parseClientIdUrl(clientId: string): URL {
   // Check the string as sent: `new URL()` resolves dot segments away, and the
   // rule is about the identifier itself, not the URL it collapses to.
   const rawPath = clientId.replace(/^[a-z]+:\/\/[^/]*/i, '').split(/[?#]/)[0] ?? '';
-  if (rawPath.split('/').some((seg) => seg === '.' || seg === '..')) {
+  const decoded = (seg: string): string => {
+    try {
+      return decodeURIComponent(seg);
+    } catch {
+      return seg;
+    }
+  };
+  if (rawPath.split('/').some((seg) => decoded(seg) === '.' || decoded(seg) === '..')) {
     reject('must not contain dot path segments');
   }
   if (url.hash || clientId.includes('#')) reject('must not contain a fragment');
@@ -170,7 +188,7 @@ function parseClientIdUrl(clientId: string): URL {
 }
 
 /** Does this client_id look like a Client Identifier URL rather than a registered id? */
-function isClientIdUrl(clientId: string): boolean {
+export function isClientIdUrl(clientId: string): boolean {
   return /^https?:\/\//i.test(clientId);
 }
 
@@ -215,8 +233,10 @@ export class OAuthProvider {
    */
   private readonly metadataClients = new Map<
     string,
-    { client: RegisteredClient; expires_at: number }
+    { client: RegisteredClient; fetched_at: number; expires_at: number }
   >();
+  /** In-flight document fetches, so concurrent requests for one client_id fetch once. */
+  private readonly pendingResolves = new Map<string, Promise<void>>();
   private readonly codes = new Map<string, AuthorizationCode>();
   private readonly tokens = new Map<string, StoredToken>();
   private persistTimer: NodeJS.Timeout | null = null;
@@ -332,8 +352,21 @@ export class OAuthProvider {
   async resolveClient(clientId: string): Promise<void> {
     if (this.clients.has(clientId) || !isClientIdUrl(clientId)) return;
     const cached = this.metadataClients.get(clientId);
-    if (cached && cached.expires_at > Date.now()) return;
+    if (cached && cached.expires_at - Date.now() > CLIENT_METADATA_EXPIRY_MARGIN) return;
 
+    const pending = this.pendingResolves.get(clientId);
+    if (pending) return pending;
+    const run = this.fetchAndCache(clientId, cached).finally(() => {
+      this.pendingResolves.delete(clientId);
+    });
+    this.pendingResolves.set(clientId, run);
+    return run;
+  }
+
+  private async fetchAndCache(
+    clientId: string,
+    cached: { client: RegisteredClient; fetched_at: number; expires_at: number } | undefined,
+  ): Promise<void> {
     const url = parseClientIdUrl(clientId);
     const fetchDocument =
       this.options.fetchClientMetadata ??
@@ -344,18 +377,56 @@ export class OAuthProvider {
     try {
       document = await fetchDocument(clientId);
     } catch (error) {
+      // The detail (did not resolve / 302 / timed out / too large) is useful
+      // to the operator and a probing oracle to anyone else, so it goes to
+      // the log and the caller gets one generic sentence.
+      console.error(
+        `oauth: client metadata document for ${url.host} could not be fetched: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      if (cached && cached.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE > Date.now()) {
+        // Known client, host briefly down: keep the last good document,
+        // bounded by the grace window measured from when it was fetched.
+        const ttl = this.options.clientMetadataTtl ?? CLIENT_METADATA_TTL;
+        this.metadataClients.set(clientId, {
+          ...cached,
+          expires_at: Math.min(
+            Date.now() + ttl,
+            cached.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE,
+          ),
+        });
+        return;
+      }
       throw new OAuthErrorResponse(
         'invalid_client',
-        `client_id metadata document could not be fetched: ${error instanceof Error ? error.message : String(error)}`,
+        'client_id metadata document could not be fetched',
         401,
       );
     }
 
     const client = this.clientFromMetadataDocument(clientId, url, document);
+    const now = Date.now();
+    this.metadataClients.delete(clientId); // re-insert so Map order stays oldest-first
     this.metadataClients.set(clientId, {
       client,
-      expires_at: Date.now() + (this.options.clientMetadataTtl ?? CLIENT_METADATA_TTL),
+      fetched_at: now,
+      expires_at: now + (this.options.clientMetadataTtl ?? CLIENT_METADATA_TTL),
     });
+    this.evictMetadataClients();
+  }
+
+  /** Drop lapsed documents (beyond grace) and cap the map at CLIENT_METADATA_MAX. */
+  private evictMetadataClients(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.metadataClients) {
+      if (entry.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE < now) {
+        this.metadataClients.delete(key);
+      }
+    }
+    while (this.metadataClients.size > CLIENT_METADATA_MAX) {
+      const oldest = this.metadataClients.keys().next().value;
+      if (oldest === undefined) break;
+      this.metadataClients.delete(oldest);
+    }
   }
 
   private clientFromMetadataDocument(
@@ -381,7 +452,15 @@ export class OAuthProvider {
     ) {
       invalid('must list redirect_uris');
     }
-    validateRedirectUris(redirectUris as string[]);
+    try {
+      validateRedirectUris(redirectUris as string[]);
+    } catch (error) {
+      // Same rules as DCR, but a document problem is a client problem: one
+      // code (invalid_client) for everything wrong with the document.
+      invalid(
+        `lists an unusable redirect_uri: ${error instanceof OAuthErrorResponse ? error.description : String(error)}`,
+      );
+    }
 
     // A document is public by construction, so it cannot carry a shared
     // secret and cannot ask to authenticate with one.
@@ -662,6 +741,7 @@ export class OAuthProvider {
       // reuse detection still fires; everything is dropped once expired.
       if (token.expires_at < now) this.tokens.delete(key);
     }
+    this.evictMetadataClients();
   }
 
   private persist(): void {

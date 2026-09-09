@@ -16,7 +16,7 @@ import {
   type McpHttpHandler,
 } from '@modelcontextprotocol/server';
 import { CoolifyMcpServer } from './mcp-server.js';
-import { OAuthProvider, OAuthErrorResponse } from './oauth.js';
+import { OAuthProvider, OAuthErrorResponse, isClientIdUrl } from './oauth.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 import type { InstanceRegistry } from './instances.js';
 
@@ -290,8 +290,15 @@ export function createHttpApp(config: HttpServerConfig): {
     }
 
     if (path === '/authorize' && request.method === 'GET') {
+      const clientId = url.searchParams.get('client_id') ?? '';
+      // A URL client_id makes this leg fetch from a host the requester chose
+      // (#340), so it gets the same per-IP limit as the credential-bearing
+      // legs. A registered id stays unlimited: that page is in-memory work.
+      if (isClientIdUrl(clientId) && !authLimiter.allow(`cimd:${clientIp}`)) {
+        return html('<p>Too many attempts. Try again in a minute.</p>', 429);
+      }
       try {
-        await provider.resolveClient(url.searchParams.get('client_id') ?? '');
+        await provider.resolveClient(clientId);
         const validated = provider.validateAuthorizationRequest(url.searchParams);
         return html(
           authorizePage(url.searchParams, validated.client.client_name ?? 'An MCP client'),

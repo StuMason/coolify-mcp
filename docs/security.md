@@ -61,6 +61,13 @@ hatch, not a normal setting.
 
 ## Secure by default
 
+The server makes requests to one host it was not configured with: in HTTP
+mode, the URL a client presents as its `client_id` (a Client ID Metadata
+Document). That fetch goes through the SSRF guard in `src/lib/ssrf.ts`
+(public addresses only, pinned DNS, no redirects, size and time caps), is
+rate-limited per IP, and reports one generic sentence on failure so the
+authorize page cannot be used to probe other hosts.
+
 Secrets are masked at the API boundary. A client granted "list" access never
 sees plaintext credentials unless you explicitly opt in with `reveal: true`:
 

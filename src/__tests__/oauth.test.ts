@@ -1127,7 +1127,7 @@ describe('Client ID Metadata Documents (#340)', () => {
     [
       'non-https redirect',
       { ...goodDocument(), redirect_uris: ['http://client.example.com/cb'] },
-      'https',
+      'unusable redirect_uri',
     ],
     [
       'secret-based auth',
@@ -1142,7 +1142,11 @@ describe('Client ID Metadata Documents (#340)', () => {
       const fetcher = jest.fn(async () => document);
       const provider = makeCimdProvider(fetcher);
       await expect(provider.resolveClient(CLIENT_URL)).rejects.toThrow(reason);
-      await expect(provider.resolveClient(CLIENT_URL)).rejects.toThrow(reason);
+      // One code for everything wrong with a document, on every leg.
+      await expect(provider.resolveClient(CLIENT_URL)).rejects.toMatchObject({
+        code: 'invalid_client',
+        status: 401,
+      });
       expect(fetcher).toHaveBeenCalledTimes(2);
       expect(() => provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x'))).toThrow(
         /unknown client_id/,
@@ -1150,7 +1154,7 @@ describe('Client ID Metadata Documents (#340)', () => {
     },
   );
 
-  it('surfaces a fetch failure as invalid_client and retries next time', async () => {
+  it('surfaces a fetch failure as a generic invalid_client, logs the detail, and retries next time', async () => {
     const fetcher = jest
       .fn<(url: string) => Promise<unknown>>()
       .mockRejectedValueOnce(
@@ -1158,12 +1162,84 @@ describe('Client ID Metadata Documents (#340)', () => {
       )
       .mockResolvedValueOnce(goodDocument());
     const provider = makeCimdProvider(fetcher);
-    await expect(provider.resolveClient(CLIENT_URL)).rejects.toMatchObject({
-      code: 'invalid_client',
-      status: 401,
-    });
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const failure = provider.resolveClient(CLIENT_URL);
+      await expect(failure).rejects.toMatchObject({ code: 'invalid_client', status: 401 });
+      // The page must not become a probing oracle for public hosts: the
+      // reason stays in the log, the caller gets one sentence.
+      await expect(failure).rejects.toThrow(
+        /^invalid_client: client_id metadata document could not be fetched$/,
+      );
+      expect(String(stderr.mock.calls[0][0])).toMatch(/client\.example\.com.*answered 302/);
+    } finally {
+      stderr.mockRestore();
+    }
     await expect(provider.resolveClient(CLIENT_URL)).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetches once for concurrent requests naming the same client_id', async () => {
+    let release!: (value: unknown) => void;
+    const fetcher = jest.fn(() => new Promise<unknown>((resolve) => (release = resolve)));
+    const provider = makeCimdProvider(fetcher);
+    const a = provider.resolveClient(CLIENT_URL);
+    const b = provider.resolveClient(CLIENT_URL);
+    release(goodDocument());
+    await Promise.all([a, b]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a known client working through a document-host outage, for a bounded time', async () => {
+    jest.useFakeTimers();
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const fetcher = jest
+        .fn<(url: string) => Promise<unknown>>()
+        .mockResolvedValueOnce(goodDocument())
+        .mockRejectedValue(new Error('gave no response within 10000ms'));
+      const provider = makeCimdProvider(fetcher);
+      await provider.resolveClient(CLIENT_URL);
+      // Past the hour: the refresh fails, the last good document serves.
+      jest.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+      await expect(provider.resolveClient(CLIENT_URL)).resolves.toBeUndefined();
+      expect(() =>
+        provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x')),
+      ).not.toThrow();
+      // Past the day of grace: the registration is gone until the host is back.
+      jest.setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
+      await expect(provider.resolveClient(CLIENT_URL)).rejects.toMatchObject({
+        code: 'invalid_client',
+      });
+    } finally {
+      stderr.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('evicts lapsed documents on prune and caps the cache at 512 entries', async () => {
+    jest.useFakeTimers();
+    try {
+      const provider = makeCimdProvider(async (url: string) => ({
+        ...goodDocument(),
+        client_id: url,
+      }));
+      const cache = (provider as unknown as { metadataClients: Map<string, unknown> })
+        .metadataClients;
+      for (let i = 0; i < 600; i++) {
+        await provider.resolveClient(`https://client.example.com/c/${i}.json`);
+      }
+      expect(cache.size).toBe(512);
+      expect(cache.has('https://client.example.com/c/599.json')).toBe(true);
+      expect(cache.has('https://client.example.com/c/0.json')).toBe(false);
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 60 * 1000);
+      // prune() runs at the top of every token exchange.
+      expect(() => provider.exchange(new URLSearchParams({ grant_type: 'nope' }))).toThrow();
+      expect(cache.size).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('re-fetches once the cache entry expires, so a client can change its redirect URIs', async () => {
@@ -1174,14 +1250,19 @@ describe('Client ID Metadata Documents (#340)', () => {
         ...goodDocument(),
         redirect_uris: ['https://client.example.com/v2'],
       });
-    const provider = makeCimdProvider(fetcher, { clientMetadataTtl: 30 });
-    await provider.resolveClient(CLIENT_URL);
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    await provider.resolveClient(CLIENT_URL);
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(() => provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x'))).toThrow(
-      /redirect_uri not registered/,
-    );
+    const provider = makeCimdProvider(fetcher);
+    jest.useFakeTimers();
+    try {
+      await provider.resolveClient(CLIENT_URL);
+      jest.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+      await provider.resolveClient(CLIENT_URL);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(() => provider.validateAuthorizationRequest(authorizeParams(CLIENT_URL, 'x'))).toThrow(
+        /redirect_uri not registered/,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('rejects a redirect_uri the document does not list, exactly as DCR does', async () => {
@@ -1276,5 +1357,42 @@ describe('Client ID Metadata Documents (#340)', () => {
     );
     expect(token.status).toBe(401);
     expect(((await token.json()) as { error: string }).error).toBe('invalid_client');
+  });
+
+  it('rate-limits GET /authorize per IP only when the client_id is a URL', async () => {
+    const app = createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const headers = { 'x-forwarded-for': '203.0.113.9' };
+      const statuses: number[] = [];
+      for (let i = 0; i < 21; i++) {
+        const res = await app.fetch(
+          new Request(
+            `${ISSUER}/authorize?${authorizeParams(`https://127.0.0.1/c/${i}.json`, 'x').toString()}`,
+            { headers },
+          ),
+        );
+        statuses.push(res.status);
+      }
+      expect(statuses.slice(0, 20).every((code) => code === 400)).toBe(true);
+      expect(statuses[20]).toBe(429);
+
+      // A registered-id page is in-memory work and keeps its old behaviour.
+      const plain = await app.fetch(
+        new Request(`${ISSUER}/authorize?${authorizeParams('mcp_client_nope', 'x').toString()}`, {
+          headers,
+        }),
+      );
+      expect(plain.status).toBe(400);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });
