@@ -345,3 +345,326 @@ paths:
       security:
         -
           bearerAuth: []
+    patch:
+      tags:
+        - Projects
+      summary: 'Update Environment'
+      description: 'Update environment by name or UUID within a project.'
+      operationId: update-environment
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: 'Environment fields to update.'
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'The name of the environment.'
+                description:
+                  type: string
+                  description: 'The description of the environment.'
+              type: object
+      responses:
+        '200':
+          description: 'Environment updated.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string, example: env123 }
+                  name: { type: string, example: staging }
+                  description: { type: string, example: 'Staging environment' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          description: 'Project or environment not found.'
+        '409':
+          description: 'Environment with this name already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/environments/{environment_name_or_uuid}/envs':
+    get:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'List Environment Shared Envs'
+      description: 'List shared environment variables for a project environment (type=environment).'
+      operationId: list-environment-shared-envs
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Environment shared environment variables.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Create Environment Shared Env'
+      description: 'Create a shared environment variable for a project environment (type=environment).'
+      operationId: create-environment-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: 'Environment variable created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'Environment variable already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/environments/{environment_name_or_uuid}/envs/{env_id}':
+    delete:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Delete Environment Shared Env'
+      description: 'Delete an environment shared environment variable by id.'
+      operationId: delete-environment-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable deleted.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Update Environment Shared Env'
+      description: 'Update an environment shared environment variable by id.'
+      operationId: update-environment-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: environment_name_or_uuid
+          in: path
+          description: 'Environment name or UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable updated.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/envs':
+    get:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'List Project Shared Envs'
+      description: 'List shared environment variables for a project (type=project).'
+      operationId: list-project-shared-envs
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Project shared environment variables.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Create Project Shared Env'
+      description: 'Create a shared environment variable for a project (type=project).'
+      operationId: create-project-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: 'Environment variable created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'Environment variable already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/projects/{uuid}/envs/{env_id}':
+    delete:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Delete Project Shared Env'
+      description: 'Delete a project shared environment variable by id.'
+      operationId: delete-project-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable deleted.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Update Project Shared Env'
+      description: 'Update a project shared environment variable by id.'
+      operationId: update-project-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Project UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable updated.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

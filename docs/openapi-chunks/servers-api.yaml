@@ -330,6 +330,349 @@ paths:
       security:
         -
           bearerAuth: []
+  '/servers/{uuid}/claim':
+    post:
+      tags:
+        - Servers
+      summary: 'Claim imported server'
+      description: 'Claim a managed host for this instance: write ownership file and rebind Sentinel.'
+      operationId: claim-server
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                write_remote:
+                  type: boolean
+                  default: true
+                rebind_sentinel:
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: 'Claim result'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/cloudflare-tunnel':
+    get:
+      tags:
+        - Servers
+      summary: 'Get Cloudflare Tunnel settings'
+      description: 'Get Cloudflare Tunnel settings for a server owned by the authenticated team.'
+      operationId: get-server-cloudflare-tunnel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloudflare Tunnel settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  is_cloudflare_tunnel: { type: boolean }
+                  ip: { type: string }
+                  ip_previous: { type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Servers
+      summary: 'Update Cloudflare Tunnel settings'
+      description: 'Update stored Cloudflare Tunnel settings for a server. Does not run remote cloudflared configuration; use enable/disable for the manual UI actions.'
+      operationId: update-server-cloudflare-tunnel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                is_cloudflare_tunnel:
+                  type: boolean
+              type: object
+      responses:
+        '200':
+          description: 'Updated Cloudflare Tunnel settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/cloudflare-tunnel/disable':
+    post:
+      tags:
+        - Servers
+      summary: 'Disable Cloudflare Tunnel'
+      description: 'Mark Cloudflare Tunnel as disabled and restore ip_previous when available. Does not remove the remote cloudflared container.'
+      operationId: disable-server-cloudflare-tunnel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloudflare Tunnel disabled.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/cloudflare-tunnel/enable':
+    post:
+      tags:
+        - Servers
+      summary: 'Enable Cloudflare Tunnel (manual)'
+      description: 'Manually mark Cloudflare Tunnel as enabled for a server (matches UI manual enable). Does not deploy cloudflared remotely.'
+      operationId: enable-server-cloudflare-tunnel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Cloudflare Tunnel enabled.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/docker-cleanup':
+    get:
+      tags:
+        - Servers
+      summary: 'Get Docker cleanup settings'
+      description: 'Get Docker cleanup settings for a server owned by the authenticated team.'
+      operationId: get-server-docker-cleanup
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Docker cleanup settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  docker_cleanup_frequency: { type: string }
+                  docker_cleanup_threshold: { type: integer }
+                  force_docker_cleanup: { type: boolean }
+                  delete_unused_volumes: { type: boolean }
+                  delete_unused_networks: { type: boolean }
+                  disable_application_image_retention: { type: boolean }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Servers
+      summary: 'Update Docker cleanup settings'
+      description: 'Update Docker cleanup settings for a server owned by the authenticated team.'
+      operationId: update-server-docker-cleanup
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                docker_cleanup_frequency:
+                  description: 'Cron / human frequency expression.'
+                  type: string
+                docker_cleanup_threshold:
+                  type: integer
+                  maximum: 99
+                  minimum: 1
+                force_docker_cleanup:
+                  type: boolean
+                delete_unused_volumes:
+                  type: boolean
+                delete_unused_networks:
+                  type: boolean
+                disable_application_image_retention:
+                  type: boolean
+              type: object
+      responses:
+        '200':
+          description: 'Updated Docker cleanup settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  docker_cleanup_frequency: { type: string }
+                  docker_cleanup_threshold: { type: integer }
+                  force_docker_cleanup: { type: boolean }
+                  delete_unused_volumes: { type: boolean }
+                  delete_unused_networks: { type: boolean }
+                  disable_application_image_retention: { type: boolean }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/docker-cleanup/executions':
+    get:
+      tags:
+        - Servers
+      summary: 'List Docker cleanup executions'
+      description: 'List recent Docker cleanup execution logs for a server owned by the authenticated team.'
+      operationId: list-server-docker-cleanup-executions
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Recent Docker cleanup executions.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { uuid: { type: string }, status: { type: string }, message: { type: [string, 'null'] }, finished_at: { type: [string, 'null'] }, created_at: { type: string }, updated_at: { type: string } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/docker-cleanup/run':
+    post:
+      tags:
+        - Servers
+      summary: 'Run Docker cleanup'
+      description: 'Dispatch a manual Docker cleanup job for a server owned by the authenticated team.'
+      operationId: run-server-docker-cleanup
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              properties:
+                delete_unused_volumes:
+                  type: boolean
+                delete_unused_networks:
+                  type: boolean
+              type: object
+      responses:
+        '200':
+          description: 'Docker cleanup job dispatched.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Manual cleanup job started.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   '/servers/{uuid}/domains':
     get:
       tags:
@@ -362,6 +705,525 @@ paths:
       security:
         -
           bearerAuth: []
+  '/servers/{uuid}/envs':
+    get:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'List Server Shared Envs'
+      description: 'List shared environment variables for a server (type=server).'
+      operationId: list-server-shared-envs
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Server shared environment variables.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Create Server Shared Env'
+      description: 'Create a shared environment variable for a server (type=server).'
+      operationId: create-server-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: 'Environment variable created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'Environment variable already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/envs/{env_id}':
+    delete:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Delete Server Shared Env'
+      description: 'Delete a server shared environment variable by id.'
+      operationId: delete-server-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable deleted.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Update Server Shared Env'
+      description: 'Update a server shared environment variable by id.'
+      operationId: update-server-shared-env
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable updated.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/export':
+    get:
+      tags:
+        - Servers
+      summary: 'Export server transfer bundle'
+      description: 'Export a server and all resources hosted on it as a versioned transfer bundle for moving between Coolify instances. Requires read:sensitive.'
+      operationId: export-server-transfer-bundle
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+        -
+          name: encrypt
+          in: query
+          description: 'If true and passphrase is provided, return an encrypted envelope.'
+          required: false
+          schema:
+            type: boolean
+        -
+          name: passphrase
+          in: query
+          description: 'Passphrase used when encrypt=true.'
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Transfer bundle'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Missing sensitive permission'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/export/mailbox':
+    post:
+      tags:
+        - Servers
+      summary: 'Write transfer bundle to server mailbox'
+      description: 'Write an export bundle to /data/coolify/exports on the managed host for air-gapped import.'
+      operationId: export-server-transfer-mailbox
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                passphrase:
+                  type: [string, 'null']
+              type: object
+      responses:
+        '200':
+          description: 'Mailbox write result'
+        '403':
+          description: 'Missing sensitive permission'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/log-drains':
+    get:
+      tags:
+        - Servers
+      summary: 'Get log drain settings'
+      description: 'Get log drain settings for a server owned by the authenticated team. Sensitive fields require the read:sensitive or root token ability.'
+      operationId: get-server-log-drains
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Log drain settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  is_logdrain_newrelic_enabled: { type: boolean }
+                  logdrain_newrelic_license_key: { description: 'Only present with read:sensitive.', type: string }
+                  logdrain_newrelic_base_uri: { type: [string, 'null'] }
+                  is_logdrain_axiom_enabled: { type: boolean }
+                  logdrain_axiom_dataset_name: { type: [string, 'null'] }
+                  logdrain_axiom_api_key: { description: 'Only present with read:sensitive.', type: string }
+                  is_logdrain_custom_enabled: { type: boolean }
+                  logdrain_custom_config: { description: 'Only present with read:sensitive.', type: string }
+                  logdrain_custom_config_parser: { description: 'Only present with read:sensitive.', type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Servers
+      summary: 'Update log drain settings'
+      description: 'Update New Relic, Axiom, or custom log drain settings for a server owned by the authenticated team.'
+      operationId: update-server-log-drains
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                is_logdrain_newrelic_enabled:
+                  type: boolean
+                logdrain_newrelic_license_key:
+                  type: string
+                logdrain_newrelic_base_uri:
+                  type: string
+                is_logdrain_axiom_enabled:
+                  type: boolean
+                logdrain_axiom_dataset_name:
+                  type: string
+                logdrain_axiom_api_key:
+                  type: string
+                is_logdrain_custom_enabled:
+                  type: boolean
+                logdrain_custom_config:
+                  type: string
+                logdrain_custom_config_parser:
+                  type: string
+              type: object
+      responses:
+        '200':
+          description: 'Updated log drain settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/migrate':
+    post:
+      tags:
+        - Servers
+      summary: 'Migrate server to another Coolify instance'
+      description: 'One-shot handoff: export this server, import+claim on the target instance (using the provided token), then disable automations here. Requires read:sensitive and write.'
+      operationId: migrate-server-between-instances
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - target_url
+                - target_token
+              properties:
+                target_url:
+                  type: string
+                  example: 'https://coolify-b.example.com'
+                target_token:
+                  description: 'API token on the target instance (root or write)'
+                  type: string
+                write_remote:
+                  type: boolean
+                  default: false
+                rebind_sentinel:
+                  type: boolean
+                  default: true
+                preserve_uuids:
+                  type: boolean
+                  default: true
+                adopt_mode:
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: Migrated
+        '403':
+          description: 'Missing sensitive permission'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          description: 'Validation or remote import failed'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/proxy':
+    get:
+      tags:
+        - Servers
+      summary: 'Get server proxy'
+      description: 'Get proxy settings for a server owned by the authenticated team. The raw proxy configuration is only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner, and only when already stored in the database (no remote fetch).'
+      operationId: get-server-proxy
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Server proxy settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  proxy_type: { type: [string, 'null'], example: TRAEFIK }
+                  status: { type: [string, 'null'], example: running }
+                  redirect_enabled: { type: boolean, example: true }
+                  redirect_url: { type: [string, 'null'], example: 'https://example.com' }
+                  generate_exact_labels: { type: boolean, example: false }
+                  configuration: { description: 'Docker Compose proxy configuration when stored in the database. Only present with read:sensitive.', type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Servers
+      summary: 'Update server proxy'
+      description: 'Update proxy redirect settings, exact labels generation, and optionally the proxy type for a team-owned server.'
+      operationId: update-server-proxy
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                redirect_enabled:
+                  type: boolean
+                redirect_url:
+                  description: 'Public http(s) redirect URL, or null to clear.'
+                  type: [string, 'null']
+                generate_exact_labels:
+                  type: boolean
+                proxy_type:
+                  description: 'Proxy type (case-insensitive).'
+                  type: string
+                  enum: [traefik, caddy, nginx, none]
+              type: object
+      responses:
+        '200':
+          description: 'Proxy settings updated.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  proxy_type: { type: [string, 'null'] }
+                  status: { type: [string, 'null'] }
+                  redirect_enabled: { type: boolean }
+                  redirect_url: { type: [string, 'null'] }
+                  generate_exact_labels: { type: boolean }
+                  configuration: { type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/proxy/configuration':
+    put:
+      tags:
+        - Servers
+      summary: 'Save server proxy configuration'
+      description: 'Save the raw proxy Docker Compose configuration for a team-owned server. Multi-line configuration must be base64 encoded (same pattern as other compose payloads).'
+      operationId: save-server-proxy-configuration
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - configuration
+              properties:
+                configuration:
+                  description: 'Proxy docker-compose YAML. Prefer base64 encoding for multi-line content.'
+                  type: string
+              type: object
+      responses:
+        '200':
+          description: 'Proxy configuration saved.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Proxy configuration saved.' }
+                  proxy_type: { type: [string, 'null'] }
+                  status: { type: [string, 'null'] }
+                  redirect_enabled: { type: boolean }
+                  redirect_url: { type: [string, 'null'] }
+                  generate_exact_labels: { type: boolean }
+                  configuration: { type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/proxy/restart':
+    post:
+      tags:
+        - Servers
+      summary: 'Restart server proxy'
+      description: 'Queue a proxy restart for a team-owned server.'
+      operationId: restart-server-proxy
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Proxy restart queued.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Proxy restart queued.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
   '/servers/{uuid}/resources':
     get:
       tags:
@@ -391,6 +1253,133 @@ paths:
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/sentinel':
+    get:
+      tags:
+        - Servers
+      summary: 'Get Sentinel settings'
+      description: 'Get Sentinel settings for a server owned by the authenticated team. sentinel_token and sentinel_custom_url require the read:sensitive or root token ability.'
+      operationId: get-server-sentinel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Sentinel settings.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  is_sentinel_enabled: { type: boolean }
+                  is_metrics_enabled: { type: boolean }
+                  is_sentinel_debug_enabled: { type: boolean }
+                  sentinel_token: { description: 'Only present with read:sensitive.', type: string }
+                  sentinel_metrics_refresh_rate_seconds: { type: integer }
+                  sentinel_metrics_history_days: { type: integer }
+                  sentinel_push_interval_seconds: { type: integer }
+                  sentinel_custom_url: { description: 'Only present with read:sensitive.', type: string }
+                  sentinel_updated_at: { type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Servers
+      summary: 'Update Sentinel settings'
+      description: 'Update Sentinel settings for a server owned by the authenticated team. Changing token/metrics timing fields may restart Sentinel.'
+      operationId: update-server-sentinel
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                is_sentinel_enabled:
+                  type: boolean
+                is_metrics_enabled:
+                  type: boolean
+                is_sentinel_debug_enabled:
+                  type: boolean
+                sentinel_token:
+                  type: string
+                sentinel_metrics_refresh_rate_seconds:
+                  type: integer
+                  minimum: 1
+                sentinel_metrics_history_days:
+                  type: integer
+                  minimum: 1
+                sentinel_push_interval_seconds:
+                  type: integer
+                  minimum: 10
+                sentinel_custom_url:
+                  type: [string, 'null']
+              type: object
+      responses:
+        '200':
+          description: 'Updated Sentinel settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/transfer/complete':
+    post:
+      tags:
+        - Servers
+      summary: 'Mark server transferred'
+      description: 'Source-instance step: disable automations after a successful export/import handoff.'
+      operationId: complete-server-transfer
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                export_id:
+                  type: [string, 'null']
+                target_instance_url:
+                  type: [string, 'null']
+              type: object
+      responses:
+        '200':
+          description: 'Marked transferred'
+        '404':
+          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
@@ -559,6 +1548,59 @@ paths:
           $ref: '#/components/responses/422'
         '429':
           $ref: '#/components/responses/429'
+      security:
+        -
+          bearerAuth: []
+  /servers/import:
+    post:
+      tags:
+        - Servers
+      summary: 'Import server transfer bundle'
+      description: 'Import a server transfer bundle into this Coolify instance (adopt mode by default).'
+      operationId: import-server-transfer-bundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                bundle:
+                  description: 'Plain or encrypted transfer bundle'
+                  type: object
+                passphrase:
+                  type: [string, 'null']
+                dry_run:
+                  type: boolean
+                  default: false
+                preserve_uuids:
+                  type: boolean
+                  default: true
+                adopt_mode:
+                  description: 'Import without forcing redeploy; keep statuses for adoption'
+                  type: boolean
+                  default: true
+                claim:
+                  description: 'Automatically claim the host for this instance after import'
+                  type: boolean
+                  default: true
+                write_remote:
+                  description: 'When claiming, write ownership file on the host via SSH'
+                  type: boolean
+                  default: false
+                rebind_sentinel:
+                  description: 'When claiming, rebind Sentinel to this instance'
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: 'Dry-run result'
+        '201':
+          description: Imported
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          description: 'Validation failed'
       security:
         -
           bearerAuth: []

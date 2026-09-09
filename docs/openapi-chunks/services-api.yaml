@@ -402,6 +402,10 @@ paths:
                 url:
                   description: 'Comma-separated list of URLs (e.g. "http://app.example.com:8080,https://app2.example.com"). Stored as fqdn.'
                   type: [string, 'null']
+                noindex_domains:
+                  description: 'The subset of the service application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the domains are ignored.'
+                  type: [array, 'null']
+                  items: { type: string }
                 human_name:
                   type: [string, 'null']
                 description:
@@ -664,6 +668,51 @@ paths:
           $ref: '#/components/responses/404'
         '501':
           description: 'Swarm not supported.'
+      security:
+        -
+          bearerAuth: []
+  '/services/{uuid}/clone':
+    post:
+      tags:
+        - Services
+      summary: Clone
+      description: 'Clone a service to a destination owned by the authenticated team.'
+      operationId: clone-service-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the service.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  type: string
+                name:
+                  type: [string, 'null']
+                clone_volumes:
+                  type: boolean
+                  default: false
+              type: object
+      responses:
+        '201':
+          description: 'Service cloned.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
         -
           bearerAuth: []
@@ -1282,6 +1331,51 @@ paths:
       security:
         -
           bearerAuth: []
+  '/services/{uuid}/migrate':
+    post:
+      tags:
+        - Services
+      summary: 'Migrate to Server'
+      description: 'Migrate a service to another destination/server owned by the authenticated team. Stops the service, optionally transfers persistent volume data when both servers are managed by Coolify, and updates database records. Redeploy after migration completes.'
+      operationId: migrate-service-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the service.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  description: 'UUID of the target destination.'
+                  type: string
+                migrate_volumes:
+                  description: 'Whether to transfer persistent volume data when migrating across servers.'
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: 'Service migration started or completed.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   '/services/{uuid}/move':
     post:
       tags:
@@ -1568,6 +1662,38 @@ paths:
           $ref: '#/components/responses/404'
         '422':
           $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/services/{uuid}/scheduled-tasks/{task_uuid}/execute':
+    post:
+      tags:
+        - 'Scheduled Tasks'
+      summary: 'Execute Task'
+      description: 'Queue immediate execution of a scheduled task for a service.'
+      operationId: execute-scheduled-task-by-service-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the service.'
+          required: true
+          schema:
+            type: string
+        -
+          name: task_uuid
+          in: path
+          description: 'UUID of the scheduled task.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Scheduled task execution queued.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
@@ -1983,6 +2109,36 @@ paths:
           $ref: '#/components/responses/404'
         '409':
           description: 'Backup or recovery operation is still running.'
+      security:
+        -
+          bearerAuth: []
+  '/services/{uuid}/storages/{storage_uuid}/backups/run':
+    post:
+      tags:
+        - Services
+      summary: 'Run service storage backup'
+      description: 'Queue an immediate volume backup for a service storage that has a schedule.'
+      operationId: run-service-storage-backup
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+        -
+          name: storage_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Storage backup queued.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []

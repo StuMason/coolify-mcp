@@ -653,6 +653,51 @@ paths:
       security:
         -
           bearerAuth: []
+  '/databases/{uuid}/clone':
+    post:
+      tags:
+        - Databases
+      summary: Clone
+      description: 'Clone a database to a destination owned by the authenticated team.'
+      operationId: clone-database-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the database.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  type: string
+                name:
+                  type: [string, 'null']
+                clone_volumes:
+                  type: boolean
+                  default: false
+              type: object
+      responses:
+        '201':
+          description: 'Database cloned.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   '/databases/{uuid}/envs':
     get:
       tags:
@@ -937,6 +982,51 @@ paths:
           $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/databases/{uuid}/migrate':
+    post:
+      tags:
+        - Databases
+      summary: 'Migrate to Server'
+      description: 'Migrate a database to another destination/server owned by the authenticated team. Stops the database, optionally transfers persistent volume data when both servers are managed by Coolify, and updates database records. Redeploy after migration completes.'
+      operationId: migrate-database-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the database.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  description: 'UUID of the target destination.'
+                  type: string
+                migrate_volumes:
+                  description: 'Whether to transfer persistent volume data when migrating across servers.'
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: 'Database migration started or completed.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
         -
           bearerAuth: []
@@ -1394,6 +1484,36 @@ paths:
           $ref: '#/components/responses/404'
         '409':
           description: 'Backup or recovery operation is still running.'
+      security:
+        -
+          bearerAuth: []
+  '/databases/{uuid}/storages/{storage_uuid}/backups/run':
+    post:
+      tags:
+        - Databases
+      summary: 'Run database storage backup'
+      description: 'Queue an immediate volume backup for a database storage that has a schedule.'
+      operationId: run-database-storage-backup
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+        -
+          name: storage_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Storage backup queued.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
