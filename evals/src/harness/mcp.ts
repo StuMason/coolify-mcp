@@ -27,9 +27,9 @@ export interface EvalContext {
   fixture: FixtureHandle;
   client: Client;
   /** Raw tools/list entries, annotations included. */
+  toolInfo: McpToolInfo[];
   /** The server `instructions` field from `initialize` (#339); undefined if unset. */
   instructions?: string;
-  toolInfo: McpToolInfo[];
   /** The same tools as an AI SDK ToolSet whose execute() round-trips through the server. */
   toolSet: ToolSet;
   /** Tool names the server marks read-only / destructive — derived, never hand-listed. */

@@ -749,6 +749,7 @@ export class CoolifyMcpServer extends McpServer {
           fleet: registry.isFleet,
           defaultInstance: registry.default.name,
           readonly: options?.readonly === true,
+          requireElicitation: options?.requireElicitation === true,
         }),
       },
     );

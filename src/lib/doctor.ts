@@ -19,6 +19,7 @@
 
 import { checkStartupConfig, mergeCfAccessHeaders, type Transport } from './startup-check.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
+import { TESTED_RANGE } from './tested-range.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skipped' | 'inconclusive';
 
@@ -54,7 +55,6 @@ interface InstanceConfig {
  * a warning, not a failure — the API is mostly stable — but it is the first
  * thing to suspect when something else in the report is red.
  */
-export const TESTED_RANGE = { min: [4, 0] as const, max: [4, 3] as const, label: '4.0.x – 4.3.x' };
 
 const PROBE_TIMEOUT_MS = 10_000;
 
