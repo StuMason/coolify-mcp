@@ -42,6 +42,7 @@ import type {
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
+import { auditEnabled, auditedCall, markRefused } from './audit.js';
 import { DEFAULT_INSTANCE_NAME, InstanceRegistry, type InstanceDefinition } from './instances.js';
 import { buildInstructions } from './instructions.js';
 import {
@@ -606,6 +607,12 @@ export interface CoolifyMcpServerOptions {
    * HTTP mode sets this; stdio keeps the progressive-enhancement default.
    */
   requireElicitation?: boolean;
+  /**
+   * Default for the audit log (#370) when `COOLIFY_MCP_AUDIT` says nothing.
+   * HTTP mode passes true; stdio leaves it off, because a local single-user
+   * pipe writing a line per call is noise for most people.
+   */
+  auditByDefault?: boolean;
 }
 
 /**
@@ -632,6 +639,8 @@ export class CoolifyMcpServer extends McpServer {
    */
   private readonly instanceContext = new AsyncLocalStorage<InstanceDefinition>();
   private readonly serverOptions: CoolifyMcpServerOptions;
+  /** Resolved once at construction: env overrides the transport's default (#370). */
+  private readonly auditing: boolean;
   /**
    * The tools that actually got registered on this instance. Read-only mode
    * (#303) drops every mutating tool and fleet mode adds one, so "which tools
@@ -711,6 +720,7 @@ export class CoolifyMcpServer extends McpServer {
       try {
         instance = this.registry.get(requested);
       } catch (error) {
+        markRefused('validation');
         return {
           content: [
             {
@@ -722,11 +732,30 @@ export class CoolifyMcpServer extends McpServer {
       }
       return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
     };
+    // Audit wraps the OUTERMOST callback so the line covers instance routing
+    // too: an unknown instance name is a refusal like any other, and a record
+    // that only starts once routing succeeded would be missing exactly the
+    // calls somebody is most likely to be looking for.
+    const audited: ToolCallback<z.ZodObject<Args>> = !this.auditing
+      ? scoped
+      : (args, extra) =>
+          auditedCall(
+            {
+              tool: name,
+              args,
+              instance: this.registry.isFleet
+                ? ((args as { instance?: string }).instance ?? this.registry.default.name)
+                : undefined,
+              clientId: (extra as { authInfo?: { clientId?: string } }).authInfo?.clientId,
+            },
+            () => scoped(args, extra),
+          ) as ReturnType<ToolCallback<z.ZodObject<Args>>>;
+
     this.registeredTools.add(name);
     this.registerTool(
       name,
       { description, inputSchema: z.object(shape), annotations },
-      scoped as unknown as ToolCallback<z.ZodObject<typeof shape>>,
+      audited as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
   }
 
@@ -807,6 +836,12 @@ export class CoolifyMcpServer extends McpServer {
       requireHuman: this.serverOptions.requireElicitation,
     });
     if (!outcome.approved) {
+      // Two different refusals wearing the same shape: a human who said no, and
+      // a client that could not be asked at all. Collapsing them would hide the
+      // second, which is a configuration problem rather than a decision.
+      markRefused(
+        outcome.message.includes('does not support elicitation') ? 'no_elicitation' : 'declined',
+      );
       return { content: [{ type: 'text' as const, text: outcome.message }] };
     }
     return wrap(operation);
@@ -835,6 +870,7 @@ export class CoolifyMcpServer extends McpServer {
       this.clients.set(instance.name, new CoolifyClient(instance));
     }
     this.serverOptions = options ?? {};
+    this.auditing = auditEnabled(options?.auditByDefault === true);
     this.registerTools();
     // Order matters: prompts describe workflows in terms of the tools that
     // actually registered above, and `definePrompt` reads that set.

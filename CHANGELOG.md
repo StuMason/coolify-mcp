@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Audit log for every tool call and every refusal** (#370). One JSON line per call carrying the tool, action, resource uuids, outcome, duration, and in HTTP mode the OAuth client id. On by default in HTTP mode, off over stdio, `COOLIFY_MCP_AUDIT` overrides either way. Refusals are distinguished from errors and carry a reason category, so "a human said no" reads differently from "the client could not be asked". Arguments and responses are never logged: identifiers come from a closed allowlist of key names, so a future argument carrying a secret cannot reach a log line without a deliberate edit. See the audit section in `docs/http-mode.md`.
+
 ### Changed
+
+- HTTP mode's audit line now reports what happened rather than what was asked. It previously peeked at the request body before dispatch, which could only name the tool; it is now written after the call completes and carries the outcome and duration.
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
 

@@ -12,7 +12,6 @@
 import {
   createMcpHandler,
   requireBearerAuth,
-  type AuthInfo,
   type McpHttpHandler,
 } from '@modelcontextprotocol/server';
 import { CoolifyMcpServer } from './mcp-server.js';
@@ -203,21 +202,6 @@ function authorizePage(params: URLSearchParams, clientName: string, error?: stri
 </html>`;
 }
 
-/** One JSON line per tool call: who, what, when. The defensibility feature. */
-function auditToolCall(authInfo: AuthInfo | undefined, body: unknown): void {
-  if (typeof body !== 'object' || body === null) return;
-  const message = body as { method?: string; params?: { name?: string; arguments?: unknown } };
-  if (message.method !== 'tools/call') return;
-  console.error(
-    JSON.stringify({
-      audit: 'tools/call',
-      tool: message.params?.name,
-      client_id: authInfo?.clientId,
-      at: new Date().toISOString(),
-    }),
-  );
-}
-
 export function createHttpApp(config: HttpServerConfig): {
   fetch: (request: Request) => Promise<Response>;
   provider: OAuthProvider;
@@ -243,6 +227,9 @@ export function createHttpApp(config: HttpServerConfig): {
       new CoolifyMcpServer(config.instances ?? config.coolify, {
         readonly: config.readonly,
         requireElicitation: true,
+        // On by default here: a multi-client, internet-facing server is exactly
+        // where "who did what" has to be answerable. COOLIFY_MCP_AUDIT=off opts out.
+        auditByDefault: true,
       }),
     {
       onerror: (error) => console.error('mcp handler:', error.message),
@@ -382,16 +369,10 @@ export function createHttpApp(config: HttpServerConfig): {
       const authResult = await bearer(request);
       if (authResult instanceof Response) return authResult;
 
-      // The MCP handler consumes the body; clone first so the audit peek
-      // cannot interfere with serving.
-      let parsed: unknown;
-      try {
-        parsed = request.method === 'POST' ? await request.clone().json() : undefined;
-      } catch {
-        parsed = undefined;
-      }
-      auditToolCall(authResult, parsed);
-
+      // The audit line is written by the server, not here (#370). Peeking at
+      // the request body could only ever say what was ASKED; the line that
+      // matters says what happened, which is only known once the tool has run.
+      // `authInfo` carries the OAuth client id through to it.
       return mcpHandler.fetch(request, { authInfo: authResult });
     }
 
