@@ -8,6 +8,7 @@ import {
   buildChunks,
   GROUPS,
   DROPPED_TOP_LEVEL_KEYS,
+  UNTAGGED_SEGMENTS,
   SPEC_PATH,
   CHUNKS_DIR,
 } from '../split-openapi-chunks.mjs';
@@ -160,6 +161,20 @@ describe('committed chunks vs the bundled spec', () => {
       const group = GROUPS[segment as keyof typeof GROUPS] ?? 'untagged-api';
       expect(fs.existsSync(path.join(CHUNKS_DIR, `${group}.yaml`))).toBe(true);
     }
+  });
+
+  it('lets exactly the listed first segments fall through to untagged-api', () => {
+    // A re-vendor that brings a new resource family must land in GROUPS or
+    // in UNTAGGED_SEGMENTS by decision, never in untagged-api by default —
+    // six families arrived in #347 and the previous test could not tell.
+    const untagged = [
+      ...new Set(
+        Object.keys(spec.paths)
+          .map((p) => p.split('/').filter(Boolean)[0] ?? '')
+          .filter((segment) => !(segment in GROUPS)),
+      ),
+    ].sort();
+    expect(untagged).toEqual([...UNTAGGED_SEGMENTS].sort());
   });
 
   it('drops only the top-level keys we have explicitly decided to drop', () => {

@@ -26,3 +26,118 @@ paths:
       security:
         -
           bearerAuth: []
+    post:
+      tags:
+        - Tags
+      summary: Create
+      description: 'Create a tag for the current team.'
+      operationId: create-tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  minLength: 2
+              type: object
+      responses:
+        '201':
+          description: 'Tag created.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '409':
+          description: 'Tag with this name already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/tags/{uuid}':
+    delete:
+      tags:
+        - Tags
+      summary: Delete
+      description: 'Delete a tag for the current team. Detaches the tag from all resources via cascade.'
+      operationId: delete-tag-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Tag UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Tag deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Tag deleted.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Tags
+      summary: Update
+      description: 'Update a tag name for the current team.'
+      operationId: update-tag-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Tag UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  minLength: 2
+              type: object
+      responses:
+        '200':
+          description: 'Tag updated.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'Tag with this name already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

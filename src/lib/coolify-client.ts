@@ -1864,6 +1864,10 @@ export class CoolifyClient {
     return this.request<TeamMember[]>(`/teams/${id}/members`);
   }
 
+  // `/teams/current` is gone from the vendored spec (now `/team`, 4.3+) but
+  // still routed upstream as a deprecated alias, and it is the only form
+  // that exists on 4.0–4.2. Keep it while TESTED_RANGE (doctor.ts) starts
+  // below 4.3. See the CLAUDE.md gotcha (#347).
   async getCurrentTeam(): Promise<Team> {
     return this.request<Team>('/teams/current');
   }

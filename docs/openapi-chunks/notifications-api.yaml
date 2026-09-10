@@ -1,0 +1,227 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /notifications/discord:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get Discord notification settings'
+      description: 'Get the current team Discord notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-discord-notifications
+      responses:
+        '200':
+          description: 'Discord notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update Discord notification settings'
+      description: 'Update the current team Discord notification settings.'
+      operationId: update-current-team-discord-notifications
+      responses:
+        '200':
+          description: 'Updated Discord notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /notifications/email:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get email notification settings'
+      description: 'Get the current team email notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-email-notifications
+      responses:
+        '200':
+          description: 'Email notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update email notification settings'
+      description: 'Update the current team email notification settings.'
+      operationId: update-current-team-email-notifications
+      responses:
+        '200':
+          description: 'Updated email notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /notifications/pushover:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get Pushover notification settings'
+      description: 'Get the current team Pushover notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-pushover-notifications
+      responses:
+        '200':
+          description: 'Pushover notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update Pushover notification settings'
+      description: 'Update the current team Pushover notification settings.'
+      operationId: update-current-team-pushover-notifications
+      responses:
+        '200':
+          description: 'Updated Pushover notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /notifications/slack:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get Slack notification settings'
+      description: 'Get the current team Slack notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-slack-notifications
+      responses:
+        '200':
+          description: 'Slack notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update Slack notification settings'
+      description: 'Update the current team Slack notification settings.'
+      operationId: update-current-team-slack-notifications
+      responses:
+        '200':
+          description: 'Updated Slack notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /notifications/telegram:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get Telegram notification settings'
+      description: 'Get the current team Telegram notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-telegram-notifications
+      responses:
+        '200':
+          description: 'Telegram notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update Telegram notification settings'
+      description: 'Update the current team Telegram notification settings.'
+      operationId: update-current-team-telegram-notifications
+      responses:
+        '200':
+          description: 'Updated Telegram notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /notifications/webhook:
+    get:
+      tags:
+        - Notifications
+      summary: 'Get webhook notification settings'
+      description: 'Get the current team webhook notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      operationId: get-current-team-webhook-notifications
+      responses:
+        '200':
+          description: 'Webhook notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Notifications
+      summary: 'Update webhook notification settings'
+      description: 'Update the current team webhook notification settings.'
+      operationId: update-current-team-webhook-notifications
+      responses:
+        '200':
+          description: 'Updated webhook notification settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

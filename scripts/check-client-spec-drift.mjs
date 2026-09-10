@@ -29,12 +29,19 @@
  *
  * Known limitation: matching is HTTP-method-blind and params are pure
  * wildcards, so a client literal can satisfy a spec param in the same
- * position — e.g. the deprecated `/applications/dockercompose` route
- * (removed upstream in v4.1.0, see #235) still "matches" via
- * `/applications/{uuid}`. This check catches whole path *shapes* the spec
- * has never heard of; it cannot catch a removed sibling of a parameterised
- * route without method-aware matching, which isn't worth the complexity
- * for the one known case.
+ * position. This check catches whole path *shapes* the spec has never heard
+ * of; it cannot catch a removed sibling of a parameterised route without
+ * method-aware matching, which isn't worth the complexity for the known
+ * cases. Those cases, kept here next to the matcher that masks them (they
+ * cannot go in ALLOWLIST, because they *match* and would trip the
+ * stale-allowlist error):
+ *
+ *   - `/applications/dockercompose` — removed upstream in v4.1.0 (#235);
+ *     masked by `/applications/{uuid}`.
+ *   - `/teams/current` and `/teams/current/members` — dropped from the spec
+ *     in favour of `/team` (4.3+), still routed upstream as deprecated
+ *     aliases and the only form that exists on 4.0–4.2 (#347); masked by
+ *     `/teams/{id}` and `/teams/{id}/members`. See the CLAUDE.md gotcha.
  */
 
 import fs from 'node:fs';
@@ -55,10 +62,11 @@ export const CLIENT_PATH = path.join(ROOT, 'src/lib/coolify-client.ts');
  * forget and the path later disappears again).
  */
 export const ALLOWLIST = [
-  // Currently empty: refreshing docs/coolify-openapi.yaml from upstream
-  // main (see #236) closed every gap that existed at the time. Add entries
-  // here only when upstream's openapi.yaml genuinely hasn't caught up with
-  // a client-called endpoint yet.
+  // Currently empty: every client route matches a spec path as of the
+  // 2026-09-09 re-vendor (#347). Add entries here only when upstream's
+  // openapi.yaml genuinely hasn't caught up with a client-called endpoint
+  // yet. Routes the matcher masks rather than misses are listed in the
+  // header comment, not here.
 ];
 
 /** Extract every top-level path key from the spec's `paths:` block. */

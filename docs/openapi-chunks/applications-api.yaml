@@ -187,6 +187,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 git_commit_sha:
                   type: string
                   description: 'The git commit SHA.'
@@ -346,7 +350,7 @@ paths:
                 docker_compose_domains:
                   type: array
                   description: 'Array of URLs to be applied to containers of a dockercompose application.'
-                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' } }, type: object }
+                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' }, redirect: { type: string, nullable: true, description: 'Per-service www/non-www redirect for this compose service.', enum: [www, non-www, both] } }, type: object }
                 watch_paths:
                   type: string
                   description: 'The watch paths.'
@@ -401,6 +405,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 connect_to_docker_network:
                   type: boolean
                   description: 'The flag to connect the service to the predefined Docker network.'
@@ -440,6 +480,159 @@ paths:
                   warning: { type: string, example: 'Using the same domain for multiple resources can cause routing conflicts and unpredictable behavior.' }
                   conflicts: { type: array, items: { properties: { domain: { type: string, example: example.com }, resource_name: { type: string, example: 'My Application' }, resource_uuid: { type: string, nullable: true, example: abc123-def456 }, resource_type: { type: string, enum: [application, service, instance], example: application }, message: { type: string, example: "Domain example.com is already in use by application 'My Application'" } }, type: object } }
                 type: object
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/clone':
+    post:
+      tags:
+        - Applications
+      summary: Clone
+      description: 'Clone an application to a destination owned by the authenticated team.'
+      operationId: clone-application-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  description: 'UUID of the destination to clone into.'
+                  type: string
+                name:
+                  description: 'Optional name for the cloned application.'
+                  type: [string, 'null']
+                clone_volumes:
+                  description: 'Whether to clone volume data.'
+                  type: boolean
+                  default: false
+              type: object
+      responses:
+        '201':
+          description: 'Application cloned.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                  message: { type: string, example: 'Application cloned.' }
+                type: object
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/destinations':
+    get:
+      tags:
+        - Applications
+      summary: 'List Destinations'
+      description: 'List primary and additional destinations for a standalone application.'
+      operationId: list-application-destinations
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Application destinations.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - Applications
+      summary: 'Add Destination'
+      description: 'Attach an additional standalone Docker destination to an application.'
+      operationId: add-application-destination
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  type: string
+              type: object
+      responses:
+        '201':
+          description: 'Destination attached.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/destinations/{destination_uuid}':
+    delete:
+      tags:
+        - Applications
+      summary: 'Remove Destination'
+      description: 'Detach an additional destination from an application.'
+      operationId: remove-application-destination
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+        -
+          name: destination_uuid
+          in: path
+          description: 'UUID of the destination.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Destination detached.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
       security:
         -
           bearerAuth: []
@@ -729,6 +922,51 @@ paths:
       security:
         -
           bearerAuth: []
+  '/applications/{uuid}/migrate':
+    post:
+      tags:
+        - Applications
+      summary: 'Migrate to Server'
+      description: 'Migrate an application to another destination/server owned by the authenticated team. Stops the application, optionally transfers persistent volume data when both servers are managed by Coolify, and updates database records. Redeploy after migration completes.'
+      operationId: migrate-application-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - destination_uuid
+              properties:
+                destination_uuid:
+                  description: 'UUID of the target destination.'
+                  type: string
+                migrate_volumes:
+                  description: 'Whether to transfer persistent volume data when migrating across servers.'
+                  type: boolean
+                  default: true
+              type: object
+      responses:
+        '200':
+          description: 'Application migration started or completed.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   '/applications/{uuid}/move':
     post:
       tags:
@@ -851,6 +1089,86 @@ paths:
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/rollback':
+    post:
+      tags:
+        - Applications
+      summary: Rollback
+      description: 'Queue a rollback deployment for an application to a previous image commit/tag.'
+      operationId: rollback-application-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - commit
+              properties:
+                commit:
+                  description: 'Image tag / commit to roll back to.'
+                  type: string
+              type: object
+      responses:
+        '200':
+          description: 'Rollback deployment queued.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string }
+                  deployment_uuid: { type: string }
+                type: object
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/rollback-images':
+    get:
+      tags:
+        - Applications
+      summary: 'List Rollback Images'
+      description: 'List available Docker images for rolling back an application. Returns an empty list when the server is unavailable or remote inspection is not possible.'
+      operationId: list-application-rollback-images
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Rollback images.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  current: { type: [string, 'null'] }
+                  images: { type: array, items: { properties: { tag: { type: string }, created_at: { type: string }, is_current: { type: boolean } }, type: object } }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
         '404':
           $ref: '#/components/responses/404'
       security:
@@ -1051,6 +1369,38 @@ paths:
           $ref: '#/components/responses/404'
         '422':
           $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/applications/{uuid}/scheduled-tasks/{task_uuid}/execute':
+    post:
+      tags:
+        - 'Scheduled Tasks'
+      summary: 'Execute Task'
+      description: 'Queue immediate execution of a scheduled task for an application.'
+      operationId: execute-scheduled-task-by-application-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'UUID of the application.'
+          required: true
+          schema:
+            type: string
+        -
+          name: task_uuid
+          in: path
+          description: 'UUID of the scheduled task.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Scheduled task execution queued.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
@@ -1480,6 +1830,36 @@ paths:
       security:
         -
           bearerAuth: []
+  '/applications/{uuid}/storages/{storage_uuid}/backups/run':
+    post:
+      tags:
+        - Applications
+      summary: 'Run application storage backup'
+      description: 'Queue an immediate volume backup for an application storage that has a schedule.'
+      operationId: run-application-storage-backup
+      parameters:
+        -
+          name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+        -
+          name: storage_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Storage backup queued.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
   '/applications/{uuid}/tags':
     get:
       tags:
@@ -1649,6 +2029,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 docker_registry_image_name:
                   type: string
                   description: 'The docker registry image name.'
@@ -1818,6 +2202,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 is_http_basic_auth_enabled:
                   type: boolean
                   description: 'HTTP Basic Authentication enabled.'
@@ -1927,6 +2347,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 ports_mappings:
                   type: string
                   description: 'The ports mappings.'
@@ -2087,6 +2511,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 is_http_basic_auth_enabled:
                   type: boolean
                   description: 'HTTP Basic Authentication enabled.'
@@ -2206,6 +2666,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 git_commit_sha:
                   type: string
                   description: 'The git commit SHA.'
@@ -2369,7 +2833,7 @@ paths:
                 docker_compose_domains:
                   type: array
                   description: 'Array of URLs to be applied to containers of a dockercompose application.'
-                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' } }, type: object }
+                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' }, redirect: { type: string, nullable: true, description: 'Per-service www/non-www redirect for this compose service.', enum: [www, non-www, both] } }, type: object }
                 watch_paths:
                   type: string
                   description: 'The watch paths.'
@@ -2425,6 +2889,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 is_http_basic_auth_enabled:
                   type: boolean
                   description: 'HTTP Basic Authentication enabled.'
@@ -2548,6 +3048,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 git_commit_sha:
                   type: string
                   description: 'The git commit SHA.'
@@ -2711,7 +3215,7 @@ paths:
                 docker_compose_domains:
                   type: array
                   description: 'Array of URLs to be applied to containers of a dockercompose application.'
-                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' } }, type: object }
+                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' }, redirect: { type: string, nullable: true, description: 'Per-service www/non-www redirect for this compose service.', enum: [www, non-www, both] } }, type: object }
                 watch_paths:
                   type: string
                   description: 'The watch paths.'
@@ -2767,6 +3271,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 is_http_basic_auth_enabled:
                   type: boolean
                   description: 'HTTP Basic Authentication enabled.'
@@ -2886,6 +3426,10 @@ paths:
                 domains:
                   type: string
                   description: 'The application URLs in a comma-separated list.'
+                noindex_domains:
+                  type: array
+                  items: { type: string }
+                  description: 'The subset of the application domains served with an X-Robots-Tag: noindex, nofollow response header, keeping them out of search engines. Entries that are not among the application domains are ignored.'
                 git_commit_sha:
                   type: string
                   description: 'The git commit SHA.'
@@ -3049,7 +3593,7 @@ paths:
                 docker_compose_domains:
                   type: array
                   description: 'Array of URLs to be applied to containers of a dockercompose application.'
-                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' } }, type: object }
+                  items: { properties: { name: { type: string, description: 'The service name as defined in docker-compose.' }, domain: { type: string, description: 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")' }, redirect: { type: string, nullable: true, description: 'Per-service www/non-www redirect for this compose service.', enum: [www, non-www, both] } }, type: object }
                 watch_paths:
                   type: string
                   description: 'The watch paths.'
@@ -3105,6 +3649,42 @@ paths:
                 is_raw_compose_deployment_enabled:
                   type: boolean
                   description: 'Deploy the raw Docker Compose definition.'
+                is_log_drain_enabled:
+                  type: boolean
+                  description: 'Enable log drain for the application.'
+                is_gpu_enabled:
+                  type: boolean
+                  description: 'Enable GPU support.'
+                gpu_driver:
+                  type: string
+                  nullable: true
+                  description: 'GPU driver name.'
+                gpu_count:
+                  type: string
+                  nullable: true
+                  description: 'Number of GPUs to allocate.'
+                gpu_device_ids:
+                  type: string
+                  nullable: true
+                  description: 'Comma-separated GPU device IDs.'
+                gpu_options:
+                  type: string
+                  nullable: true
+                  description: 'Additional GPU options.'
+                is_consistent_container_name_enabled:
+                  type: boolean
+                  description: 'Use a consistent container name across deployments.'
+                custom_internal_name:
+                  type: string
+                  nullable: true
+                  description: 'Custom internal container name.'
+                preview_url_template:
+                  type: string
+                  description: 'Preview URL template.'
+                max_restart_count:
+                  type: integer
+                  minimum: 0
+                  description: 'Maximum container restart count before stopping.'
                 is_http_basic_auth_enabled:
                   type: boolean
                   description: 'HTTP Basic Authentication enabled.'

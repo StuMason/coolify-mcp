@@ -3,6 +3,155 @@ info:
   title: Coolify
   version: '0.1'
 paths:
+  /team:
+    get:
+      tags:
+        - Teams
+      summary: 'Authenticated Team'
+      description: 'Get the team bound to the API token.'
+      operationId: get-token-team
+      responses:
+        '200':
+          description: 'Team bound to the API token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /team/envs:
+    get:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'List Team Shared Envs'
+      description: 'List shared environment variables for the current team (type=team).'
+      operationId: list-team-shared-envs
+      responses:
+        '200':
+          description: 'Team shared environment variables.'
+        '401':
+          $ref: '#/components/responses/401'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Create Team Shared Env'
+      description: 'Create a shared environment variable for the current team (type=team).'
+      operationId: create-team-shared-env
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - key
+              properties:
+                key:
+                  type: string
+                value:
+                  type: [string, 'null']
+                is_literal:
+                  type: boolean
+                is_multiline:
+                  type: boolean
+                is_shown_once:
+                  type: boolean
+                comment:
+                  type: [string, 'null']
+              type: object
+      responses:
+        '201':
+          description: 'Environment variable created.'
+        '401':
+          $ref: '#/components/responses/401'
+        '409':
+          description: 'Environment variable already exists.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/team/envs/{env_id}':
+    delete:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Delete Team Shared Env'
+      description: 'Delete a team shared environment variable by id.'
+      operationId: delete-team-shared-env
+      parameters:
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable deleted.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Shared Environment Variables'
+      summary: 'Update Team Shared Env'
+      description: 'Update a team shared environment variable by id.'
+      operationId: update-team-shared-env
+      parameters:
+        -
+          name: env_id
+          in: path
+          description: 'Shared env id (integer).'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'Environment variable updated.'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  /team/members:
+    get:
+      tags:
+        - Teams
+      summary: 'Authenticated Team Members'
+      description: 'Get members of the team bound to the API token.'
+      operationId: get-token-team-members
+      responses:
+        '200':
+          description: 'Members of the team bound to the API token.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
   /teams:
     get:
       tags:
@@ -87,50 +236,6 @@ paths:
           $ref: '#/components/responses/400'
         '404':
           $ref: '#/components/responses/404'
-      security:
-        -
-          bearerAuth: []
-  /teams/current:
-    get:
-      tags:
-        - Teams
-      summary: 'Authenticated Team'
-      description: 'Get currently authenticated team.'
-      operationId: get-current-team
-      responses:
-        '200':
-          description: 'Current Team.'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Team'
-        '401':
-          $ref: '#/components/responses/401'
-        '400':
-          $ref: '#/components/responses/400'
-      security:
-        -
-          bearerAuth: []
-  /teams/current/members:
-    get:
-      tags:
-        - Teams
-      summary: 'Authenticated Team Members'
-      description: 'Get currently authenticated team members.'
-      operationId: get-current-team-members
-      responses:
-        '200':
-          description: 'Currently authenticated team members.'
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/User'
-        '401':
-          $ref: '#/components/responses/401'
-        '400':
-          $ref: '#/components/responses/400'
       security:
         -
           bearerAuth: []

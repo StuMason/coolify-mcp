@@ -85,3 +85,43 @@ paths:
       security:
         -
           bearerAuth: []
+    patch:
+      tags:
+        - Destinations
+      summary: 'Update destination'
+      description: 'Update a Docker network destination name. Network cannot be changed via the API.'
+      operationId: update-destination-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Destination UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+              type: object
+      responses:
+        '200':
+          description: 'Destination updated.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Destination'
+        '401':
+          $ref: '#/components/responses/401'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []

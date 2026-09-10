@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: Coolify
+  version: '0.1'
+paths:
+  /gitlab-apps:
+    get:
+      tags:
+        - 'GitLab Apps'
+      summary: List
+      description: 'List all GitLab apps for the current team (and system-wide sources).'
+      operationId: list-gitlab-apps
+      responses:
+        '200':
+          description: 'List of GitLab apps.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, api_url: { type: string }, html_url: { type: string }, custom_user: { type: string }, custom_port: { type: integer }, client_id: { type: string, nullable: true }, group_name: { type: string, nullable: true }, redirect_uri: { type: string, nullable: true }, is_system_wide: { type: boolean }, is_public: { type: boolean }, team_id: { type: integer } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - 'GitLab Apps'
+      summary: 'Create GitLab App'
+      description: 'Create a new GitLab app (OAuth source). Credentials may be supplied later via the UI or update endpoint.'
+      operationId: create-gitlab-app
+      requestBody:
+        description: 'GitLab app creation payload.'
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - name
+                - html_url
+              properties:
+                name:
+                  type: string
+                  description: 'Name of the GitLab app.'
+                html_url:
+                  type: string
+                  description: 'GitLab instance URL (e.g., https://gitlab.com).'
+                api_url:
+                  type: string
+                  description: 'GitLab API URL (defaults to {html_url}/api/v4).'
+                custom_user:
+                  type: string
+                  description: 'Custom user for SSH access (default: git).'
+                custom_port:
+                  type: integer
+                  description: 'Custom port for SSH access (default: 22).'
+                group_name:
+                  type: string
+                  nullable: true
+                  description: 'Optional comma-separated group names to filter repositories.'
+                client_id:
+                  type: string
+                  nullable: true
+                  description: 'GitLab OAuth Application ID.'
+                client_secret:
+                  type: string
+                  nullable: true
+                  description: 'GitLab OAuth Application Secret.'
+                webhook_token:
+                  type: string
+                  nullable: true
+                  description: 'Webhook secret token (auto-generated when omitted).'
+                redirect_uri:
+                  type: string
+                  nullable: true
+                  description: 'OAuth redirect URI registered in GitLab.'
+                is_system_wide:
+                  type: boolean
+                  description: 'Is this app system-wide (non-cloud instances only).'
+              type: object
+      responses:
+        '201':
+          description: 'GitLab app created successfully.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  id: { type: integer }
+                  uuid: { type: string }
+                  name: { type: string }
+                  api_url: { type: string }
+                  html_url: { type: string }
+                  custom_user: { type: string }
+                  custom_port: { type: integer }
+                  client_id: { type: string, nullable: true }
+                  group_name: { type: string, nullable: true }
+                  redirect_uri: { type: string, nullable: true }
+                  is_system_wide: { type: boolean }
+                  team_id: { type: integer }
+                type: object
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/gitlab-apps/{gitlab_app_id}':
+    delete:
+      tags:
+        - 'GitLab Apps'
+      summary: 'Delete GitLab App'
+      description: 'Delete a GitLab app if it is not being used by any applications.'
+      operationId: deleteGitlabApp
+      parameters:
+        -
+          name: gitlab_app_id
+          in: path
+          description: 'GitLab App ID'
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 'GitLab app deleted successfully'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'GitLab app deleted successfully' }
+                type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: 'GitLab app not found'
+        '409':
+          description: 'Conflict - GitLab app is in use'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'This GitLab app is being used by 5 application(s). Please delete all applications first.' }
+                type: object
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'GitLab Apps'
+      summary: 'Update GitLab App'
+      description: 'Update an existing GitLab app.'
+      operationId: updateGitlabApp
+      parameters:
+        -
+          name: gitlab_app_id
+          in: path
+          description: 'GitLab App ID'
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                  description: 'GitLab App name'
+                html_url:
+                  type: string
+                  description: 'GitLab HTML URL'
+                api_url:
+                  type: string
+                  description: 'GitLab API URL'
+                custom_user:
+                  type: string
+                  description: 'Custom user for SSH'
+                custom_port:
+                  type: integer
+                  description: 'Custom port for SSH'
+                group_name:
+                  type: string
+                  nullable: true
+                  description: 'Optional group filter'
+                client_id:
+                  type: string
+                  nullable: true
+                  description: 'OAuth Application ID'
+                client_secret:
+                  type: string
+                  nullable: true
+                  description: 'OAuth Application Secret'
+                webhook_token:
+                  type: string
+                  nullable: true
+                  description: 'Webhook secret token'
+                redirect_uri:
+                  type: string
+                  nullable: true
+                  description: 'OAuth redirect URI'
+                is_system_wide:
+                  type: boolean
+                  description: 'Is system wide (non-cloud instances only)'
+              type: object
+      responses:
+        '200':
+          description: 'GitLab app updated successfully'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'GitLab app updated successfully' }
+                  data: { type: object, description: 'Updated GitLab app data' }
+                type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: 'GitLab app not found'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
