@@ -379,7 +379,14 @@ export function getPagination(
 }
 
 /** Wrap handler with error handling and HATEOAS actions */
-function wrapWithActions<T>(
+/**
+ * Build the `{ data, _actions, _pagination }` envelope.
+ *
+ * Module-level and unfiltered: it does not know which tools a given server
+ * registered. Call it through {@link CoolifyMcpServer.wrapWithActions}, which
+ * drops any suggestion the client cannot act on (#390).
+ */
+function buildActionEnvelope<T>(
   fn: () => Promise<T>,
   getActions?: (result: T) => ResponseAction[],
   getPaginationFn?: (result: T) => ResponsePagination | undefined,
@@ -721,6 +728,38 @@ export class CoolifyMcpServer extends McpServer {
       { description, inputSchema: z.object(shape), annotations },
       scoped as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
+  }
+
+  /**
+   * {@link buildActionEnvelope}, with `_actions` filtered to tools this server
+   * actually registered (#390).
+   *
+   * `_actions` is a next-step affordance: the model reads it and calls what it
+   * names. Read-only mode (#303) does not register mutating tools, but the
+   * action builders are static lists — so a read-only server was suggesting
+   * `control` and `deployment` calls that do not exist on it. The server
+   * `instructions` (#339) point the model at `_actions` explicitly, which makes
+   * a dead-end suggestion worse than it was before: the model is now told to
+   * trust this list.
+   *
+   * Filtered here, once, rather than at the nine call sites, so a future action
+   * builder cannot reintroduce the bug by forgetting.
+   */
+  private wrapWithActions<T>(
+    fn: () => Promise<T>,
+    getActions?: (result: T) => ResponseAction[],
+    getPaginationFn?: (result: T) => ResponsePagination | undefined,
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    return buildActionEnvelope(
+      fn,
+      getActions && ((result: T) => this.availableActions(getActions(result))),
+      getPaginationFn,
+    );
+  }
+
+  /** Drop suggested actions naming a tool this server did not register. */
+  private availableActions(actions: ResponseAction[]): ResponseAction[] {
+    return actions.filter((action) => this.registeredTools.has(action.tool as ToolName));
   }
 
   /**
@@ -1581,7 +1620,7 @@ export class CoolifyMcpServer extends McpServer {
       'List apps (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
       async ({ page, per_page }) =>
-        wrapWithActions(
+        this.wrapWithActions(
           () => this.client.listApplications({ page, per_page, summary: true }),
           undefined,
           (result) =>
@@ -1594,7 +1633,7 @@ export class CoolifyMcpServer extends McpServer {
       'App details. Credentials (webhook secrets, basic-auth password, compose bodies, labels) are masked by default; pass reveal: true when you explicitly need them.',
       { uuid: z.string(), reveal: z.boolean().optional() },
       async ({ uuid, reveal }) =>
-        wrapWithActions(
+        this.wrapWithActions(
           () => this.client.getApplication(uuid, { reveal }),
           (app) => getApplicationActions(app.uuid, app.status),
         ),
@@ -2532,7 +2571,7 @@ export class CoolifyMcpServer extends McpServer {
           return actions;
         };
 
-        return wrapWithActions(() => methods[resource][action](uuid), getControlActions);
+        return this.wrapWithActions(() => methods[resource][action](uuid), getControlActions);
       },
     );
 
@@ -2751,7 +2790,7 @@ export class CoolifyMcpServer extends McpServer {
       'List deployments (summary)',
       { page: z.number().optional(), per_page: z.number().optional() },
       async ({ page, per_page }) =>
-        wrapWithActions(
+        this.wrapWithActions(
           () => this.client.listDeployments({ page, per_page, summary: true }),
           undefined,
           (result) =>
@@ -2780,12 +2819,12 @@ export class CoolifyMcpServer extends McpServer {
       },
       async ({ tag_or_uuid, force, wait, timeout_seconds }) => {
         if (!wait) {
-          return wrapWithActions(
+          return this.wrapWithActions(
             () => this.client.deployByTagOrUuid(tag_or_uuid, force),
             () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
           );
         }
-        return wrapWithActions(
+        return this.wrapWithActions(
           () =>
             this.triggerAndWaitForDeploy(
               tag_or_uuid,
@@ -2819,7 +2858,7 @@ export class CoolifyMcpServer extends McpServer {
             if (lines !== undefined) {
               const p = page ?? 1;
               const ll = lines;
-              return wrapWithActions(
+              return this.wrapWithActions(
                 async () => {
                   const deployment = await this.client.getDeployment(uuid, {
                     includeLogs: true,
@@ -2868,7 +2907,7 @@ export class CoolifyMcpServer extends McpServer {
               );
             }
             // Otherwise return essential info without logs
-            return wrapWithActions(
+            return this.wrapWithActions(
               () => this.client.getDeployment(uuid),
               (dep) => getDeploymentActions(dep.uuid, dep.status, dep.application_uuid),
             );

@@ -3308,3 +3308,67 @@ describe('list_destinations (#351)', () => {
     expect(spy).toHaveBeenCalledWith(undefined);
   });
 });
+
+/**
+ * `_actions` must only ever name a tool this server registered (#390).
+ *
+ * The affordance is a next-step instruction the model acts on, and the server
+ * `instructions` (#339) tell it to trust the list. Read-only mode (#303) does
+ * not register mutating tools, so an unfiltered static action builder was
+ * sending a read-only client at `control` and `deployment`.
+ */
+describe('_actions never advertises a tool this server does not have (#390)', () => {
+  const CONFIG = { baseUrl: 'http://localhost:3000', accessToken: 'test-token' };
+  const APP = { uuid: 'app-1', name: 'api', status: 'running:healthy' };
+
+  /** `get_application` through a real client, returning the parsed envelope. */
+  async function readApplication(server: CoolifyMcpServer): Promise<{
+    _actions?: Array<{ tool: string }>;
+  }> {
+    jest.spyOn(server['client'], 'getApplication').mockResolvedValue(APP as never);
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = (await client.callTool({
+        name: 'get_application',
+        arguments: { uuid: 'app-1' },
+      })) as { content: Array<{ text: string }> };
+      return JSON.parse(result.content[0].text);
+    } finally {
+      await client.close();
+    }
+  }
+
+  it('a full server still suggests the mutating follow-ups', async () => {
+    const parsed = await readApplication(new CoolifyMcpServer(CONFIG));
+    const tools = (parsed._actions ?? []).map((a) => a.tool);
+    // The affordance is the feature; the fix must not blunt it where it works.
+    expect(tools).toContain('control');
+    expect(tools).toContain('logs');
+  });
+
+  it('a read-only server suggests only what it registered', async () => {
+    const parsed = await readApplication(new CoolifyMcpServer(CONFIG, { readonly: true }));
+    const tools = (parsed._actions ?? []).map((a) => a.tool);
+    expect(tools).toContain('logs');
+    // `control` is destructive-annotated, so read-only mode never registered it.
+    expect(tools).not.toContain('control');
+  });
+
+  it('every suggested action names a registered tool, in both modes', async () => {
+    for (const options of [undefined, { readonly: true }]) {
+      const server = new CoolifyMcpServer(CONFIG, options);
+      const registered = new Set(
+        Object.keys(
+          (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools,
+        ),
+      );
+      const parsed = await readApplication(server);
+      const orphans = (parsed._actions ?? [])
+        .map((a) => a.tool)
+        .filter((tool) => !registered.has(tool));
+      expect(orphans).toEqual([]);
+    }
+  });
+});
