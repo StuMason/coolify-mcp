@@ -47,6 +47,57 @@ export interface MoveResourceResponse {
   environment_uuid?: string;
 }
 
+/**
+ * Body for `PUT /{applications,databases,services}/{uuid}/storages/{storage_uuid}/backups`
+ * (Coolify v4.2+).
+ *
+ * **These are replace semantics, not merge.** Upstream declares the schema
+ * `additionalProperties: false` with `frequency` as the only required field and
+ * a default on every other one, so a PUT that omits `save_s3` does not leave the
+ * existing value alone — it sets it to `false`. Combined with the absence of any
+ * GET route for a schedule (verified against `VolumeBackupsController`, which
+ * defines only PUT, DELETE and the run POST), there is no way to read the
+ * current settings back before replacing them. Callers must send the full
+ * intended schedule every time.
+ */
+export interface VolumeBackupScheduleRequest {
+  /** Cron expression, e.g. `0 2 * * *`. The only required field. */
+  frequency: string;
+  enabled?: boolean;
+  save_s3?: boolean;
+  disable_local_backup?: boolean;
+  stop_during_backup?: boolean;
+  s3_storage_uuid?: string | null;
+  retention_amount_locally?: number;
+  retention_days_locally?: number;
+  retention_max_storage_locally?: number;
+  retention_amount_s3?: number;
+  retention_days_s3?: number;
+  retention_max_storage_s3?: number;
+  timeout?: number;
+}
+
+/** Response from setting a volume backup schedule. Echoes the stored schedule. */
+export interface VolumeBackupScheduleResponse {
+  uuid: string;
+  message: string;
+  storage_uuid: string;
+  storage_type: 'persistent' | 'directory';
+  frequency: string;
+  enabled: boolean;
+  save_s3: boolean;
+  disable_local_backup: boolean;
+  stop_during_backup: boolean;
+  s3_storage_uuid?: string | null;
+  retention_amount_locally: number;
+  retention_days_locally: number;
+  retention_max_storage_locally: number;
+  retention_amount_s3: number;
+  retention_days_s3: number;
+  retention_max_storage_s3: number;
+  timeout: number;
+}
+
 export interface MessageResponse {
   message: string;
 }
