@@ -114,6 +114,15 @@ export class TokenSource {
   }
 
   private readFile(): string {
+    // Stat BEFORE reading, and let it throw: a missing file is then the same
+    // path as any other read failure, handled by the caller, with no defensive
+    // branch here that nothing can reach.
+    //
+    // Taking the mtime first also errs in the safe direction. If the file is
+    // rewritten between the stat and the read we store the older mtime, so the
+    // next `current()` sees a newer one and re-reads. The cost is one extra
+    // read; the alternative ordering can leave a stale token looking fresh.
+    const stat = statSync(this.path as string);
     const raw = readFileSync(this.path as string, 'utf8');
     // `echo token > file` appends a newline, and a Bearer header carrying one
     // is rejected as malformed rather than as a bad token — an error that
@@ -122,11 +131,7 @@ export class TokenSource {
     if (!token) {
       throw new Error(`Coolify access token file is empty: ${this.path}`);
     }
-    try {
-      this.mtimeMs = statSync(this.path as string).mtimeMs;
-    } catch {
-      this.mtimeMs = 0;
-    }
+    this.mtimeMs = stat.mtimeMs;
     this.lastReadAt = Date.now();
     return token;
   }
