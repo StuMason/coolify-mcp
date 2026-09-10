@@ -1269,39 +1269,40 @@ export class CoolifyClient {
   /**
    * Move a resource to another environment (Coolify v4.2+).
    *
-   * One private helper for all three resource types because the request and
-   * response shapes are byte-identical across `/applications`, `/databases` and
-   * `/services` — three copies would be three places for the `/move` suffix to
-   * drift out of step with {@link errorHint}, which keys its version hint on
-   * exactly that suffix.
+   * Each collection is a LITERAL at its own `this.request()` call site rather
+   * than a shared helper taking `collection` as a parameter. The DRY version
+   * reads better and silently weakens the gate: `check:spec-drift` extracts the
+   * template passed to `this.request()` and turns every `${...}` into a wildcard
+   * segment, so `/${collection}/${uuid}/move` collapses to a two-wildcard path
+   * ending in `move` — one route that matches any of the three, and therefore
+   * proves none of them.
    *
    * Sent as an unconditional POST. Unlike the enable/disable/validate group,
-   * `/move` has no pre-4.2 GET form to fall back to, so
-   * {@link postWithLegacyGetFallback} would be wrong here: a retry could only
-   * ever hit the same absent route. An older instance therefore surfaces the
-   * catch-all 404, which `errorHint` turns into a version message.
+   * `/move` has no pre-4.2 GET form, so {@link postWithLegacyGetFallback} would
+   * be wrong here: a retry could only ever hit the same absent route, and on an
+   * instance that did route it a second call would be a second move. An older
+   * instance surfaces the catch-all 404, which {@link errorHint} turns into a
+   * version message.
    */
-  private async moveResource(
-    collection: 'applications' | 'databases' | 'services',
-    uuid: string,
-    environmentUuid: string,
-  ): Promise<MoveResourceResponse> {
-    return this.request<MoveResourceResponse>(`/${collection}/${uuid}/move`, {
+  async moveApplication(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.request<MoveResourceResponse>(`/applications/${uuid}/move`, {
       method: 'POST',
       body: JSON.stringify({ environment_uuid: environmentUuid }),
     });
   }
 
-  async moveApplication(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.moveResource('applications', uuid, environmentUuid);
-  }
-
   async moveDatabase(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.moveResource('databases', uuid, environmentUuid);
+    return this.request<MoveResourceResponse>(`/databases/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
   }
 
   async moveService(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.moveResource('services', uuid, environmentUuid);
+    return this.request<MoveResourceResponse>(`/services/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
   }
 
   async deleteApplication(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
