@@ -60,8 +60,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (!process.env.COOLIFY_ACCESS_TOKEN && !process.env.COOLIFY_INSTANCES) {
-    throw new Error('COOLIFY_ACCESS_TOKEN environment variable is required');
+  if (
+    !process.env.COOLIFY_ACCESS_TOKEN &&
+    !process.env.COOLIFY_ACCESS_TOKEN_FILE &&
+    !process.env.COOLIFY_INSTANCES
+  ) {
+    throw new Error(
+      'COOLIFY_ACCESS_TOKEN environment variable is required (or COOLIFY_ACCESS_TOKEN_FILE to allow rotation without a restart)',
+    );
   }
 
   // The instance registry (#367): the single-instance vars (with CF Access

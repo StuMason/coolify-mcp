@@ -7,11 +7,23 @@
 // Configuration
 // =============================================================================
 
-export interface CoolifyConfig {
+/**
+ * How to reach one Coolify instance.
+ *
+ * Exactly one token source is required, and the union says so rather than
+ * leaving it to a runtime check: `accessToken` from the environment, or
+ * `accessTokenFile` pointing at a path that is re-read when it changes (#398).
+ * A spawned server never sees a later change to its parent's environment, so
+ * the file is what makes rotating a token without a restart possible. When both
+ * are present the file wins.
+ */
+export type CoolifyConfig = {
   baseUrl: string;
-  accessToken: string;
   customHeaders?: Record<string, string>;
-}
+} & (
+  | { accessToken: string; accessTokenFile?: string }
+  | { accessToken?: string; accessTokenFile: string }
+);
 
 // =============================================================================
 // Common Types
