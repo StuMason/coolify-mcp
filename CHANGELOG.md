@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A loopback client can pick its own callback port** (#340). `redirect_uri` was matched by exact string equality, so a native client that registers `http://127.0.0.1/callback` and then calls back on the ephemeral port it actually bound was rejected mid-redirect with a generic `invalid_request`. RFC 8252 requires the port to be free at request time for loopback redirects, and it now is. The relaxation applies only to loopback: a remote https callback differing by port is still a different endpoint and is still refused.
+
 ### Changed
+
+- **The Client ID Metadata Document fetch is bounded at 3 seconds** (#340), rather than inheriting the 10 second default. Claude allows 10 seconds for the whole of discovery, registration and token exchange, so one hop cannot be allowed to spend all of it. The `client_id` is a URL the caller chooses, so a host that connects and then stalls is entirely under their control.
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
 

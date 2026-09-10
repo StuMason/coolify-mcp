@@ -137,6 +137,21 @@ export interface OAuthProviderOptions {
 
 /** The draft recommends a 5 KB cap; 8 KB leaves room for a logo_uri and a few extra members. */
 const CLIENT_METADATA_MAX_BYTES = 8 * 1024;
+
+/**
+ * How long the Client ID Metadata Document fetch may take (#340).
+ *
+ * Claude allows **10 seconds for the whole of discovery, registration and token
+ * exchange**. `fetchPublicJson` defaults to a 10s timeout, which is the entire
+ * budget for one hop inside it: a slow or deliberately-stalling `client_id`
+ * host would burn the lot and the connection would fail rather than degrade,
+ * with nothing in the flow able to say why.
+ *
+ * Three seconds leaves room for DNS, TLS, our own work and the browser redirect
+ * that follows. A metadata document is a small static JSON file; a host that
+ * cannot serve one in three seconds is not one to wait on.
+ */
+const CLIENT_METADATA_TIMEOUT_MS = 3_000;
 const CLIENT_METADATA_TTL = 60 * 60 * 1000;
 /**
  * How long a previously fetched document keeps a client working after its
@@ -198,6 +213,51 @@ export function isClientIdUrl(clientId: string): boolean {
  * file: URI with a loopback "host" is still a redirect into something that
  * is not a browser callback (#340).
  */
+/** A loopback host per RFC 8252 section 7.3. Names, not just literals. */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
+/**
+ * Does a requested `redirect_uri` match one the client registered?
+ *
+ * Exact string equality, except that a **loopback** redirect may differ in its
+ * port. RFC 8252 section 7.3: "the authorization server MUST allow any port to
+ * be specified at the time of the request for loopback IP redirect URIs".
+ *
+ * This is not a nicety. A native client binds an ephemeral port at the moment
+ * it starts the flow, so it registers `http://127.0.0.1/callback` and then calls
+ * back on `http://127.0.0.1:51763/callback`. Exact matching rejects that, and
+ * the failure surfaces to the user as a generic "invalid_request" partway
+ * through a browser redirect, which is close to undiagnosable.
+ *
+ * The relaxation is deliberately narrow: scheme, host and path must still match
+ * exactly, and only loopback hosts qualify. A remote https callback that
+ * differs by port is a different endpoint, and treating it as the same one
+ * would let a client registered for :443 be redirected to an attacker's :8443.
+ */
+export function redirectUriMatches(registered: string, requested: string): boolean {
+  if (registered === requested) return true;
+  let a: URL;
+  let b: URL;
+  try {
+    a = new URL(registered);
+    b = new URL(requested);
+  } catch {
+    return false;
+  }
+  if (!isLoopbackHost(a.hostname) || !isLoopbackHost(b.hostname)) return false;
+  return (
+    a.protocol === b.protocol &&
+    a.hostname === b.hostname &&
+    a.pathname === b.pathname &&
+    a.search === b.search &&
+    !a.hash &&
+    !b.hash
+  );
+}
+
 function validateRedirectUris(redirectUris: string[]): void {
   for (const uri of redirectUris) {
     let parsed: URL;
@@ -206,8 +266,7 @@ function validateRedirectUris(redirectUris: string[]): void {
     } catch {
       throw new OAuthErrorResponse('invalid_redirect_uri', `not a valid URL: ${uri}`);
     }
-    const host = parsed.hostname.replace(/^\[|\]$/g, '');
-    const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    const isLoopback = isLoopbackHost(parsed.hostname);
     if (!(parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLoopback))) {
       throw new OAuthErrorResponse(
         'invalid_redirect_uri',
@@ -371,7 +430,10 @@ export class OAuthProvider {
     const fetchDocument =
       this.options.fetchClientMetadata ??
       ((target: string): Promise<unknown> =>
-        fetchPublicJson(target, { maxBytes: CLIENT_METADATA_MAX_BYTES }));
+        fetchPublicJson(target, {
+          maxBytes: CLIENT_METADATA_MAX_BYTES,
+          timeoutMs: CLIENT_METADATA_TIMEOUT_MS,
+        }));
 
     let document: unknown;
     try {
@@ -515,7 +577,7 @@ export class OAuthProvider {
     }
 
     const redirectUri = params.get('redirect_uri') ?? '';
-    if (!client.redirect_uris.includes(redirectUri)) {
+    if (!client.redirect_uris.some((registered) => redirectUriMatches(registered, redirectUri))) {
       throw new OAuthErrorResponse('invalid_request', 'redirect_uri not registered for client');
     }
 
