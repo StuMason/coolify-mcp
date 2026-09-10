@@ -59,13 +59,9 @@
       },
       "public_port": {
         "description": "Public port. On update, null clears the assigned port.",
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
+        "type": [
+          "number",
+          "null"
         ]
       },
       "public_port_timeout": {
