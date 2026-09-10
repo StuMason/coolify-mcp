@@ -129,6 +129,17 @@ describe('TokenSource: file (#398)', () => {
     expect(source.current()).toBe('tok-2');
   });
 
+  it('refresh reports no change when the file has gone', () => {
+    // Same reasoning as `current()`: a vanished file is a moment, not a state,
+    // so the last good value stands and nothing is reported as rotated.
+    const path = write('token', 'tok-1');
+    const source = new TokenSource({ accessTokenFile: path });
+    rmSync(path);
+
+    expect(source.refresh()).toEqual({ changed: false });
+    expect(source.current()).toBe('tok-1');
+  });
+
   it('does not re-read while the file is unchanged', () => {
     const path = write('token', 'tok-1');
     const source = new TokenSource({ accessTokenFile: path });
