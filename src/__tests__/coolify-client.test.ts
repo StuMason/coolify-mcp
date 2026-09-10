@@ -7173,8 +7173,6 @@ describe('volume backup schedules (#305)', () => {
 });
 
 describe('volume backups on a pre-4.2 instance (#305)', () => {
-  const catchAll = { message: 'Not found.', docs: 'https://coolify.io/docs/api' };
-
   it.each([
     '/applications/app-1/storages/stor-1/backups',
     '/databases/db-1/storages/stor-1/backups',
