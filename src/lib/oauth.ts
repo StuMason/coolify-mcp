@@ -29,6 +29,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { OAuthError as SdkOAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
+import { fetchPublicJson } from './ssrf.js';
 
 /** RFC 7591 client metadata subset we accept and persist. */
 export interface RegisteredClient {
@@ -123,10 +124,119 @@ export interface OAuthProviderOptions {
   refreshTokenTtl: number;
   /** Where OAuth state persists. Empty string keeps everything in memory (tests). */
   stateFile: string;
+  /**
+   * Fetches a Client ID Metadata Document (#340). Defaults to the
+   * SSRF-guarded {@link fetchPublicJson}; tests inject a stub. Whatever is
+   * passed must refuse private addresses and redirects the way the default
+   * does, because the URL is attacker-chosen.
+   */
+  fetchClientMetadata?: (url: string) => Promise<unknown>;
+  /** How long a fetched metadata document is trusted, in ms. Default one hour. */
+  clientMetadataTtl?: number;
+}
+
+/** The draft recommends a 5 KB cap; 8 KB leaves room for a logo_uri and a few extra members. */
+const CLIENT_METADATA_MAX_BYTES = 8 * 1024;
+const CLIENT_METADATA_TTL = 60 * 60 * 1000;
+/**
+ * How long a previously fetched document keeps a client working after its
+ * host stops answering. A refresh should not force a re-authorization
+ * because the client's static host had a bad five minutes; a dead host
+ * should not keep a registration alive forever either.
+ */
+const CLIENT_METADATA_GRACE = 24 * 60 * 60 * 1000;
+/** Refresh this close to expiry, so the synchronous lookup that follows never sees a lapsed entry. */
+const CLIENT_METADATA_EXPIRY_MARGIN = 5_000;
+/** Distinct document clients held in memory; oldest evicted beyond this. */
+const CLIENT_METADATA_MAX = 512;
+
+/**
+ * Parse a Client Identifier URL, applying the draft's constraints:
+ * https, no userinfo, a path component, no `.`/`..` segments, no fragment.
+ * Anything else is not a CIMD client and gets `invalid_client`.
+ */
+function parseClientIdUrl(clientId: string): URL {
+  let url: URL;
+  try {
+    url = new URL(clientId);
+  } catch {
+    throw new OAuthErrorResponse('invalid_client', 'client_id URL is not a valid URL', 401);
+  }
+  const reject = (why: string): never => {
+    throw new OAuthErrorResponse('invalid_client', `client_id URL ${why}`, 401);
+  };
+  if (url.protocol !== 'https:') reject('must use https');
+  if (url.username || url.password) reject('must not contain userinfo');
+  if (url.pathname === '' || url.pathname === '/') reject('must contain a path component');
+  // Check the string as sent: `new URL()` resolves dot segments away, and the
+  // rule is about the identifier itself, not the URL it collapses to.
+  const rawPath = clientId.replace(/^[a-z]+:\/\/[^/]*/i, '').split(/[?#]/)[0] ?? '';
+  const decoded = (seg: string): string => {
+    try {
+      return decodeURIComponent(seg);
+    } catch {
+      return seg;
+    }
+  };
+  if (rawPath.split('/').some((seg) => decoded(seg) === '.' || decoded(seg) === '..')) {
+    reject('must not contain dot path segments');
+  }
+  if (url.hash || clientId.includes('#')) reject('must not contain a fragment');
+  // Simple string comparison is the rule, so the identifier we fetch and
+  // compare against is the string the client sent, never a normalised form.
+  return url;
+}
+
+/** Does this client_id look like a Client Identifier URL rather than a registered id? */
+export function isClientIdUrl(clientId: string): boolean {
+  return /^https?:\/\//i.test(clientId);
+}
+
+/**
+ * The redirect-URI rules shared by DCR and CIMD registration. Loopback
+ * relaxes the TLS requirement, never the scheme: a javascript:, data: or
+ * file: URI with a loopback "host" is still a redirect into something that
+ * is not a browser callback (#340).
+ */
+function validateRedirectUris(redirectUris: string[]): void {
+  for (const uri of redirectUris) {
+    let parsed: URL;
+    try {
+      parsed = new URL(uri);
+    } catch {
+      throw new OAuthErrorResponse('invalid_redirect_uri', `not a valid URL: ${uri}`);
+    }
+    const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (!(parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLoopback))) {
+      throw new OAuthErrorResponse(
+        'invalid_redirect_uri',
+        'redirect_uris must be https (http loopback excepted)',
+      );
+    }
+    if (parsed.hash) {
+      throw new OAuthErrorResponse(
+        'invalid_redirect_uri',
+        'redirect_uris must not carry a fragment',
+      );
+    }
+  }
 }
 
 export class OAuthProvider {
   private readonly clients = new Map<string, RegisteredClient>();
+  /**
+   * Clients identified by a Client ID Metadata Document URL (#340). Memory
+   * only, never persisted: the document is the registration, and re-fetching
+   * it is how a client changes its redirect URIs. This is also what stops the
+   * state file growing by one client per fresh connection, which DCR does.
+   */
+  private readonly metadataClients = new Map<
+    string,
+    { client: RegisteredClient; fetched_at: number; expires_at: number }
+  >();
+  /** In-flight document fetches, so concurrent requests for one client_id fetch once. */
+  private readonly pendingResolves = new Map<string, Promise<void>>();
   private readonly codes = new Map<string, AuthorizationCode>();
   private readonly tokens = new Map<string, StoredToken>();
   private persistTimer: NodeJS.Timeout | null = null;
@@ -150,6 +260,11 @@ export class OAuthProvider {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+      // Client ID Metadata Documents (#340): a client may present an https
+      // URL as its client_id and we fetch its registration from there. Claude
+      // selects this over DCR only when both this flag and 'none' above are
+      // advertised. /register stays for clients that predate it.
+      client_id_metadata_document_supported: true,
       scopes_supported: ['coolify'],
       // RFC 9207: the redirect carries `iss`, so clients can detect
       // authorization-server mix-up. Advertising it obliges them to check.
@@ -179,31 +294,7 @@ export class OAuthProvider {
     ) {
       throw new OAuthErrorResponse('invalid_client_metadata', 'redirect_uris is required');
     }
-    for (const uri of redirectUris as string[]) {
-      let parsed: URL;
-      try {
-        parsed = new URL(uri);
-      } catch {
-        throw new OAuthErrorResponse('invalid_redirect_uri', `not a valid URL: ${uri}`);
-      }
-      const host = parsed.hostname.replace(/^\[|\]$/g, '');
-      const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-      // Loopback relaxes the TLS requirement, never the scheme: a javascript:,
-      // data: or file: URI with a loopback "host" is still a redirect into
-      // something that is not a browser callback (#340).
-      if (!(parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLoopback))) {
-        throw new OAuthErrorResponse(
-          'invalid_redirect_uri',
-          'redirect_uris must be https (http loopback excepted)',
-        );
-      }
-      if (parsed.hash) {
-        throw new OAuthErrorResponse(
-          'invalid_redirect_uri',
-          'redirect_uris must not carry a fragment',
-        );
-      }
-    }
+    validateRedirectUris(redirectUris as string[]);
 
     const method =
       typeof metadata.token_endpoint_auth_method === 'string'
@@ -245,6 +336,160 @@ export class OAuthProvider {
   }
 
   // ===========================================================================
+  // Client ID Metadata Documents (draft-ietf-oauth-client-id-metadata-document)
+  // ===========================================================================
+
+  /**
+   * Make `client_id` resolvable before a synchronous lookup. A registered id
+   * is already known; a Client Identifier URL is fetched, validated and
+   * cached for {@link OAuthProviderOptions.clientMetadataTtl}. Anything else
+   * is left for the lookup to reject as unknown. Errors are never cached:
+   * a client whose document was briefly unreachable is retried next time.
+   *
+   * The URL is attacker-chosen, so the fetch goes through the SSRF guard
+   * (public addresses only, no redirects, pinned DNS, size and time caps).
+   */
+  async resolveClient(clientId: string): Promise<void> {
+    if (this.clients.has(clientId) || !isClientIdUrl(clientId)) return;
+    const cached = this.metadataClients.get(clientId);
+    if (cached && cached.expires_at - Date.now() > CLIENT_METADATA_EXPIRY_MARGIN) return;
+
+    const pending = this.pendingResolves.get(clientId);
+    if (pending) return pending;
+    const run = this.fetchAndCache(clientId, cached).finally(() => {
+      this.pendingResolves.delete(clientId);
+    });
+    this.pendingResolves.set(clientId, run);
+    return run;
+  }
+
+  private async fetchAndCache(
+    clientId: string,
+    cached: { client: RegisteredClient; fetched_at: number; expires_at: number } | undefined,
+  ): Promise<void> {
+    const url = parseClientIdUrl(clientId);
+    const fetchDocument =
+      this.options.fetchClientMetadata ??
+      ((target: string): Promise<unknown> =>
+        fetchPublicJson(target, { maxBytes: CLIENT_METADATA_MAX_BYTES }));
+
+    let document: unknown;
+    try {
+      document = await fetchDocument(clientId);
+    } catch (error) {
+      // The detail (did not resolve / 302 / timed out / too large) is useful
+      // to the operator and a probing oracle to anyone else, so it goes to
+      // the log and the caller gets one generic sentence.
+      console.error(
+        `oauth: client metadata document for ${url.host} could not be fetched: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      if (cached && cached.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE > Date.now()) {
+        // Known client, host briefly down: keep the last good document,
+        // bounded by the grace window measured from when it was fetched.
+        const ttl = this.options.clientMetadataTtl ?? CLIENT_METADATA_TTL;
+        this.metadataClients.set(clientId, {
+          ...cached,
+          expires_at: Math.min(
+            Date.now() + ttl,
+            cached.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE,
+          ),
+        });
+        return;
+      }
+      throw new OAuthErrorResponse(
+        'invalid_client',
+        'client_id metadata document could not be fetched',
+        401,
+      );
+    }
+
+    const client = this.clientFromMetadataDocument(clientId, url, document);
+    const now = Date.now();
+    this.metadataClients.delete(clientId); // re-insert so Map order stays oldest-first
+    this.metadataClients.set(clientId, {
+      client,
+      fetched_at: now,
+      expires_at: now + (this.options.clientMetadataTtl ?? CLIENT_METADATA_TTL),
+    });
+    this.evictMetadataClients();
+  }
+
+  /** Drop lapsed documents (beyond grace) and cap the map at CLIENT_METADATA_MAX. */
+  private evictMetadataClients(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.metadataClients) {
+      if (entry.fetched_at + CLIENT_METADATA_TTL + CLIENT_METADATA_GRACE < now) {
+        this.metadataClients.delete(key);
+      }
+    }
+    while (this.metadataClients.size > CLIENT_METADATA_MAX) {
+      const oldest = this.metadataClients.keys().next().value;
+      if (oldest === undefined) break;
+      this.metadataClients.delete(oldest);
+    }
+  }
+
+  private clientFromMetadataDocument(
+    clientId: string,
+    url: URL,
+    document: unknown,
+  ): RegisteredClient {
+    const invalid = (why: string): never => {
+      throw new OAuthErrorResponse('invalid_client', `client_id metadata document ${why}`, 401);
+    };
+    if (typeof document !== 'object' || document === null || Array.isArray(document)) {
+      invalid('is not a JSON object');
+    }
+    const doc = document as Record<string, unknown>;
+    // Simple string comparison, per the draft: no normalisation of either side.
+    if (doc.client_id !== clientId) invalid('client_id does not match the URL it was fetched from');
+
+    const redirectUris = doc.redirect_uris;
+    if (
+      !Array.isArray(redirectUris) ||
+      redirectUris.length === 0 ||
+      !redirectUris.every((u) => typeof u === 'string')
+    ) {
+      invalid('must list redirect_uris');
+    }
+    try {
+      validateRedirectUris(redirectUris as string[]);
+    } catch (error) {
+      // Same rules as DCR, but a document problem is a client problem: one
+      // code (invalid_client) for everything wrong with the document.
+      invalid(
+        `lists an unusable redirect_uri: ${error instanceof OAuthErrorResponse ? error.description : String(error)}`,
+      );
+    }
+
+    // A document is public by construction, so it cannot carry a shared
+    // secret and cannot ask to authenticate with one.
+    const method = doc.token_endpoint_auth_method ?? 'none';
+    if (method !== 'none') invalid('may only use token_endpoint_auth_method "none"');
+    if ('client_secret' in doc || 'client_secret_expires_at' in doc) {
+      invalid('must not carry a client_secret');
+    }
+
+    // The consent page shows the hostname the identifier resolves to, so a
+    // person sees where the registration came from, not just a chosen name.
+    const name = typeof doc.client_name === 'string' ? doc.client_name.trim() : '';
+    return {
+      client_id: clientId,
+      client_name: name ? `${name} (${url.host})` : url.host,
+      redirect_uris: redirectUris as string[],
+      token_endpoint_auth_method: 'none',
+      created_at: Date.now(),
+    };
+  }
+
+  private lookupClient(clientId: string): RegisteredClient | undefined {
+    const registered = this.clients.get(clientId);
+    if (registered) return registered;
+    const cached = this.metadataClients.get(clientId);
+    return cached && cached.expires_at > Date.now() ? cached.client : undefined;
+  }
+
+  // ===========================================================================
   // Authorization endpoint
   // ===========================================================================
 
@@ -264,7 +509,7 @@ export class OAuthProvider {
     state: string | null;
   } {
     const clientId = params.get('client_id') ?? '';
-    const client = this.clients.get(clientId);
+    const client = this.lookupClient(clientId);
     if (!client) {
       throw new OAuthErrorResponse('invalid_client', 'unknown client_id', 401);
     }
@@ -346,7 +591,7 @@ export class OAuthProvider {
   }
 
   private authenticateClient(params: URLSearchParams): RegisteredClient {
-    const client = this.clients.get(params.get('client_id') ?? '');
+    const client = this.lookupClient(params.get('client_id') ?? '');
     if (!client) throw new OAuthErrorResponse('invalid_client', 'unknown client_id', 401);
     if (client.token_endpoint_auth_method === 'client_secret_post') {
       const secret = params.get('client_secret') ?? '';
@@ -496,6 +741,7 @@ export class OAuthProvider {
       // reuse detection still fires; everything is dropped once expired.
       if (token.expires_at < now) this.tokens.delete(key);
     }
+    this.evictMetadataClients();
   }
 
   private persist(): void {
