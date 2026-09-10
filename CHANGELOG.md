@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Move a resource between environments** (#299). `application`, `database` and `service` take a `move` action, taking the target `environment_uuid`. "Promote this app from staging to production" now has an answer that is one call instead of recreating the resource and copying env vars across. Requires Coolify v4.2+; an older instance is told so by name rather than returning a bare 404. The confirmation says what a move actually does: containers keep running, and from the next deployment the resource uses the target environment's shared environment variables.
+- **Scheduled volume backups** (#305). `storages` gains `backup_set`, `backup_delete` and `backup_run` for application, database and service volumes (Coolify v4.2+). `backup_delete` removes the archives as well as the schedule, so it asks first, and points at `backup_set` with `enabled: false` for the "stop backing up but keep what I have" case. Note two upstream limits: Coolify has no endpoint to read a schedule back, so `find_issues` still cannot flag a volume with no backup; and `backup_set` replaces the whole schedule rather than merging, so omitted fields revert to their defaults.
 
 ### Changed
 
