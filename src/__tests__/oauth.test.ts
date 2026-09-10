@@ -7,7 +7,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { OAuthProvider, OAuthErrorResponse, canonicalResource } from '../lib/oauth.js';
+import {
+  OAuthProvider,
+  OAuthErrorResponse,
+  canonicalResource,
+  redirectUriMatches,
+} from '../lib/oauth.js';
 import {
   createHttpApp,
   normalizePublicUrl,
@@ -1481,6 +1486,310 @@ describe('Client ID Metadata Documents (#340)', () => {
       expect(plain.status).toBe(400);
     } finally {
       stderr.mockRestore();
+    }
+  });
+});
+
+describe('redirect_uri matching: loopback ports are the client’s to choose (#340)', () => {
+  it('matches an exact registration', () => {
+    expect(
+      redirectUriMatches(
+        'https://claude.ai/api/mcp/auth_callback',
+        'https://claude.ai/api/mcp/auth_callback',
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['http://127.0.0.1/callback', 'http://127.0.0.1:51763/callback'],
+    ['http://localhost/callback', 'http://localhost:8123/callback'],
+    ['http://[::1]/callback', 'http://[::1]:9000/callback'],
+    ['http://127.0.0.1:51763/callback', 'http://127.0.0.1/callback'],
+  ])('lets a loopback client pick its port at request time (%s -> %s)', (reg, req) => {
+    // RFC 8252 §7.3. A native client binds an ephemeral port when the flow
+    // starts, so exact matching rejects every real callback it ever makes.
+    expect(redirectUriMatches(reg, req)).toBe(true);
+  });
+
+  it('does NOT relax the port for a remote https callback', () => {
+    // Treating :443 and :8443 as the same endpoint would let a client
+    // registered for one be redirected to an attacker's listener on the other.
+    expect(
+      redirectUriMatches('https://client.example.com/cb', 'https://client.example.com:8443/cb'),
+    ).toBe(false);
+  });
+
+  it('still requires scheme, host and path to match exactly', () => {
+    expect(redirectUriMatches('http://127.0.0.1/callback', 'http://127.0.0.1:1/other')).toBe(false);
+    expect(redirectUriMatches('http://127.0.0.1/callback', 'https://127.0.0.1/callback')).toBe(
+      false,
+    );
+    expect(redirectUriMatches('http://127.0.0.1/callback', 'http://localhost/callback')).toBe(
+      false,
+    );
+    expect(redirectUriMatches('http://127.0.0.1/callback', 'http://127.0.0.1:1/callback?x=1')).toBe(
+      false,
+    );
+  });
+
+  it('never matches a fragment-bearing request', () => {
+    expect(redirectUriMatches('http://127.0.0.1/cb', 'http://127.0.0.1:1/cb#frag')).toBe(false);
+  });
+
+  it('rejects anything unparseable rather than falling back to equality', () => {
+    expect(redirectUriMatches('not a url', 'not a url too')).toBe(false);
+  });
+
+  it('accepts the redirect URIs Claude actually uses', () => {
+    // The three named on #340: claude.ai's callback, and port-agnostic loopback
+    // for Claude Code. Registration must accept them and authorize must match.
+    const provider = makeProvider();
+    const registered = provider.registerClient({
+      client_name: 'Claude',
+      redirect_uris: [
+        'https://claude.ai/api/mcp/auth_callback',
+        'http://localhost/callback',
+        'http://127.0.0.1/callback',
+      ],
+      token_endpoint_auth_method: 'none',
+    });
+    const { challenge } = pkcePair();
+
+    const validated = provider.validateAuthorizationRequest(
+      new URLSearchParams({
+        client_id: registered.client_id as string,
+        redirect_uri: 'http://127.0.0.1:51763/callback',
+        response_type: 'code',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      }),
+    );
+
+    expect(validated.redirectUri).toBe('http://127.0.0.1:51763/callback');
+  });
+
+  it('carries the requested port through to the token exchange', () => {
+    // The code is bound to the URI actually used, not to the registered
+    // pattern, so RFC 6749 §4.1.3's exact-match rule at /token still bites.
+    // Two codes, because a code is burned on first presentation even when that
+    // presentation fails — which is the replay protection doing its job.
+    const provider = makeProvider();
+    const registered = provider.registerClient({
+      client_name: 'Claude Code',
+      redirect_uris: ['http://127.0.0.1/callback'],
+      token_endpoint_auth_method: 'none',
+    });
+    const clientId = registered.client_id as string;
+    const used = 'http://127.0.0.1:51763/callback';
+
+    const codeFor = (challenge: string): string => {
+      const validated = provider.validateAuthorizationRequest(
+        new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: used,
+          response_type: 'code',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+        }),
+      );
+      const { redirectTo } = provider.completeAuthorization(validated);
+      return new URL(redirectTo).searchParams.get('code')!;
+    };
+
+    const wrong = pkcePair();
+    expect(() =>
+      provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: codeFor(wrong.challenge),
+          client_id: clientId,
+          redirect_uri: 'http://127.0.0.1:9999/callback',
+          code_verifier: wrong.verifier,
+        }),
+      ),
+    ).toThrow(OAuthErrorResponse);
+
+    const right = pkcePair();
+    expect(
+      provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: codeFor(right.challenge),
+          client_id: clientId,
+          redirect_uri: used,
+          code_verifier: right.verifier,
+        }),
+      ),
+    ).toHaveProperty('access_token');
+  });
+});
+
+describe('protected-resource metadata: exact resource match (#340)', () => {
+  function app(): ReturnType<typeof createHttpApp> {
+    return createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+  }
+
+  // RFC 9728 wants the metadata at both the bare well-known path and the
+  // path-suffixed variant, and the `resource` value has to be byte-identical to
+  // the URL the user typed. A trailing slash or scheme mismatch here fails
+  // silently: the client fetches metadata, sees a resource it did not ask for,
+  // and abandons the flow with nothing useful on screen.
+  it.each(['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'])(
+    'serves %s with resource exactly equal to the MCP URL',
+    async (path) => {
+      const response = await app().fetch(new Request(`${ISSUER}${path}`));
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        resource: string;
+        authorization_servers?: string[];
+      };
+      expect(body.resource).toBe(RESOURCE);
+      expect(body.resource).not.toMatch(/\/$/);
+      expect(body.authorization_servers).toContain(ISSUER);
+    },
+  );
+
+  it('both paths serve the identical document', async () => {
+    const a = app();
+    const bare = await (
+      await a.fetch(new Request(`${ISSUER}/.well-known/oauth-protected-resource`))
+    ).json();
+    const suffixed = await (
+      await a.fetch(new Request(`${ISSUER}/.well-known/oauth-protected-resource/mcp`))
+    ).json();
+
+    expect(bare).toEqual(suffixed);
+  });
+
+  it('the 401 challenge points at a document whose resource is the URL that was called', async () => {
+    // The whole point of the challenge: discovery must be startable from it
+    // alone. If the resource in the document disagrees with the URL the client
+    // used, the client has no way to know which one is authoritative.
+    const a = app();
+    const denied = await a.fetch(
+      new Request(RESOURCE, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      }),
+    );
+
+    expect(denied.status).toBe(401);
+    const challenge = denied.headers.get('www-authenticate') ?? '';
+    const advertised = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
+    expect(advertised).toBeDefined();
+
+    const metadata = (await (await a.fetch(new Request(advertised!))).json()) as {
+      resource: string;
+    };
+    expect(metadata.resource).toBe(RESOURCE);
+  });
+});
+
+describe('discovery and token stay inside the 10s connection budget (#340)', () => {
+  // Claude allows 10 seconds for the whole of discovery, registration and token
+  // exchange, and 30 for a refresh. Past that the connection fails outright
+  // rather than degrading, so anything on this path that can block has to be
+  // bounded well below the total, not at it.
+
+  it('bounds the CIMD fetch far below the whole budget', async () => {
+    // The one outbound call on the authorize path: the client_id is a URL the
+    // caller chose, so a host that accepts the connection and then stalls is
+    // entirely under their control. fetchPublicJson defaults to 10s, which is
+    // the entire budget for a single hop inside it.
+    const started = Date.now();
+    let rejected: unknown;
+
+    const provider = new OAuthProvider({
+      issuer: ISSUER,
+      resource: RESOURCE,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      fetchClientMetadata: () =>
+        new Promise((_resolve, reject) => {
+          // Stand in for a host that stalls: the production path bounds this
+          // with a timeout, and the provider must surface a refusal either way.
+          setTimeout(() => reject(new Error('timed out')), 5);
+        }),
+    });
+
+    try {
+      await provider.resolveClient('https://attacker.example/metadata.json');
+    } catch (error) {
+      rejected = error;
+    }
+
+    expect(rejected).toBeInstanceOf(OAuthErrorResponse);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it('serves every discovery document without any outbound call', async () => {
+    // Metadata is computed from configuration, so nothing on the discovery path
+    // can block on a network hop. Any fetch here would be a regression that
+    // only shows up as a timeout in somebody's client.
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    const a = createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+    });
+
+    try {
+      const started = Date.now();
+      for (const path of [
+        '/.well-known/oauth-authorization-server',
+        '/.well-known/oauth-protected-resource',
+        '/.well-known/oauth-protected-resource/mcp',
+      ]) {
+        const response = await a.fetch(new Request(`${ISSUER}${path}`));
+        expect(response.status).toBe(200);
+      }
+      expect(Date.now() - started).toBeLessThan(1_000);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('registration and token exchange do no I/O of their own', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    try {
+      const provider = makeProvider();
+      const clientId = registerTestClient(provider);
+      const { verifier, challenge } = pkcePair();
+      const { code } = authorize(provider, clientId, challenge);
+
+      const started = Date.now();
+      const tokens = provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code,
+          redirect_uri: 'https://client.example.com/callback',
+          code_verifier: verifier,
+        }),
+      );
+
+      expect(tokens).toHaveProperty('access_token');
+      expect(Date.now() - started).toBeLessThan(1_000);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
     }
   });
 });
