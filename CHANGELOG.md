@@ -11,8 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Move a resource between environments** (#299). `application`, `database` and `service` take a `move` action, taking the target `environment_uuid`. "Promote this app from staging to production" now has an answer that is one call instead of recreating the resource and copying env vars across. Requires Coolify v4.2+; an older instance is told so by name rather than returning a bare 404. The confirmation says what a move actually does: containers keep running, and from the next deployment the resource uses the target environment's shared environment variables.
 - **Scheduled volume backups** (#305). `storages` gains `backup_set`, `backup_delete` and `backup_run` for application, database and service volumes (Coolify v4.2+). `backup_delete` removes the archives as well as the schedule, so it asks first, and points at `backup_set` with `enabled: false` for the "stop backing up but keep what I have" case. Note two upstream limits: Coolify has no endpoint to read a schedule back, so `find_issues` still cannot flag a volume with no backup; and `backup_set` replaces the whole schedule rather than merging, so omitted fields revert to their defaults.
+- **Audit log for every tool call and every refusal** (#370). One JSON line per call carrying the tool, action, resource uuids, outcome, duration, and in HTTP mode the OAuth client id. On by default in HTTP mode, off over stdio, `COOLIFY_MCP_AUDIT` overrides either way. Refusals are distinguished from errors and carry a reason category, so "a human said no" reads differently from "the client could not be asked". Arguments and responses are never logged: identifiers come from a closed allowlist of key names, so a future argument carrying a secret cannot reach a log line without a deliberate edit. See the audit section in `docs/http-mode.md`.
 
 ### Changed
+
+- HTTP mode's audit line now reports what happened rather than what was asked. It previously peeked at the request body before dispatch, which could only name the tool; it is now written after the call completes and carries the outcome and duration.
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
 

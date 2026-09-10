@@ -195,6 +195,7 @@ internet-facing service.
 | `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)     |
 | `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)     |
 | `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md)) |
+| `COOLIFY_MCP_AUDIT`       | `on` in HTTP mode        | `off` disables the [audit log](#audit-log)             |
 
 ### Running a fleet over HTTP
 
@@ -206,6 +207,48 @@ default proves you belong to the fleet. Every instance in the list must
 therefore belong to the same owner. An agency with a Coolify per client runs
 one container per client; the isolation is the deployment, not the OAuth
 layer.
+
+## Audit log
+
+Every tool call writes one JSON line to stderr, so `docker logs` on the
+container is the record of what the agent did. It is on by default in HTTP mode
+and off over stdio; `COOLIFY_MCP_AUDIT=off` or `=on` overrides either way.
+
+```json
+{
+  "audit": "tools/call",
+  "at": "2026-09-10T11:02:44.318Z",
+  "tool": "application",
+  "action": "delete",
+  "uuids": ["wrcooc9efp6gmp9z3r2foggo"],
+  "outcome": "refused",
+  "reason": "declined",
+  "duration_ms": 4211,
+  "client_id": "mcp_client_9f2c"
+}
+```
+
+`outcome` is `ok`, `error`, or `refused`. A refusal is a decision rather than a
+fault, and `reason` says which one:
+
+| `reason`         | What happened                                                      |
+| ---------------- | ------------------------------------------------------------------ |
+| `declined`       | A human saw the confirmation and said no, or cancelled it          |
+| `no_elicitation` | The client cannot be asked, so the destructive guard failed closed |
+| `validation`     | The arguments did not satisfy the handler (unknown instance, say)  |
+
+**Arguments and responses are never logged, and that is enforced rather than
+intended.** Identifiers are collected from a closed allowlist of key names and
+checked for identifier shape, so a future argument called `password` cannot
+reach a log line by being added somewhere else in the codebase. Adding a new
+argument to the log is a deliberate edit to that allowlist. This matters because
+`env_vars` carries secret values in its arguments and responses carry everything
+the secret masking exists to hide; an audit log that quietly became a second
+copy of those would be a worse leak than the one it was written to prevent.
+
+One limit worth knowing: a call whose arguments fail the tool's own schema is
+rejected by the MCP SDK before the server sees it, so it produces no line.
+Nothing ran and no credential was used, but the call is absent from the record.
 
 ## Troubleshooting: every one of these happened to us
 
