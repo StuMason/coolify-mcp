@@ -7171,3 +7171,32 @@ describe('volume backup schedules (#305)', () => {
     expect(body).toEqual({ frequency: '@daily' });
   });
 });
+
+describe('volume backups on a pre-4.2 instance (#305)', () => {
+  const catchAll = { message: 'Not found.', docs: 'https://coolify.io/docs/api' };
+
+  it.each([
+    '/applications/app-1/storages/stor-1/backups',
+    '/databases/db-1/storages/stor-1/backups',
+    '/services/svc-1/storages/stor-1/backups/run',
+  ])('names the version requirement for %s', (path) => {
+    // Found by an end-to-end smoke test against a backend behaving like 4.1.2:
+    // without this the generic uuid-mismatch hint fired and told the user their
+    // uuid was the wrong resource type, sending them after a problem that does
+    // not exist. Same failure `/move` had.
+    expect(errorHint(404, path)).toMatch(/v4\.2\+/);
+  });
+
+  it('does NOT claim v4.2 for the long-standing database dump schedules', () => {
+    // `/databases/{uuid}/backups` is `database_backups`, which works on 4.0.
+    // The `/storages/` segment is the whole difference.
+    const hint = errorHint(404, '/databases/db-1/backups');
+    expect(hint ?? '').not.toMatch(/Volume backup schedules require/);
+  });
+
+  it('mentions database_backups so the two are not confused', () => {
+    expect(errorHint(404, '/applications/app-1/storages/stor-1/backups')).toContain(
+      'database_backups',
+    );
+  });
+});

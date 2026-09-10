@@ -348,6 +348,17 @@ export function errorHint(status: number, path: string): string | undefined {
     // pointing confidently at the wrong one.
     return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
   }
+  if (status === 404 && /\/storages\/[\w-]+\/backups(\/run)?$/.test(path)) {
+    // Volume backup schedules are v4.2+ and simply absent before it, so an
+    // older instance answers through the routing catch-all. Without this the
+    // generic uuid-mismatch branch below claims the uuid is the wrong resource
+    // type, which is the same misleading message `/move` used to give.
+    //
+    // The `/storages/` segment is what keeps this off `/databases/{uuid}/backups`
+    // — that is the long-standing database dump schedule, which exists on 4.0
+    // and must not be told it needs 4.2.
+    return 'Volume backup schedules require Coolify v4.2+ (coollabsio/coolify volume backups) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or storage_uuid may be wrong. Note this is different from `database_backups`, which schedules database dumps and works on older versions. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
+  }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
   }
