@@ -49,6 +49,13 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: npm test
 
+      # A release carries the Coolify docs index as it stands today (#372).
+      # Best effort: if coolify.io is unreachable the committed bundle ships.
+      - name: Refresh the bundled docs index
+        if: steps.version.outputs.exists == 'false'
+        continue-on-error: true
+        run: npm run docs:index
+
       - name: Build
         if: steps.version.outputs.exists == 'false'
         run: npm run build
