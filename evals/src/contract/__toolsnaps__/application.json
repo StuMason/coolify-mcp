@@ -1,6 +1,6 @@
 {
   "name": "application",
-  "description": "Manage app: create/update/delete/delete_preview",
+  "description": "Manage app: create/update/move/delete/delete_preview",
   "annotations": {
     "destructiveHint": true
   },
@@ -16,6 +16,7 @@
           "create_dockerimage",
           "create_dockerfile",
           "update",
+          "move",
           "delete",
           "delete_preview"
         ]

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Move a resource between environments** (#299). `application`, `database` and `service` take a `move` action, taking the target `environment_uuid`. "Promote this app from staging to production" now has an answer that is one call instead of recreating the resource and copying env vars across. Requires Coolify v4.2+; an older instance is told so by name rather than returning a bare 404. The confirmation says what a move actually does: containers keep running, and from the next deployment the resource uses the target environment's shared environment variables.
+
 ### Changed
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.

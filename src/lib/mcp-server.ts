@@ -218,6 +218,45 @@ function joinList(parts: string[]): string {
  * site. Only an explicit `false` is treated as "volumes kept", which is both
  * what the spec says and the safe way to be wrong if the spec is lying again.
  */
+/**
+ * Confirmation text for `move` (#299).
+ *
+ * Deliberately *not* written in the register of `deleteResourcePrompt`. The
+ * issue asked for "the destructive/blast-radius framing the delete actions
+ * have", but upstream documents the move as "a purely organizational change —
+ * running containers are not affected", and a prompt that threatens destruction
+ * it cannot cause is the same failure as one that understates: both teach people
+ * to stop reading the dialog.
+ *
+ * The real hazard is delayed and easy to miss, so it is the thing the prompt
+ * leads on: from the next deployment the resource inherits the *target*
+ * environment's shared environment variables. Moving production into staging
+ * looks like nothing at all until someone redeploys.
+ *
+ * It also says the move is reversible, because it is — the same call in the
+ * other direction — and a confirmation that implies otherwise costs the reader
+ * a hesitation they do not need to have.
+ */
+function moveResourcePrompt(
+  kind: 'application' | 'database' | 'service',
+  name: string,
+  uuid: string,
+  targetEnvironmentUuid: string,
+  currentEnvironmentUuid?: string,
+): string {
+  const from = currentEnvironmentUuid
+    ? ` It is currently in environment ${sanitizeForPrompt(currentEnvironmentUuid)}.`
+    : '';
+  return (
+    `Move ${kind} "${sanitizeForPrompt(name)}" (${sanitizeForPrompt(uuid)}) ` +
+    `to environment ${sanitizeForPrompt(targetEnvironmentUuid)}?\n\n` +
+    `Containers are not affected and keep running.${from} From its next deployment ` +
+    `onwards it will use the target environment's shared environment variables ` +
+    `instead of its current ones, so check the target is the environment you mean. ` +
+    `The move is reversible: moving it back is the same operation in the other direction.`
+  );
+}
+
 function deleteResourcePrompt(
   kind: 'application' | 'database' | 'service',
   name: string,
@@ -1641,7 +1680,7 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'application',
-      'Manage app: create/update/delete/delete_preview',
+      'Manage app: create/update/move/delete/delete_preview',
       {
         action: z.enum([
           'create_public',
@@ -1650,6 +1689,7 @@ export class CoolifyMcpServer extends McpServer {
           'create_dockerimage',
           'create_dockerfile',
           'update',
+          'move',
           'delete',
           'delete_preview',
         ]),
@@ -1982,6 +2022,31 @@ export class CoolifyMcpServer extends McpServer {
             const { action: _, uuid: __, delete_volumes: ___, ...updateData } = args;
             return wrap(() => this.client.updateApplication(uuid, updateData));
           }
+          case 'move':
+            if (!uuid || !args.environment_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid, environment_uuid required. Find the target environment_uuid with the `environments` tool.',
+                  },
+                ],
+              };
+            return this.guardDestructive(
+              extra.mcpReq.signal,
+              `Move an application to another environment.`,
+              async () => {
+                const app = await this.client.getApplication(uuid);
+                return moveResourcePrompt(
+                  'application',
+                  app.name || uuid,
+                  uuid,
+                  args.environment_uuid!,
+                  app.environment_uuid,
+                );
+              },
+              () => this.client.moveApplication(uuid, args.environment_uuid!),
+            );
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
@@ -2079,9 +2144,9 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'database',
-      'Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.',
+      'Manage database: create/update/move/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.',
       {
-        action: z.enum(['create', 'update', 'delete']),
+        action: z.enum(['create', 'update', 'move', 'delete']),
         type: z
           .enum([
             'postgresql',
@@ -2098,6 +2163,10 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
         environment_name: z.string().optional(),
+        environment_uuid: z
+          .string()
+          .optional()
+          .describe('Target environment for `move`; find it with the `environments` tool.'),
         destination_uuid: z
           .string()
           .optional()
@@ -2154,6 +2223,32 @@ export class CoolifyMcpServer extends McpServer {
       },
       async (args, extra) => {
         const { action, type, uuid, delete_volumes, ...dbData } = args;
+        if (action === 'move') {
+          if (!uuid || !args.environment_uuid)
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'Error: uuid, environment_uuid required. Find the target environment_uuid with the `environments` tool.',
+                },
+              ],
+            };
+          return this.guardDestructive(
+            extra.mcpReq.signal,
+            `Move a database to another environment.`,
+            async () => {
+              const db = await this.client.getDatabase(uuid);
+              return moveResourcePrompt(
+                'database',
+                db.name || uuid,
+                uuid,
+                args.environment_uuid!,
+                db.environment_uuid,
+              );
+            },
+            () => this.client.moveDatabase(uuid, args.environment_uuid!),
+          );
+        }
         if (action === 'delete') {
           if (!uuid) return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
           return this.guardDestructive(
@@ -2176,6 +2271,7 @@ export class CoolifyMcpServer extends McpServer {
             server_uuid: _server,
             project_uuid: _project,
             environment_name: _env,
+            environment_uuid: _envUuid,
             destination_uuid: _dest,
             instant_deploy: _deploy,
             ...updateData
@@ -2285,11 +2381,12 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'service',
-      "Manage service: create/update/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle. `update` with `connect_to_docker_network` attaches the stack to the shared `coolify` network so other stacks can reach its containers by name.",
+      "Manage service: create/update/move/delete/list_containers/update_application/start_application/stop_application/restart_application. A service is a multi-container stack; `list_containers` returns the applications and databases inside it, whose names are what the `logs` tool needs as `container`. Use `update_application` to change a sub-application's FQDN (url) or other settings. Use `start_application`/`stop_application`/`restart_application` to control sub-application lifecycle. `update` with `connect_to_docker_network` attaches the stack to the shared `coolify` network so other stacks can reach its containers by name.",
       {
         action: z.enum([
           'create',
           'update',
+          'move',
           'delete',
           'list_containers',
           'update_application',
@@ -2308,7 +2405,10 @@ export class CoolifyMcpServer extends McpServer {
         server_uuid: z.string().optional(),
         project_uuid: z.string().optional(),
         environment_name: z.string().optional().describe('Create: this or environment_uuid'),
-        environment_uuid: z.string().optional().describe('Create: this or environment_name'),
+        environment_uuid: z
+          .string()
+          .optional()
+          .describe('Create: this or environment_name. Move: the target environment.'),
         destination_uuid: z
           .string()
           .optional()
@@ -2410,6 +2510,31 @@ export class CoolifyMcpServer extends McpServer {
             }
             return wrap(() => this.client.updateService(uuid, updateData));
           }
+          case 'move':
+            if (!uuid || !args.environment_uuid)
+              return {
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: 'Error: uuid, environment_uuid required. Find the target environment_uuid with the `environments` tool.',
+                  },
+                ],
+              };
+            return this.guardDestructive(
+              extra.mcpReq.signal,
+              `Move a service to another environment.`,
+              async () => {
+                const svc = await this.client.getService(uuid);
+                return moveResourcePrompt(
+                  'service',
+                  svc.name || uuid,
+                  uuid,
+                  args.environment_uuid!,
+                  svc.environment_uuid,
+                );
+              },
+              () => this.client.moveService(uuid, args.environment_uuid!),
+            );
           case 'delete':
             if (!uuid)
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };

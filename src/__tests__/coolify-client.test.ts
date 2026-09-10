@@ -7074,3 +7074,64 @@ describe('errorHint', () => {
     expect(errorHint(404, '/health')).toBeUndefined();
   });
 });
+
+describe('move between environments (#299)', () => {
+  let client: CoolifyClient;
+
+  beforeEach(() => {
+    mockFetch.mockClear();
+    global.fetch = mockFetch;
+    client = new CoolifyClient({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-api-key',
+    });
+  });
+
+  // One table because the three endpoints are byte-identical upstream and all
+  // three route through the same private helper. A per-type copy of this test
+  // would pass while the helper built the wrong path for two of them.
+  it.each([
+    ['moveApplication' as const, 'applications'],
+    ['moveDatabase' as const, 'databases'],
+    ['moveService' as const, 'services'],
+  ])('%s posts environment_uuid to /%s/{uuid}/move', async (method, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'Moved successfully.' }));
+
+    await client[method]('res-uuid', 'target-env-uuid');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-uuid/move`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ environment_uuid: 'target-env-uuid' }),
+      }),
+    );
+  });
+
+  it('never retries with GET when the route is absent', async () => {
+    // `/move` has no pre-4.2 GET form, so the legacy fallback must not engage.
+    // A retry here could only hit the same missing route, and on an instance
+    // that DID route it, a second call would be a second move.
+    mockFetch.mockResolvedValueOnce(
+      mockResponse({ message: 'Not found.', docs: 'https://coolify.io/docs/api' }, false, 404),
+    );
+
+    await expect(client.moveApplication('res-uuid', 'target-env-uuid')).rejects.toThrow();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('surfaces the version hint on the catch-all 404 an older instance returns', async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockResponse({ message: 'Not found.', docs: 'https://coolify.io/docs/api' }, false, 404),
+    );
+
+    await expect(client.moveApplication('res-uuid', 'target-env-uuid')).rejects.toThrow(
+      /Coolify v4\.2\+/,
+    );
+  });
+});

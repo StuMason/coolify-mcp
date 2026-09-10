@@ -8,6 +8,7 @@ import type {
   ErrorResponse,
   DeleteOptions,
   MessageResponse,
+  MoveResourceResponse,
   UuidResponse,
   // Server types
   Server,
@@ -345,6 +346,14 @@ export function errorHint(status: number, path: string): string | undefined {
     // Both causes look identical from the status, so name both rather than
     // pointing confidently at the wrong one.
     return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
+  }
+  if (status === 404 && /\/move$/.test(path)) {
+    // `/move` is new in v4.2 and never existed before it, so there is no method
+    // to fall back to — an older instance simply has no such route and answers
+    // through `Route::any('/{any}')`. Without this branch the generic
+    // uuid-mismatch hint below claims the uuid is the wrong type, which sends
+    // the reader looking for a problem that is not there.
+    return 'Moving a resource between environments requires Coolify v4.2+ (POST /move, coollabsio/coolify#8968) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or the target environment_uuid may be wrong, or belong to a different resource type than this route. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
@@ -1255,6 +1264,44 @@ export class CoolifyClient {
       body: JSON.stringify(payload),
     });
     return app;
+  }
+
+  /**
+   * Move a resource to another environment (Coolify v4.2+).
+   *
+   * One private helper for all three resource types because the request and
+   * response shapes are byte-identical across `/applications`, `/databases` and
+   * `/services` — three copies would be three places for the `/move` suffix to
+   * drift out of step with {@link errorHint}, which keys its version hint on
+   * exactly that suffix.
+   *
+   * Sent as an unconditional POST. Unlike the enable/disable/validate group,
+   * `/move` has no pre-4.2 GET form to fall back to, so
+   * {@link postWithLegacyGetFallback} would be wrong here: a retry could only
+   * ever hit the same absent route. An older instance therefore surfaces the
+   * catch-all 404, which `errorHint` turns into a version message.
+   */
+  private async moveResource(
+    collection: 'applications' | 'databases' | 'services',
+    uuid: string,
+    environmentUuid: string,
+  ): Promise<MoveResourceResponse> {
+    return this.request<MoveResourceResponse>(`/${collection}/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
+  }
+
+  async moveApplication(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.moveResource('applications', uuid, environmentUuid);
+  }
+
+  async moveDatabase(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.moveResource('databases', uuid, environmentUuid);
+  }
+
+  async moveService(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.moveResource('services', uuid, environmentUuid);
   }
 
   async deleteApplication(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {
