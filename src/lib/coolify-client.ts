@@ -123,6 +123,7 @@ import type {
   Tag,
   AttachTagsRequest,
 } from '../types/coolify.js';
+import { TokenSource } from './token-source.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
 
 // =============================================================================
@@ -715,7 +716,7 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
  */
 export class CoolifyClient {
   private readonly baseUrl: string;
-  private readonly accessToken: string;
+  private readonly tokens: TokenSource;
   private readonly customHeaders: Record<string, string>;
   private cachedVersion: string | null = null;
 
@@ -730,11 +731,9 @@ export class CoolifyClient {
     if (!config.baseUrl) {
       throw new Error('Coolify base URL is required');
     }
-    if (!config.accessToken) {
-      throw new Error('Coolify access token is required');
-    }
+    // Throws when neither a token nor a readable token file is configured.
+    this.tokens = new TokenSource(config);
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
-    this.accessToken = config.accessToken;
 
     const reserved = new Set(['authorization', 'content-type']);
     const raw = config.customHeaders ?? {};
@@ -753,7 +752,30 @@ export class CoolifyClient {
   // Private HTTP methods
   // ===========================================================================
 
+  /**
+   * One retry, only on 401, and only when a re-read actually produced a
+   * different token (#398).
+   *
+   * All three conditions matter. Retrying anything but a 401 could double-fire
+   * a state change. Retrying a 401 unconditionally turns a genuinely bad token
+   * into two failed calls per tool instead of one. And re-reading is pointless
+   * unless the token moved, which is why `refresh()` reports whether it did.
+   */
   private async request<T>(
+    path: string,
+    options: RequestInit = {},
+    sanitize?: { reveal?: boolean },
+  ): Promise<T> {
+    try {
+      return await this.attempt<T>(path, options, sanitize);
+    } catch (error) {
+      if (!(error instanceof CoolifyApiError) || error.status !== 401) throw error;
+      if (!this.tokens.refresh().changed) throw error;
+      return this.attempt<T>(path, options, sanitize);
+    }
+  }
+
+  private async attempt<T>(
     path: string,
     options: RequestInit = {},
     sanitize?: { reveal?: boolean },
@@ -765,7 +787,7 @@ export class CoolifyClient {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${this.tokens.current()}`,
           ...this.customHeaders,
           ...options.headers,
         },
@@ -929,7 +951,10 @@ export class CoolifyClient {
     const url = `${this.baseUrl}/api/v1/version`;
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${this.accessToken}`,
+        // Current token, but no 401 retry: this path calls fetch() directly
+        // rather than through request(), because /version answers in plain
+        // text. A version probe is not worth a second round trip.
+        Authorization: `Bearer ${this.tokens.current()}`,
         ...this.customHeaders,
       },
     });

@@ -17,6 +17,7 @@
  *   which today has exactly one entry.
  */
 
+import { readFileSync, statSync } from 'node:fs';
 import { checkStartupConfig, mergeCfAccessHeaders, type Transport } from './startup-check.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
 import { TESTED_RANGE } from './tested-range.js';
@@ -47,6 +48,8 @@ interface InstanceConfig {
   name: string;
   baseUrl: string | undefined;
   token: string | undefined;
+  /** Path from COOLIFY_ACCESS_TOKEN_FILE (#398). Takes precedence over `token`. */
+  tokenFile?: string;
   headers: Record<string, string>;
 }
 
@@ -69,11 +72,54 @@ function instancesFromEnv(
       name: 'default',
       baseUrl: env.COOLIFY_BASE_URL?.replace(/\/$/, ''),
       token: env.COOLIFY_ACCESS_TOKEN,
+      tokenFile: env.COOLIFY_ACCESS_TOKEN_FILE,
       // The same merge the server itself performs — doctor must diagnose the
       // config the server would actually run with, --header flags included.
       headers: mergeCfAccessHeaders(env, cliHeaders),
     },
   ];
+}
+
+/**
+ * Which source the token comes from, and whether it is usable (#398).
+ *
+ * Reports the path and the file's age, never a byte of the value. A token file
+ * that exists but is empty is the failure this catches: it looks configured
+ * from the outside and produces a bare 401 on every call, which is precisely
+ * the class of problem that cost one team their integration (#368).
+ */
+function describeTokenSource(instance: InstanceConfig): { detail: string; problem?: string } {
+  if (instance.tokenFile) {
+    try {
+      const stat = statSync(instance.tokenFile);
+      const contents = readFileSync(instance.tokenFile, 'utf8').trim();
+      if (!contents) {
+        return {
+          detail: '',
+          problem: `COOLIFY_ACCESS_TOKEN_FILE points at an empty file (${instance.tokenFile})`,
+        };
+      }
+      const ageMinutes = Math.round((Date.now() - stat.mtimeMs) / 60_000);
+      return {
+        detail: `token from COOLIFY_ACCESS_TOKEN_FILE (${instance.tokenFile}, last changed ${ageMinutes}m ago; re-read automatically, no restart needed)`,
+      };
+    } catch (error) {
+      return {
+        detail: '',
+        problem: `COOLIFY_ACCESS_TOKEN_FILE is unreadable (${instance.tokenFile}): ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+  if (!instance.token) {
+    return {
+      detail: '',
+      problem:
+        'COOLIFY_ACCESS_TOKEN is unset (or set COOLIFY_ACCESS_TOKEN_FILE to rotate without a restart)',
+    };
+  }
+  return {
+    detail: 'COOLIFY_ACCESS_TOKEN set (from the environment, so rotating it needs a restart)',
+  };
 }
 
 /**
@@ -169,7 +215,11 @@ async function checkInstance(
   // --- config: required vars present, and shapes sane (#368's first story) ---
   const configProblems: string[] = [];
   if (!instance.baseUrl) configProblems.push('COOLIFY_BASE_URL is unset');
-  if (!instance.token) configProblems.push('COOLIFY_ACCESS_TOKEN is unset');
+  // A token file satisfies the requirement on its own (#398) — but only if it
+  // can actually be read, because "configured" and "usable" are different
+  // states and the whole point of doctor is not to conflate them.
+  const tokenSource = describeTokenSource(instance);
+  if (tokenSource.problem) configProblems.push(tokenSource.problem);
   const shape = checkStartupConfig(env, transport);
   configProblems.push(...shape.errors);
   if (configProblems.length > 0) {
@@ -185,7 +235,7 @@ async function checkInstance(
     checks.push({
       check: 'config',
       status: 'pass',
-      detail: 'COOLIFY_BASE_URL set, COOLIFY_ACCESS_TOKEN set',
+      detail: `COOLIFY_BASE_URL set, ${tokenSource.detail}`,
     });
   }
 
