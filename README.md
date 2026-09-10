@@ -95,17 +95,17 @@ At the time of writing Coolify documents its server as read-only, with write ope
 
 This server is for the jobs those two do not cover yet.
 
-|  | Coolify's built-in `/mcp` | Official CLI | This server |
-| --- | --- | --- | --- |
-| Where it runs | Inside your Coolify | Your shell | Your machine, or a container inside your Coolify |
-| Install | Nothing | One binary | `npx`, a one-click Claude Desktop extension, or a container |
-| Transport | Streamable HTTP | Not an MCP server | stdio and HTTP, so it also works in clients that only speak stdio |
-| Coolify instances | One | One context at a time | One or many, every tool taking an `instance` |
-| Writes | Documented as read-only today | Yes | Yes |
-| Before a destructive call | Not applicable | You typed it | Stops and asks you in your own client, naming the blast radius |
-| When something is broken | Not applicable | Shell exit codes | `doctor` names the cause and the one-line fix |
+|                           | Coolify's built-in `/mcp`     | Official CLI          | This server                                                       |
+| ------------------------- | ----------------------------- | --------------------- | ----------------------------------------------------------------- |
+| Where it runs             | Inside your Coolify           | Your shell            | Your machine, or a container inside your Coolify                  |
+| Install                   | Nothing                       | One binary            | `npx`, a one-click Claude Desktop extension, or a container       |
+| Transport                 | Streamable HTTP               | Not an MCP server     | stdio and HTTP, so it also works in clients that only speak stdio |
+| Coolify instances         | One                           | One context at a time | One or many, every tool taking an `instance`                      |
+| Writes                    | Documented as read-only today | Yes                   | Yes                                                               |
+| Before a destructive call | Not applicable                | You typed it          | Stops and asks you in your own client, naming the blast radius    |
+| When something is broken  | Not applicable                | Shell exit codes      | `doctor` names the cause and the one-line fix                     |
 
-A rough rule. One instance and read-only questions, with no setup: use Coolify's. Scripting and CI: use the CLI. Several instances, writes you want a human gate in front of, a client that only speaks stdio, or you want to be told *why* it is broken: this one.
+A rough rule. One instance and read-only questions, with no setup: use Coolify's. Scripting and CI: use the CLI. Several instances, writes you want a human gate in front of, a client that only speaks stdio, or you want to be told _why_ it is broken: this one.
 
 Other third-party Coolify MCP servers exist. Choose on transport, on how many instances you need to reach from one connection, and on what happens the moment before something is deleted.
 
