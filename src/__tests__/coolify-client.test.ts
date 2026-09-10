@@ -7074,3 +7074,100 @@ describe('errorHint', () => {
     expect(errorHint(404, '/health')).toBeUndefined();
   });
 });
+
+describe('volume backup schedules (#305)', () => {
+  let client: CoolifyClient;
+
+  beforeEach(() => {
+    mockFetch.mockClear();
+    global.fetch = mockFetch;
+    client = new CoolifyClient({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-api-key',
+    });
+  });
+
+  it.each([
+    ['setApplicationStorageBackup' as const, 'applications'],
+    ['setDatabaseStorageBackup' as const, 'databases'],
+    ['setServiceStorageBackup' as const, 'services'],
+  ])('%s PUTs the schedule to /%s/{uuid}/storages/{storage}/backups', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client[m]('res-1', 'stor-1', { frequency: '0 2 * * *' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups`,
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  it.each([
+    ['deleteApplicationStorageBackup' as const, 'applications'],
+    ['deleteDatabaseStorageBackup' as const, 'databases'],
+    ['deleteServiceStorageBackup' as const, 'services'],
+  ])('%s DELETEs /%s/{uuid}/storages/{storage}/backups', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'deleted' }));
+
+    await client[m]('res-1', 'stor-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it.each([
+    ['runApplicationStorageBackup' as const, 'applications'],
+    ['runDatabaseStorageBackup' as const, 'databases'],
+    ['runServiceStorageBackup' as const, 'services'],
+  ])('%s POSTs /%s/{uuid}/storages/{storage}/backups/run', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'queued' }));
+
+    await client[m]('res-1', 'stor-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups/run`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('sends false and zero rather than dropping them', async () => {
+    // The upstream schema defaults `enabled` to true and the retention numbers
+    // to non-zero, so a request builder that strips falsy values would silently
+    // turn "disabled, keep nothing locally" into "enabled, keep 7". Only
+    // `undefined` may be dropped.
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client.setApplicationStorageBackup('res-1', 'stor-1', {
+      frequency: '0 2 * * *',
+      enabled: false,
+      save_s3: false,
+      retention_amount_locally: 0,
+      s3_storage_uuid: null,
+    });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toEqual({
+      frequency: '0 2 * * *',
+      enabled: false,
+      save_s3: false,
+      retention_amount_locally: 0,
+      s3_storage_uuid: null,
+    });
+  });
+
+  it('omits unset fields entirely rather than sending null for them', async () => {
+    // Omission means "take Coolify's default"; an explicit null would mean
+    // something different on `s3_storage_uuid`, the one nullable field.
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client.setApplicationStorageBackup('res-1', 'stor-1', { frequency: '@daily' });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body) as object;
+    expect(body).toEqual({ frequency: '@daily' });
+  });
+});

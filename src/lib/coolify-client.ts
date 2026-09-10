@@ -8,6 +8,8 @@ import type {
   ErrorResponse,
   DeleteOptions,
   MessageResponse,
+  VolumeBackupScheduleRequest,
+  VolumeBackupScheduleResponse,
   UuidResponse,
   // Server types
   Server,
@@ -2058,6 +2060,97 @@ export class CoolifyClient {
     return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Volume backup schedules (Coolify v4.2+, #305)
+  //
+  // Written out per resource type with the collection as a LITERAL, rather than
+  // shared through one helper taking `collection` as a parameter. The DRY version
+  // reads better and is wrong: `check:spec-drift` extracts the template passed to
+  // `this.request()` and turns every `${...}` into a wildcard segment, so
+  // `/${collection}/${uuid}/storages/${storageUuid}/backups` collapses to
+  // `/*/*/storages/*/backups` — one route that matches any of the three, proving
+  // none of them. Three literal call sites are three checked routes.
+  //
+  // There is deliberately no `get`/`list` here. Upstream's VolumeBackupsController
+  // defines only PUT, DELETE and the run POST — no GET route for a schedule exists
+  // — and the storages listing returns the raw volume models without the backup
+  // relation loaded. "Does this volume have a backup?" is unanswerable through the
+  // Coolify API today, not merely unimplemented here.
+  // ---------------------------------------------------------------------------
+
+  async setApplicationStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/applications/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async setDatabaseStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/databases/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async setServiceStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/services/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async deleteApplicationStorageBackup(
+    uuid: string,
+    storageUuid: string,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async runApplicationStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/applications/${uuid}/storages/${storageUuid}/backups/run`,
+      { method: 'POST' },
+    );
+  }
+
+  async runDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups/run`, {
+      method: 'POST',
+    });
+  }
+
+  async runServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups/run`, {
+      method: 'POST',
     });
   }
 

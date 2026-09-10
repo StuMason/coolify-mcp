@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Scheduled volume backups** (#305). `storages` gains `backup_set`, `backup_delete` and `backup_run` for application, database and service volumes (Coolify v4.2+). `backup_delete` removes the archives as well as the schedule, so it asks first, and points at `backup_set` with `enabled: false` for the "stop backing up but keep what I have" case. Note two upstream limits: Coolify has no endpoint to read a schedule back, so `find_issues` still cannot flag a volume with no backup; and `backup_set` replaces the whole schedule rather than merging, so omitted fields revert to their defaults.
+
 ### Changed
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.

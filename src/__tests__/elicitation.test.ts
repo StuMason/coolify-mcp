@@ -1169,3 +1169,113 @@ describe('elicitation: #315 review round', () => {
     await h.close();
   });
 });
+
+describe('volume backup schedules (#305)', () => {
+  it('backup_delete asks first, and says the archives go too', async () => {
+    // Upstream deletes the schedule AND its local and S3 archives. "Stop backing
+    // up" and "throw away every backup I have" are different decisions, so the
+    // prompt has to name which one is happening and offer the other.
+    const h = await harness(decline);
+    const del = jest
+      .spyOn(h.server['client'], 'deleteApplicationStorageBackup')
+      .mockResolvedValue({ message: 'gone' } as never);
+
+    await h.call('storages', {
+      resource: 'application',
+      action: 'backup_delete',
+      uuid: 'app-1',
+      storage_uuid: 'stor-1',
+    });
+
+    expect(del).not.toHaveBeenCalled();
+    const prompt = h.prompts[0];
+    expect(prompt).toContain('archives are deleted with it');
+    expect(prompt).toContain('backup_set');
+    expect(prompt).toContain('enabled: false');
+    expect(prompt).toContain('cannot be undone');
+  });
+
+  it.each([
+    ['database', 'deleteDatabaseStorageBackup'],
+    ['service', 'deleteServiceStorageBackup'],
+  ] as const)('backup_delete is guarded for %s too', async (resource, method) => {
+    const h = await harness(decline);
+    const del = jest.spyOn(h.server['client'], method).mockResolvedValue({ message: 'x' } as never);
+
+    await h.call('storages', {
+      resource,
+      action: 'backup_delete',
+      uuid: 'r-1',
+      storage_uuid: 'stor-1',
+    });
+
+    expect(del).not.toHaveBeenCalled();
+    expect(h.prompts).toHaveLength(1);
+    await h.close();
+  });
+
+  it('backup_set and backup_run are not gated, because neither discards data', async () => {
+    const h = await harness(accept);
+    const set = jest
+      .spyOn(h.server['client'], 'setApplicationStorageBackup')
+      .mockResolvedValue({ uuid: 'b1', message: 'ok' } as never);
+    const run = jest
+      .spyOn(h.server['client'], 'runApplicationStorageBackup')
+      .mockResolvedValue({ message: 'queued' } as never);
+
+    await h.call('storages', {
+      resource: 'application',
+      action: 'backup_set',
+      uuid: 'app-1',
+      storage_uuid: 'stor-1',
+      frequency: '0 2 * * *',
+    });
+    await h.call('storages', {
+      resource: 'application',
+      action: 'backup_run',
+      uuid: 'app-1',
+      storage_uuid: 'stor-1',
+    });
+
+    expect(set).toHaveBeenCalled();
+    expect(run).toHaveBeenCalled();
+    expect(h.prompts).toHaveLength(0);
+    await h.close();
+  });
+
+  it('backup_set refuses without a frequency and explains the replace semantics', async () => {
+    const h = await harness(accept);
+    const set = jest
+      .spyOn(h.server['client'], 'setApplicationStorageBackup')
+      .mockResolvedValue({ uuid: 'b1', message: 'ok' } as never);
+
+    const text = await h.call('storages', {
+      resource: 'application',
+      action: 'backup_set',
+      uuid: 'app-1',
+      storage_uuid: 'stor-1',
+    });
+
+    expect(text).toContain('frequency required');
+    expect(text).toContain('replaces the whole schedule');
+    expect(set).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('every backup action needs a storage_uuid', async () => {
+    const h = await harness(accept);
+
+    for (const action of ['backup_set', 'backup_delete', 'backup_run']) {
+      const text = await h.call('storages', {
+        resource: 'application',
+        action,
+        uuid: 'app-1',
+        frequency: '@daily',
+      });
+      expect(text).toContain('storage_uuid required');
+    }
+
+    expect(h.prompts).toHaveLength(0);
+    await h.close();
+  });
+});
