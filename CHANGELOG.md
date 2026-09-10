@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
+
 ## [3.2.0] - 2026-09-10
 
 The client-surface release. The server now speaks all three MCP primitives instead of one: prompts you start as slash commands, resources your client can attach, and an `instructions` field that tells a model what this server is before it reads a single tool definition. `search_docs` works with no network at all. HTTP mode accepts Client ID Metadata Documents, which the spec now prefers over dynamic registration.

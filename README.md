@@ -87,6 +87,28 @@ Destructive operations stop and ask **you**, in your own client, before anything
 
 Works against Coolify v4.0 through v4.3. The v4.2 GET-to-POST change and the v4.2 secrets and Member-role restrictions are handled; see [compatibility](docs/tools.md#coolify-version-compatibility).
 
+## Coolify's own MCP server, and when you want this one
+
+Coolify ships an MCP server of its own, built into the product. Enable it in **Settings → Advanced** (and per team), point your client at `https://your-coolify/mcp`, and there is nothing to install: it runs inside the instance, so no third-party code ever holds your token. If you run one Coolify, with one team, and you mostly want to ask it questions, use that. It is the shortest path and it costs you nothing.
+
+At the time of writing Coolify documents its server as read-only, with write operations planned. It is moving quickly, so check [the Coolify docs](https://coolify.io/docs/integrations/mcp) for where it has got to. There is also an [official CLI](https://github.com/coollabsio/coolify-cli) if you would rather script than converse.
+
+This server is for the jobs those two do not cover yet.
+
+|                           | Coolify's built-in `/mcp`     | Official CLI          | This server                                                                                                                    |
+| ------------------------- | ----------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Where it runs             | Inside your Coolify           | Your shell            | Your machine, or a container inside your Coolify                                                                               |
+| Install                   | Nothing                       | One binary            | `npx`, a one-click Claude Desktop extension, or a container                                                                    |
+| Transport                 | Streamable HTTP               | Not an MCP server     | stdio and HTTP, so it also works in clients that only speak stdio                                                              |
+| Coolify instances         | One                           | One context at a time | One or many; in fleet mode every tool takes an `instance`                                                                      |
+| Writes                    | Documented as read-only today | Yes                   | Yes                                                                                                                            |
+| Before a destructive call | Not applicable                | You typed it          | Stops and asks you in your own client, naming the blast radius, on clients that support elicitation; fails closed in HTTP mode |
+| When something is broken  | Not applicable                | Shell exit codes      | `doctor` names the cause and the one-line fix                                                                                  |
+
+A rough rule. One instance and read-only questions, with no setup: use Coolify's. Scripting and CI: use the CLI. Several instances, writes you want a human gate in front of, a client that only speaks stdio, or you want to be told _why_ it is broken: this one.
+
+Other third-party Coolify MCP servers exist. Choose on transport, on how many instances you need to reach from one connection, and on what happens the moment before something is deleted.
+
 ## Example prompts
 
 ```text
