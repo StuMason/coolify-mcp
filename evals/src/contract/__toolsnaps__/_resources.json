@@ -1,0 +1,41 @@
+{
+  "resources": [
+    {
+      "name": "api-gateway",
+      "title": "api-gateway",
+      "uri": "coolify://application/app-api",
+      "description": "exited:unhealthy — https://api.example.test",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "log-viewer",
+      "title": "log-viewer",
+      "uri": "coolify://application/app-logviewer",
+      "description": "running:healthy — https://logs.example.test",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "shop-frontend",
+      "title": "shop-frontend",
+      "uri": "coolify://application/app-shop",
+      "description": "running:healthy — https://shop.example.test",
+      "mimeType": "application/json"
+    },
+    {
+      "name": "overview",
+      "title": "Infrastructure overview",
+      "uri": "coolify://overview",
+      "description": "Counts and current status for every server, project, application, database and service. The same snapshot `get_infrastructure_overview` returns.",
+      "mimeType": "application/json"
+    }
+  ],
+  "templates": [
+    {
+      "name": "application",
+      "title": "Application detail",
+      "uriTemplate": "coolify://application/{uuid}",
+      "description": "Full configuration and status for one application. Credentials are masked, as they are on `get_application` without `reveal`.",
+      "mimeType": "application/json"
+    }
+  ]
+}

@@ -15,6 +15,12 @@
  * non-secret fixture content.
  */
 
+/**
+ * A credential planted on `app-api` so masking tests can assert a real value
+ * never reaches the client. Obviously fake, and never a real secret shape.
+ */
+export const FIXTURE_WEBHOOK_SECRET = 'whsec-fixture-must-never-be-returned';
+
 export const FIXTURE_TOKEN = 'fixture-token-not-a-real-credential';
 
 export const CANARY = {
@@ -88,6 +94,10 @@ export const APPLICATIONS = [
     git_branch: 'main',
     build_pack: 'dockerfile',
     last_online_at: '2026-08-05T06:41:00Z',
+    // Present so the masking assertions have something real to catch. Without
+    // a credential in the fixture, "the resource read is masked" would pass on
+    // an application that has no secret to leak (#371).
+    manual_webhook_secret_github: FIXTURE_WEBHOOK_SECRET,
   },
   {
     id: 103,
