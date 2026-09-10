@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Server `instructions`** (#339). The `initialize` response now carries orientation the tool names cannot: that tools are consolidated by `action`, what `list_*` and `get_*` return, the smart lookups on `diagnose_app` and `diagnose_server`, that `_actions` and `_pagination` are computed by the server, where the destructive confirmation boundary is, the tested Coolify range and the 4.2-only calls. Fleet mode adds the `instance` paragraph; read-only mode says so. Claude Code reads this field at session start and defers full tool definitions, so it is the first thing the model sees. Snapshotted and budgeted in the contract tests like the tool list.
 - `SECURITY.md`, and private vulnerability reporting enabled on the repository.
 
 ## [3.1.0] - 2026-09-09

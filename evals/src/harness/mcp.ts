@@ -28,6 +28,8 @@ export interface EvalContext {
   client: Client;
   /** Raw tools/list entries, annotations included. */
   toolInfo: McpToolInfo[];
+  /** The server `instructions` field from `initialize` (#339); undefined if unset. */
+  instructions?: string;
   /** The same tools as an AI SDK ToolSet whose execute() round-trips through the server. */
   toolSet: ToolSet;
   /** Tool names the server marks read-only / destructive — derived, never hand-listed. */
@@ -122,6 +124,7 @@ async function connectHarness(
   return {
     fixture,
     client,
+    instructions: client.getInstructions(),
     toolInfo,
     toolSet,
     readOnlyTools: toolInfo.filter((t) => t.annotations?.readOnlyHint === true).map((t) => t.name),

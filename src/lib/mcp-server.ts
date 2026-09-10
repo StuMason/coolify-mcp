@@ -37,6 +37,7 @@ import type {
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
 import { DEFAULT_INSTANCE_NAME, InstanceRegistry, type InstanceDefinition } from './instances.js';
+import { buildInstructions } from './instructions.js';
 
 /**
  * Database credential fields whose change on `update` is guarded — usernames
@@ -735,11 +736,24 @@ export class CoolifyMcpServer extends McpServer {
   }
 
   constructor(config: CoolifyConfig | InstanceRegistry, options?: CoolifyMcpServerOptions) {
-    super({ name: 'coolify', version: VERSION });
-    this.registry =
+    const registry =
       config instanceof InstanceRegistry
         ? config
         : new InstanceRegistry([{ name: DEFAULT_INSTANCE_NAME, ...config }]);
+    // `instructions` rides `initialize`, not `tools/list`, so shaping it by
+    // mode costs the single-instance tool list nothing (#339).
+    super(
+      { name: 'coolify', version: VERSION },
+      {
+        instructions: buildInstructions({
+          fleet: registry.isFleet,
+          defaultInstance: registry.default.name,
+          readonly: options?.readonly === true,
+          requireElicitation: options?.requireElicitation === true,
+        }),
+      },
+    );
+    this.registry = registry;
     for (const instance of this.registry.all) {
       this.clients.set(instance.name, new CoolifyClient(instance));
     }

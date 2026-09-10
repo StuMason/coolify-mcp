@@ -57,6 +57,10 @@ appears. Single-instance installs never see either.
 - **Verified deploys.** `deploy` with `wait: true` polls to a terminal status
   and returns a log tail on failure, instead of "the site returns 200 so it
   probably worked".
+- **Oriented.** The server's `instructions` field (sent on `initialize`,
+  before any tool definition) describes this shape, the safety boundary and
+  the version-sensitive calls, so a client that defers tool definitions still
+  starts with the map. Snapshotted in `evals/` like the tool list.
 - **Measured.** Tool descriptions are prompts, so `evals/` checks that a model
   picks the right tool from this surface and that attacker-controlled tool
   output cannot make it misbehave. See [evals/README.md](../evals/README.md).

@@ -76,6 +76,17 @@ describe('tool contract', () => {
     expect(unclassified).toEqual([]);
   });
 
+  it('the server instructions match their snapshot (#339)', async () => {
+    // What Claude Code reads before any tool definition. Same rule as the
+    // tools: an edit must show up in review as a snapshot diff.
+    expect(ctx.instructions).toBeDefined();
+    await expect(ctx.instructions + '\n').toMatchFileSnapshot('__toolsnaps__/_instructions.txt');
+  });
+
+  it('instructions token budget holds', () => {
+    expect((ctx.instructions ?? '').length / 4).toBeLessThan(600);
+  });
+
   it('tool list token budget holds', () => {
     // ~4 chars/token heuristic over the serialized tools/list payload. The
     // v2 redesign's headline is a ~6.6k-token surface; fail loudly before a
