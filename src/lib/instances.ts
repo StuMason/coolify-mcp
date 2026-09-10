@@ -17,10 +17,15 @@
 import { mergeCfAccessHeaders } from './startup-check.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
-export interface InstanceDefinition extends CoolifyConfig {
+/**
+ * An intersection rather than `interface ... extends`, because `CoolifyConfig`
+ * is a union expressing "a token, or a token file" and an interface cannot
+ * extend a union.
+ */
+export type InstanceDefinition = CoolifyConfig & {
   /** Unique, used as the tools' `instance` argument. */
   name: string;
-}
+};
 
 /** `instance: "all"` is a fan-out selector on the tools that support it, never a name. */
 export const ALL_INSTANCES = 'all';
@@ -158,12 +163,15 @@ export function registryFromEnv(
   cliHeaders: Record<string, string> = {},
 ): InstanceRegistry {
   const instances: InstanceDefinition[] = [];
-  if (env.COOLIFY_BASE_URL && env.COOLIFY_ACCESS_TOKEN) {
+  // Either source satisfies the requirement: the file is read at construction,
+  // so a config with only COOLIFY_ACCESS_TOKEN_FILE is complete (#398).
+  if (env.COOLIFY_BASE_URL && (env.COOLIFY_ACCESS_TOKEN || env.COOLIFY_ACCESS_TOKEN_FILE)) {
     const merged = mergeCfAccessHeaders(env, cliHeaders);
     instances.push({
       name: DEFAULT_INSTANCE_NAME,
       baseUrl: env.COOLIFY_BASE_URL.replace(/\/$/, ''),
-      accessToken: env.COOLIFY_ACCESS_TOKEN,
+      accessToken: env.COOLIFY_ACCESS_TOKEN ?? '',
+      accessTokenFile: env.COOLIFY_ACCESS_TOKEN_FILE,
       customHeaders: Object.keys(merged).length > 0 ? merged : undefined,
     });
   }

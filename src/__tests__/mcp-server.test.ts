@@ -273,7 +273,9 @@ describe('CoolifyMcpServer v2', () => {
       const client = server['client'];
       // CoolifyClient stores base URL without /api/v1 suffix
       expect(client['baseUrl']).toBe('http://localhost:3000');
-      expect(client['accessToken']).toBe('test-token');
+      // The token is held by a TokenSource rather than captured as a field, so
+      // that a rotated token takes effect without restarting the process (#398).
+      expect(client['tokens'].current()).toBe('test-token');
     });
   });
 

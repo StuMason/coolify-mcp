@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`COOLIFY_ACCESS_TOKEN_FILE`: rotate the Coolify token without restarting** (#398). A stdio server is spawned once per client session and a subprocess never sees a later change to its parent's environment, so rotating `COOLIFY_ACCESS_TOKEN` could not reach a running server. Point the new variable at a file and it is re-read whenever the file changes, taking effect on the next tool call. A `401` triggers exactly one retry, and only when a re-read actually produced a different token, so a rotation landing mid-call recovers while a genuinely bad token still fails on the first attempt. `doctor` reports the source, and for a file its path and age, never the value. Raised by a user who retired this server partly for this reason.
+
 ### Changed
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
