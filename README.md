@@ -145,6 +145,22 @@ White-label under your own name if you're an agency. And if a job doesn't need A
 
 📮 [hey@stumason.dev](mailto:hey@stumason.dev) · [stumason.dev](https://stumason.dev) · [coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev/#hire)
 
+## Privacy Policy
+
+This server collects nothing about you. There is no telemetry, no analytics and
+no phone-home, and there is no hosted service behind it.
+
+Your Coolify API token goes to the instance you configured and nowhere else. The
+only other outbound requests are a one-off documentation index refresh from
+`coolify.io`, which carries a cache validator and no credentials, and in HTTP
+mode a credential-free fetch of the connecting client's own metadata document.
+Tool results go to your own MCP client, whose privacy policy governs what
+happens next. The audit log writes to your own stderr and never contains token
+values.
+
+Full detail, including where in the code each claim is implemented, is in
+[PRIVACY.md](PRIVACY.md).
+
 ## Links
 
 - [Coolify](https://coolify.io/): the open-source, self-hostable PaaS this server drives
