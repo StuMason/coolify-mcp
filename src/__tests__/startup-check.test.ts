@@ -223,3 +223,37 @@ describe('mergeCfAccessHeaders', () => {
     expect(mergeCfAccessHeaders({}, { 'X-Custom': 'v' })).toEqual({ 'X-Custom': 'v' });
   });
 });
+
+describe('checkStartupConfig: the confirmation signing key (#341)', () => {
+  it('rejects a key too short to sign with', () => {
+    const env = cleanEnv();
+    env.MCP_REQUEST_STATE_KEY = 'nowhere near long enough';
+    const { errors } = checkStartupConfig(env, 'http');
+    // The codec throws on this, but it is built per request in HTTP mode — so
+    // without a boot-time check the operator meets it as a confirmation that
+    // mysteriously fails, once per attempt, forever.
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('MCP_REQUEST_STATE_KEY');
+    expect(errors[0]).toContain('openssl rand -hex 32');
+  });
+
+  it('accepts a key of exactly the minimum length', () => {
+    const env = cleanEnv();
+    env.MCP_REQUEST_STATE_KEY = 'x'.repeat(32);
+    expect(checkStartupConfig(env, 'http').errors).toEqual([]);
+  });
+
+  it('says nothing when it is unset, because generating one is supported', () => {
+    expect(checkStartupConfig(cleanEnv(), 'http').errors).toEqual([]);
+  });
+
+  it('reports the placeholder rather than the length when the value is unexpanded', () => {
+    const env = cleanEnv();
+    env.MCP_REQUEST_STATE_KEY = '${MCP_REQUEST_STATE_KEY}';
+    const { errors } = checkStartupConfig(env, 'http');
+    // Both checks would fire on this string. Only the one naming the actual
+    // cause is useful, so the length check stands aside for it.
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).not.toContain('32 bytes');
+  });
+});

@@ -7,10 +7,8 @@ additional posture of the remote server.
 
 ## Ask before it hurts
 
-Destructive operations pause and ask **you**, not the model, on clients that
-support [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog):
-Claude Code and VS Code Copilot today. The prompt states the blast radius
-before you answer:
+Destructive operations pause and ask **you**, not the model. The prompt states
+the blast radius before you answer:
 
 ```text
 EMERGENCY STOP: take down 12 running applications
@@ -19,6 +17,29 @@ across 3 servers?
 ```
 
 In [fleet mode](fleet.md) every prompt also names the instance it targets.
+
+### Two protocol eras, one guarantee
+
+How the question reaches you depends on the protocol revision your client
+speaks, and both are live in the wild.
+
+On the 2025 revisions the server sends an elicitation request mid-call and waits
+for your answer. On revision `2026-07-28` a server may not interrupt itself like
+that, so the call is answered with "input required", your client asks you, and
+it then retries the call carrying your answer. Same question, same blast radius,
+two round trips instead of one.
+
+The retry carries signed state so the two halves cannot be separated. Two things
+follow that are worth knowing:
+
+- **An approval only authorises what you were shown.** The summary you read is
+  digested into that state. If the estate changes between the question and your
+  answer — an emergency stop that said 12 applications when 14 are now running —
+  the approval no longer describes the operation and it is refused rather than
+  quietly widened.
+- **Confirmations expire after ten minutes**, and do not survive a server
+  restart unless `MCP_REQUEST_STATE_KEY` is set. Both fail closed: you are asked
+  again, never waved through.
 
 Confirmation is asked for on `stop_all_apps`, `redeploy_project`,
 `restart_project_apps`, `system disable_api`, application / database /
@@ -52,6 +73,12 @@ exists for the case where a client advertises elicitation support but does not
 actually implement it. Without it, every guarded tool would return
 `could not confirm with the user` with no way to recover. It is an escape
 hatch, not a normal setting.
+
+**It only applies to the local (stdio) server.** HTTP mode requires a human for
+guarded operations unconditionally, so setting this there does not unlock
+anything: the guard simply refuses by a different route. An internet-facing
+server that waves destructive operations through because the model asked is not
+a control, so there is deliberately no way to configure one.
 
 > **If confirmations time out before you can answer them**, raise your
 > client's MCP tool timeout. The prompt runs inside the tool call, and the MCP

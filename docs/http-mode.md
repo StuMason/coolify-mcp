@@ -191,6 +191,7 @@ internet-facing service.
 | `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                         |
 | `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                        |
 | `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence                                |
+| `MCP_REQUEST_STATE_KEY`   | generated at startup     | HMAC key for confirmation state (>=32 bytes)           |
 | `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL   |
 | `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)     |
 | `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)     |
@@ -298,3 +299,23 @@ missing, so OAuth state dies with the container. Add it under Storages.
 - The test suite logs in through the full OAuth flow with the official MCP
   client SDK and runs an MCP session against this server. A change that
   breaks a real client fails CI before it ships.
+
+## Confirmation state on protocol revision 2026-07-28
+
+Clients on this revision confirm destructive operations across two round trips
+(see [security.md](security.md)). The server seals what it showed you into a
+signed token that the client echoes back, so an approval cannot be detached from
+the question it answered.
+
+That token is signed with `MCP_REQUEST_STATE_KEY`. Leave it unset and a key is
+generated when the process starts, which is fine for a single container: the
+only cost is that a confirmation in flight across a restart is refused and has
+to be asked again. Set it, to at least 32 bytes, if you run more than one
+replica or you would rather a redeploy did not interrupt someone mid-answer.
+
+```bash
+openssl rand -hex 32
+```
+
+It is not a Coolify credential and grants no access on its own. Rotating it
+invalidates confirmations in flight and nothing else.

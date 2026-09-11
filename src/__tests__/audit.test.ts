@@ -122,6 +122,23 @@ describe('audit: one line per call, whatever happens (#370)', () => {
     expect(lines[0].outcome).toBe('error');
   });
 
+  it('tags a raised confirmation as awaiting an answer, not as a success (#341)', async () => {
+    const lines: AuditEntry[] = [];
+    // What a guarded tool returns on round one of protocol revision
+    // 2026-07-28: a question, carrying no `content` at all.
+    const asked = { resultType: 'input_required', inputRequests: {}, requestState: 'sealed' };
+    await auditedCall(
+      { tool: 'application', args: { uuid: 'app-1' }, write: (e) => lines.push(e) },
+      () => asked as never,
+    );
+
+    // `ok` here would report a destructive tool call as having succeeded when
+    // nothing ran, and would double every guarded operation in any count of
+    // successful destructive calls, since the retry writes a second line.
+    expect(lines[0].outcome).toBe('awaiting_confirmation');
+    expect(lines[0].reason).toBeUndefined();
+  });
+
   it('tags a refusal, and keeps a decline apart from an error', async () => {
     const lines: AuditEntry[] = [];
     await auditedCall(

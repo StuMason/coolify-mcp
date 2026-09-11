@@ -204,6 +204,99 @@ describe('HTTP mode interop with the reference MCP client', () => {
       await client.close();
     }
 
+    // 7b. The same server, over the same transport, on protocol revision
+    // 2026-07-28 (#341). This era forbids the server pushing
+    // `elicitation/create` mid-call, so the destructive guard has to answer
+    // with an `input_required` result and be re-entered when the client
+    // retries. Pinned rather than negotiated: a silent fallback to the 2025
+    // handshake would test the other path and pass.
+    //
+    // Only HTTP reaches this code. The stdio entry point connects through
+    // the 2025 handshake and stays on that era for the life of the
+    // connection, which is why this lives here and not beside the other
+    // elicitation tests.
+    const modern = new Client(
+      { name: 'interop-modern', version: '0.0.0' },
+      {
+        capabilities: { elicitation: {} },
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    );
+    const prompts: string[] = [];
+    modern.setRequestHandler('elicitation/create', async (request) => {
+      prompts.push(request.params.message);
+      return { action: 'decline' as const };
+    });
+    const modernTransport = new StreamableHTTPClientTransport(new URL(resourceUrl), {
+      authProvider: { token: async () => tokens.access_token },
+    });
+    await modern.connect(modernTransport);
+    try {
+      const refused = (await modern.callTool({
+        name: 'stop_all_apps',
+        arguments: { confirm: true },
+      })) as { content: Array<{ type: string; text: string }> };
+      const text = refused.content.map((c) => c.text).join('\n');
+
+      // Asked exactly once. Twice would mean the handler did not recognise
+      // its own re-entry, which on this era is an infinite confirmation loop
+      // rather than a cosmetic bug.
+      expect(prompts).toHaveLength(1);
+      // This fake Coolify refuses the listing, so the prompt is the degraded
+      // one — which is worth asserting exactly: the 2025 path deliberately
+      // asks anyway when the pre-flight fails, and this era has to match it
+      // rather than erroring out and leaving the operation unconfirmable.
+      expect(prompts[0]).toContain('EMERGENCY STOP');
+      expect(prompts[0]).toContain('Could not load the details first');
+      // And the decline was understood as a decline, across two round trips.
+      expect(text).toContain('the user declined');
+      expect(text.startsWith('Error:')).toBe(false);
+    } finally {
+      await modern.close();
+    }
+
+    // 7c. The same flow, accepted rather than declined.
+    //
+    // This is the case that exercises the real codec end to end: the state
+    // is minted by the server instance that answers round one and verified
+    // by the DIFFERENT instance that answers round two, because the HTTP
+    // handler builds a fresh server per request. A key generated per
+    // instance passes every unit test and fails here, which is how that bug
+    // was found in the first place.
+    const accepting = new Client(
+      { name: 'interop-modern-accept', version: '0.0.0' },
+      {
+        capabilities: { elicitation: {} },
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    );
+    const accepted: string[] = [];
+    accepting.setRequestHandler('elicitation/create', async (request) => {
+      accepted.push(request.params.message);
+      return { action: 'accept' as const };
+    });
+    const acceptingTransport = new StreamableHTTPClientTransport(new URL(resourceUrl), {
+      authProvider: { token: async () => tokens.access_token },
+    });
+    await accepting.connect(acceptingTransport);
+    try {
+      const ran = (await accepting.callTool({
+        name: 'stop_all_apps',
+        arguments: { confirm: true },
+      })) as { content: Array<{ type: string; text: string }> };
+      const text = ran.content.map((c) => c.text).join('\n');
+
+      expect(accepted).toHaveLength(1);
+      // Past the guard. This fake Coolify refuses the stop itself, so the
+      // result is an upstream error — which is the proof that matters: the
+      // confirmation verified and the operation was attempted, rather than
+      // being aborted before it started.
+      expect(text).not.toContain('Aborted');
+      expect(text).not.toContain('requestState');
+    } finally {
+      await accepting.close();
+    }
+
     // 8. Refresh rotation through the SDK, and the old token really dies.
     const refreshed = await refreshAuthorization(publicUrl, {
       metadata,
