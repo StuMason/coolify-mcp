@@ -14,7 +14,7 @@ before you answer:
 
 ```text
 EMERGENCY STOP: take down 12 running applications
-(api, worker, dashboard, analytics, scheduler, mailer, search, billing and 4 more)
+(api, worker, dashboard, umami, scheduler, mailer, search, billing and 4 more)
 across 3 servers?
 ```
 
