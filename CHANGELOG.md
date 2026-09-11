@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-09-11
+
 ### Added
 
 - **Move a resource between environments** (#299). `application`, `database` and `service` take a `move` action, taking the target `environment_uuid`. "Promote this app from staging to production" now has an answer that is one call instead of recreating the resource and copying env vars across. Requires Coolify v4.2+; an older instance is told so by name rather than returning a bare 404. The confirmation says what a move actually does: containers keep running, and from the next deployment the resource uses the target environment's shared environment variables.
@@ -28,6 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
 - Test fixtures, docs examples and one README example prompt now use IANA-reserved `example.com` names instead of live third-party domains, and the blast-radius example reads the same way in the changelog as it does in `docs/security.md`. No behaviour change.
+
+### Upgrading from 3.2
+
+- **Drop-in for stdio users.** No config changes and no new required
+  variables. The tool count is unchanged at 45; three existing tools gained
+  actions rather than new tools appearing.
+- **HTTP mode now writes an audit line per tool call by default.** It is one
+  JSON line on stderr carrying the outcome, and it replaces the older
+  pre-dispatch line that could only name the tool. Anything parsing on the
+  `audit` key still matches, but the timing and the field set changed. Set
+  `COOLIFY_MCP_AUDIT=false` to turn it off.
+- **`move` and the volume backup actions need Coolify v4.2+.** On an older
+  instance they name the version requirement rather than returning a bare 404. Everything else works from v4.0.
+- **Tools now carry a display `title`.** Clients that show one will start
+  showing it; clients that do not are unaffected. This is why the published
+  tool-list figure moved.
 
 ## [3.2.0] - 2026-09-10
 
