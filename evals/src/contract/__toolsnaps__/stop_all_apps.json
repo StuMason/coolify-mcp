@@ -1,6 +1,6 @@
 {
   "name": "stop_all_apps",
-  "title": "Emergency stop",
+  "title": "Emergency stop all apps",
   "description": "EMERGENCY: Stop all running apps",
   "annotations": {
     "destructiveHint": true

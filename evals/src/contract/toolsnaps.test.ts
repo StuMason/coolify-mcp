@@ -11,6 +11,8 @@
  * Regenerate intentionally with: npm run snapshots:update
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FIXTURE_WEBHOOK_SECRET } from '../fixture/data.js';
 import { createEvalContext, type EvalContext } from '../harness/mcp.js';
@@ -31,6 +33,29 @@ afterAll(async () => {
 // on the CI runner — a phantom `_roster.json` diff on the check that gates
 // merge. This is deterministic everywhere.
 const byName = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The tool-list token figure as README.md states it to the public.
+ *
+ * Throws rather than defaulting: if the sentence is reworded, this must fail
+ * loudly and be repointed, not silently fall back to a number of its own and
+ * start the drift again.
+ */
+function publishedTokenFigure(): number {
+  const readme = readFileSync(
+    fileURLToPath(new URL('../../../README.md', import.meta.url)),
+    'utf8',
+  );
+  const match = readme.match(/tool list costs about ([\d,]+) tokens/);
+  if (!match) {
+    throw new Error(
+      'README.md no longer states the tool list token figure in the expected form ' +
+        '("the whole tool list costs about N tokens"). The budget gate derives its ' +
+        'ceiling from that sentence — repoint this matcher rather than hardcoding a number.',
+    );
+  }
+  return Number(match[1].replace(/,/g, ''));
+}
 
 /**
  * Backticked tokens in prompt text that are deliberately NOT tool names.
@@ -108,13 +133,20 @@ describe('tool contract', () => {
     // ~4 chars/token heuristic over the serialized tools/list payload, which
     // is what every session pays on connect.
     //
-    // The ceiling tracks the figure published in README.md and docs/tools.md,
-    // with only a small margin above it. That coupling is the point: the old
-    // ceiling sat ~1,400 tokens above the published number, so the surface
-    // grew through 3.x without tripping anything and the docs quietly went
-    // stale. Move this and the published figure together, or not at all.
-    const chars = JSON.stringify(ctx.toolInfo).length;
-    expect(chars / 4).toBeLessThan(8400);
+    // The ceiling is DERIVED from the figure README.md publishes, rather than
+    // being a second number someone has to remember to move. A hardcoded
+    // ceiling is what failed before: it sat ~1,400 tokens above the published
+    // figure, so the surface grew through 3.x, tripped nothing, and the docs
+    // went stale unnoticed.
+    //
+    // Bounded on both sides on purpose. Growing past the published figure
+    // fails, and so does inflating the published figure to buy headroom the
+    // payload does not need — otherwise the cheap fix for a red build is to
+    // edit the README, which is the drift this is here to stop.
+    const published = publishedTokenFigure();
+    const measured = JSON.stringify(ctx.toolInfo).length / 4;
+    expect(measured).toBeLessThan(published * 1.02);
+    expect(measured).toBeGreaterThan(published * 0.95);
   });
 });
 

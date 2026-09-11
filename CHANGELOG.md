@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - HTTP mode's audit line now reports what happened rather than what was asked. It previously peeked at the request body before dispatch, which could only name the tool; it is now written after the call completes and carries the outcome and duration.
 - **The Client ID Metadata Document fetch is bounded at 3 seconds** (#340), rather than inheriting the 10 second default. Claude allows 10 seconds for the whole of discovery, registration and token exchange, so one hop cannot be allowed to spend all of it. The `client_id` is a URL the caller chooses, so a host that connects and then stalls is entirely under their control.
-- **The published tool-list token figure is corrected from ~6,600 to ~8,300** (#406). The surface grew through 3.x and the README did not follow, because the budget gate sat ~1,400 tokens above the number the docs advertised and so never tripped. The gate now tracks the published figure with a small margin, and its comment says the two move together or not at all. Titles account for ~300 of the increase; the rest was already there and unreported.
+- **The published tool-list token figure is corrected from ~6,600 to ~8,300** (#406). The surface grew through 3.x and the README did not follow, because the budget gate sat ~1,400 tokens above the number the docs advertised and so never tripped. The gate no longer holds a number of its own: it reads the figure out of the README and derives its ceiling from it, bounded in both directions so neither the payload nor the published claim can drift away from the other. Titles account for ~300 of the increase; the rest was already there and unreported.
 
 ### Fixed
 
