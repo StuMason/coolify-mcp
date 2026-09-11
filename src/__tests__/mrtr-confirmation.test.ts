@@ -301,9 +301,7 @@ describe('the confirmation signing key', () => {
       const b = createConfirmationCodec();
       expect(a).not.toBe(b);
     });
-    const ctx = {
-      mcpReq: { method: 'tools/call' },
-    } as unknown as Parameters<ReturnType<typeof createConfirmationCodec>['mint']>[1];
+    const ctx = { mcpReq: { method: 'tools/call' } } as unknown as ServerContext;
     const minted = await createConfirmationCodec().mint({ digest: 'abc' }, ctx);
     // Minted by one codec instance, verified by another: the round trip HTTP
     // mode actually performs.
