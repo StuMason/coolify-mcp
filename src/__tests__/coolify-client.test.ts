@@ -2228,11 +2228,11 @@ describe('CoolifyClient', () => {
       mockFetch.mockResolvedValueOnce(mockResponse(mockApplication));
 
       await client.updateApplication('app-uuid', {
-        custom_network_aliases: 'edator-asr',
+        custom_network_aliases: 'media-asr',
       });
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
-      expect(callBody.custom_network_aliases).toBe('edator-asr');
+      expect(callBody.custom_network_aliases).toBe('media-asr');
     });
 
     it('should pass destination_uuid through in createApplicationPublic', async () => {
@@ -4130,9 +4130,9 @@ describe('CoolifyClient', () => {
         {
           id: 1,
           uuid: 'app-uuid-1',
-          name: 'tidylinker',
+          name: 'shop-frontend',
           status: 'running',
-          fqdn: 'https://tidylinker.com',
+          fqdn: 'https://shop.example.com',
           created_at: '2024-01-01',
           updated_at: '2024-01-01',
         },
@@ -4157,7 +4157,7 @@ describe('CoolifyClient', () => {
       it('should find application by name', async () => {
         mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
 
-        const result = await client.resolveApplicationUuid('tidylinker');
+        const result = await client.resolveApplicationUuid('shop-frontend');
 
         expect(result).toBe('app-uuid-1');
       });
@@ -4165,7 +4165,7 @@ describe('CoolifyClient', () => {
       it('should find application by partial name (case-insensitive)', async () => {
         mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
 
-        const result = await client.resolveApplicationUuid('TidyLink');
+        const result = await client.resolveApplicationUuid('Shop-Front');
 
         expect(result).toBe('app-uuid-1');
       });
@@ -4173,7 +4173,7 @@ describe('CoolifyClient', () => {
       it('should find application by domain', async () => {
         mockFetch.mockResolvedValueOnce(mockResponse(mockApps));
 
-        const result = await client.resolveApplicationUuid('tidylinker.com');
+        const result = await client.resolveApplicationUuid('shop.example.com');
 
         expect(result).toBe('app-uuid-1');
       });
@@ -4231,13 +4231,13 @@ describe('CoolifyClient', () => {
             ...mockApps[0],
             uuid: 'app-multi',
             // Trailing comma leaves an empty entry, which must never match.
-            fqdn: 'https://tidylinker.com,https://www.tidylinker.com,',
+            fqdn: 'https://shop.example.com,https://www.shop.example.com,',
           },
-          { ...mockApps[1], uuid: 'app-other', fqdn: 'https://www.tidylinker.com.mirror.dev' },
+          { ...mockApps[1], uuid: 'app-other', fqdn: 'https://www.shop.example.com.mirror.dev' },
         ];
         mockFetch.mockResolvedValueOnce(mockResponse(apps));
 
-        const result = await client.resolveApplicationUuid('www.tidylinker.com');
+        const result = await client.resolveApplicationUuid('www.shop.example.com');
 
         expect(result).toBe('app-multi');
       });
@@ -4658,7 +4658,7 @@ describe('CoolifyClient', () => {
       });
 
       it('should find application by domain and diagnose it', async () => {
-        const mockApps = [{ ...mockApp, uuid: 'found-uuid', fqdn: 'https://tidylinker.com' }];
+        const mockApps = [{ ...mockApp, uuid: 'found-uuid', fqdn: 'https://shop.example.com' }];
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApps)) // listApplications for lookup
           .mockResolvedValueOnce(mockResponse(mockApp))
@@ -4666,7 +4666,7 @@ describe('CoolifyClient', () => {
           .mockResolvedValueOnce(mockResponse(mockEnvVars))
           .mockResolvedValueOnce(mockResponse(mockDeployments));
 
-        const result = await client.diagnoseApplication('tidylinker.com');
+        const result = await client.diagnoseApplication('shop.example.com');
 
         expect(result.application).not.toBeNull();
       });

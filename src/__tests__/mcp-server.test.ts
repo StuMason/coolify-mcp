@@ -1072,12 +1072,12 @@ describe('CoolifyMcpServer v2', () => {
       await callApplication(server, {
         action: 'update',
         uuid: 'app-uuid',
-        custom_network_aliases: 'edator-asr',
+        custom_network_aliases: 'media-asr',
       });
 
       expect(spy).toHaveBeenCalledWith(
         'app-uuid',
-        expect.objectContaining({ custom_network_aliases: 'edator-asr' }),
+        expect.objectContaining({ custom_network_aliases: 'media-asr' }),
       );
     });
   });

@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A loopback client can pick its own callback port** (#340). `redirect_uri` was matched by exact string equality, so a native client that registers `http://127.0.0.1/callback` and then calls back on the ephemeral port it actually bound was rejected mid-redirect with a generic `invalid_request`. RFC 8252 requires the port to be free at request time for loopback redirects, and it now is. The relaxation applies only to loopback: a remote https callback differing by port is still a different endpoint and is still refused.
 
 - README answers "why not Coolify's own MCP server?" directly, with a comparison against the built-in `/mcp` and the official CLI, and recommends the built-in outright for single-instance read-only use.
+- Test fixtures, docs examples and one README example prompt now use IANA-reserved `example.com` names instead of live third-party domains, and the blast-radius example reads the same way in the changelog as it does in `docs/security.md`. No behaviour change.
 
 ## [3.2.0] - 2026-09-10
 
@@ -217,7 +218,7 @@ No runtime changes. Safe to skip; nothing to upgrade for.
 ### Added
 
 - **Human confirmation for destructive operations** (#261). `stop_all_apps` was gated on a `confirm: true` parameter the _model_ fills in — the model confirming with itself. On clients supporting [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/changelog) the confirmation now happens in client UI, outside the model's control. Covers `stop_all_apps`, `redeploy_project`, `restart_project_apps`, `system disable_api`, the application / database / service / project / environment deletes, and `bulk_env_update` above three apps.
-- Prompts state their blast radius: "take down 12 running applications (api, worker, cockpit and 4 more) across 3 servers?". Delete prompts spell out volume destruction — `delete_volumes` defaults to `true` upstream, so omitting it destroys the data. Project deletes count applications, databases and services. Env var values are never shown.
+- Prompts state their blast radius: "take down 12 running applications (api, worker, dashboard and 4 more) across 3 servers?". Delete prompts spell out volume destruction — `delete_volumes` defaults to `true` upstream, so omitting it destroys the data. Project deletes count applications, databases and services. Env var values are never shown.
 - Progressive enhancement: clients without elicitation (Claude Desktop, claude.ai) behave exactly as before. Once a client advertises support it fails closed — decline, cancel, timeout and transport errors all abort. The tool call's abort signal is threaded through, so a client giving up at 60s cannot leave a prompt live that executes at t=90s.
 - `COOLIFY_MCP_ELICITATION=off` escape hatch, for a client that advertises elicitation but does not implement it.
 - Tool count unchanged at 44.
@@ -322,7 +323,7 @@ No runtime changes. Safe to skip; nothing to upgrade for.
 
 ### Added
 
-- **`custom_network_aliases` on `application` update** (#254) — gives an app container a stable DNS name for app-to-app traffic on a shared network. App containers get `<uuid>-<deploy-suffix>` container names that change every deploy (only databases get a uuid hostname), so this field is the only way to wire e.g. `ASR_URL=http://edator-asr:9000` between apps. Added to `UpdateApplicationRequest` and the `application` tool schema (update only — Coolify's create endpoints don't accept it).
+- **`custom_network_aliases` on `application` update** (#254) — gives an app container a stable DNS name for app-to-app traffic on a shared network. App containers get `<uuid>-<deploy-suffix>` container names that change every deploy (only databases get a uuid hostname), so this field is the only way to wire e.g. `ASR_URL=http://media-asr:9000` between apps. Added to `UpdateApplicationRequest` and the `application` tool schema (update only — Coolify's create endpoints don't accept it).
 - **MCPB bundle for one-click Claude Desktop install** — every release now attaches `coolify-mcp.mcpb` to the GitHub release; drag it into Claude Desktop Settings → Extensions and enter your Coolify URL + token. Built from `manifest.json` via `@anthropic-ai/mcpb` in the publish workflow. No Node install or JSON config editing needed.
 - **Automated MCP Registry publishing** — the publish workflow now pushes `server.json` to registry.modelcontextprotocol.io via `mcp-publisher` (GitHub OIDC) on every release, so the registry listing can no longer go stale.
 
