@@ -151,10 +151,12 @@ This server collects nothing about you. There is no telemetry, no analytics and
 no phone-home, and there is no hosted service behind it.
 
 Your Coolify API token goes to the instance you configured and nowhere else. The
-only other outbound request is a documentation index refresh from
-`coolify.io`, which carries a cache validator and no credentials. Tool results go
-to your own MCP client, whose privacy policy governs what happens next. The
-audit log writes to your own stderr and never contains token values.
+only other outbound requests are a one-off documentation index refresh from
+`coolify.io`, which carries a cache validator and no credentials, and in HTTP
+mode a credential-free fetch of the connecting client's own metadata document.
+Tool results go to your own MCP client, whose privacy policy governs what
+happens next. The audit log writes to your own stderr and never contains token
+values.
 
 Full detail, including where in the code each claim is implemented, is in
 [PRIVACY.md](PRIVACY.md).
