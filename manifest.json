@@ -11,6 +11,7 @@
   "homepage": "https://stumason.dev",
   "documentation": "https://github.com/StuMason/coolify-mcp#readme",
   "support": "https://github.com/StuMason/coolify-mcp/issues",
+  "privacy_policies": ["https://github.com/StuMason/coolify-mcp/blob/main/PRIVACY.md"],
   "repository": {
     "type": "git",
     "url": "https://github.com/StuMason/coolify-mcp"
