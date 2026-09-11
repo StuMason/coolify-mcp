@@ -1,5 +1,6 @@
 {
   "name": "deployment",
+  "title": "Manage deployment",
   "description": "Manage deployment: get/cancel/list_for_app. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs.",
   "annotations": {
     "destructiveHint": true

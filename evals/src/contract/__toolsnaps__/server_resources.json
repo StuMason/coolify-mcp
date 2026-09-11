@@ -1,5 +1,6 @@
 {
   "name": "server_resources",
+  "title": "Server resources",
   "description": "Resources on server",
   "annotations": {
     "readOnlyHint": true

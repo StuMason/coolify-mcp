@@ -18,6 +18,8 @@ const SERVER_ENTRY = fileURLToPath(new URL('../../../dist/index.js', import.meta
 
 export interface McpToolInfo {
   name: string;
+  /** Display label (MCP 2025-06-18). `name` is what the model calls. */
+  title?: string;
   description?: string;
   inputSchema: unknown;
   annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };

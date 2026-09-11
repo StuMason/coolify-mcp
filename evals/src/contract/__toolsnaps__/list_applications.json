@@ -1,5 +1,6 @@
 {
   "name": "list_applications",
+  "title": "List applications",
   "description": "List apps (summary)",
   "annotations": {
     "readOnlyHint": true

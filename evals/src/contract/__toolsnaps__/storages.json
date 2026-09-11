@@ -1,5 +1,6 @@
 {
   "name": "storages",
+  "title": "Manage storages",
   "description": "Manage persistent/file storages for app, database, or service: list/create/update/delete, plus volume backups (v4.2+): backup_set/backup_delete/backup_run. backup_set REPLACES the schedule — omitted fields revert to defaults and there is no read-back endpoint, so send it whole. backup_delete deletes the archives too.",
   "annotations": {
     "destructiveHint": true

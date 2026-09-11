@@ -1,5 +1,6 @@
 {
   "name": "projects",
+  "title": "Manage projects",
   "description": "Manage projects: list/get/create/update/delete",
   "annotations": {
     "destructiveHint": true

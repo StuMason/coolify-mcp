@@ -1,5 +1,6 @@
 {
   "name": "redeploy_project",
+  "title": "Redeploy project",
   "description": "Redeploy all apps in project",
   "annotations": {
     "destructiveHint": true

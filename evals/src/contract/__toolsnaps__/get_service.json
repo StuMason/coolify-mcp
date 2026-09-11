@@ -1,5 +1,6 @@
 {
   "name": "get_service",
+  "title": "Service details",
   "description": "Service details. Credentials (compose bodies with resolved passwords, webhook secrets) are masked by default; pass reveal: true when you explicitly need them.",
   "annotations": {
     "readOnlyHint": true

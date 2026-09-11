@@ -1,5 +1,6 @@
 {
   "name": "application_logs",
+  "title": "Application logs",
   "description": "Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.",
   "annotations": {
     "readOnlyHint": true

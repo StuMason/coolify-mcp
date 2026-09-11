@@ -1,5 +1,6 @@
 {
   "name": "teams",
+  "title": "Teams",
   "description": "Manage teams: list/get/get_members/get_current/get_current_members",
   "annotations": {
     "readOnlyHint": true

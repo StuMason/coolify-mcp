@@ -1,5 +1,6 @@
 {
   "name": "get_version",
+  "title": "Coolify version",
   "description": "Coolify API version",
   "annotations": {
     "readOnlyHint": true

@@ -57,6 +57,7 @@ describe('fleet tool contract', () => {
       JSON.stringify(
         {
           name: t!.name,
+          title: t!.title,
           description: t!.description,
           annotations: t!.annotations,
           inputSchema: t!.inputSchema,
@@ -76,10 +77,17 @@ describe('fleet tool contract', () => {
 
   it('fleet tool list token budget holds', () => {
     // The fleet surface costs ~46 copies of the `instance` property on top of
-    // the single-instance ~7.7k. Fleet users opt into that; the single-instance
-    // gate in toolsnaps.test.ts is the one that protects everyone else.
+    // the single-instance surface. Fleet users opt into that; the
+    // single-instance gate in toolsnaps.test.ts is the one that protects
+    // everyone else.
+    //
+    // Unlike that one, this ceiling is a plain growth alarm, not a figure
+    // coupled to anything published — the fleet number is not advertised in
+    // the docs, so there is nothing for it to drift away from. Measured at
+    // ~9,065 when this was last moved. Raise it deliberately, and only after
+    // checking the single-instance gate is still the binding one.
     const chars = JSON.stringify(ctx.toolInfo).length;
-    expect(chars / 4).toBeLessThan(9000);
+    expect(chars / 4).toBeLessThan(9200);
   });
 });
 

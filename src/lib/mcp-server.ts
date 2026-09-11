@@ -618,6 +618,70 @@ export const TOOL_ANNOTATIONS = {
  */
 export type ToolName = keyof typeof TOOL_ANNOTATIONS;
 
+/**
+ * Human display names, one per tool (#406).
+ *
+ * `title` is the label a client shows a person; `name` is what the model
+ * calls. The MCP spec has carried a top-level `title` since 2025-06-18, and
+ * the Connectors Directory requires one on every submitted tool.
+ *
+ * Typed as `Record<ToolName, string>` rather than `satisfies`, so the compiler
+ * fails on a tool that has no title, the same way {@link TOOL_ANNOTATIONS}
+ * fails on one with no annotations. There is no default to fall back to: a
+ * missing title is a gap in the UI, not a shrug.
+ *
+ * Kept short on purpose. Titles ride `tools/list`, which every session pays
+ * for on connect, and the budget guard in `evals/` counts them.
+ */
+const TOOL_TITLES: Record<ToolName, string> = {
+  application: 'Manage application',
+  application_logs: 'Application logs',
+  bulk_env_update: 'Bulk update env var',
+  cloud_tokens: 'Cloud provider tokens',
+  control: 'Start, stop or restart',
+  database: 'Manage database',
+  database_backups: 'Database backups',
+  deploy: 'Deploy',
+  deployment: 'Manage deployment',
+  diagnose_app: 'Diagnose application',
+  diagnose_server: 'Diagnose server',
+  env_vars: 'Environment variables',
+  environments: 'Manage environments',
+  find_issues: 'Find estate issues',
+  get_application: 'Application details',
+  get_database: 'Database details',
+  get_infrastructure_overview: 'Infrastructure overview',
+  get_mcp_version: 'MCP server version',
+  get_server: 'Server details',
+  get_service: 'Service details',
+  get_version: 'Coolify version',
+  github_apps: 'GitHub Apps',
+  hetzner: 'Hetzner cloud',
+  list_applications: 'List applications',
+  list_databases: 'List databases',
+  list_deployments: 'List deployments',
+  list_destinations: 'List destinations',
+  list_instances: 'List Coolify instances',
+  list_servers: 'List servers',
+  list_services: 'List services',
+  logs: 'Container logs',
+  private_keys: 'SSH private keys',
+  projects: 'Manage projects',
+  redeploy_project: 'Redeploy project',
+  restart_project_apps: 'Restart project apps',
+  scheduled_tasks: 'Scheduled tasks',
+  search_docs: 'Search Coolify docs',
+  server_domains: 'Server domains',
+  server_resources: 'Server resources',
+  service: 'Manage service',
+  stop_all_apps: 'Emergency stop all apps',
+  storages: 'Manage storages',
+  system: 'System and API access',
+  tags: 'Manage tags',
+  teams: 'Teams',
+  validate_server: 'Validate server',
+};
+
 /** Tools that exist only when more than one instance is configured (#367). */
 export const FLEET_ONLY_TOOLS: ReadonlySet<ToolName> = new Set<ToolName>(['list_instances']);
 
@@ -794,7 +858,7 @@ export class CoolifyMcpServer extends McpServer {
     this.registeredTools.add(name);
     this.registerTool(
       name,
-      { description, inputSchema: z.object(shape), annotations },
+      { title: TOOL_TITLES[name], description, inputSchema: z.object(shape), annotations },
       audited as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
   }

@@ -1,5 +1,6 @@
 {
   "name": "server_domains",
+  "title": "Server domains",
   "description": "Domains on server",
   "annotations": {
     "readOnlyHint": true

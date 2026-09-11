@@ -2399,9 +2399,25 @@ describe('tool annotations (#260)', () => {
       expect(stopAll?.annotations?.destructiveHint).toBe(true);
     });
 
+    // `Record<ToolName, string>` makes a *missing* title a compile error, but
+    // `''` typechecks perfectly well and would ship a blank label — which is
+    // the one thing the table's doc comment says must not happen. The type
+    // cannot catch that; this can.
+    it('every tool ships a non-empty display title', async () => {
+      const tools = await listTools();
+      expect(tools.filter((t) => !t.title?.trim()).map((t) => t.name)).toEqual([]);
+    });
+
+    it('titles are distinct, so two tools never render as the same label', async () => {
+      const tools = await listTools();
+      const titles = tools.map((t) => t.title);
+      expect(titles.length).toBe(new Set(titles).size);
+    });
+
     // #260 claimed annotations were free because they ride the existing
     // tools/list response. They ride it, but they are not free — and this
-    // repo's headline is a ~6,600 token tool list, so the number needs a guard.
+    // repo's headline is a published token figure for the tool list, so the
+    // number needs a guard.
     // Measured on the real payload rather than a reconstruction of it.
     it('keeps the annotation payload small by emitting only non-default hints', async () => {
       const tools = await listTools();

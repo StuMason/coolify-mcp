@@ -1,5 +1,6 @@
 {
   "name": "cloud_tokens",
+  "title": "Cloud provider tokens",
   "description": "Manage cloud provider tokens (Hetzner/DigitalOcean): list/get/create/update/delete/validate",
   "annotations": {
     "destructiveHint": true

@@ -1,5 +1,6 @@
 {
   "name": "get_infrastructure_overview",
+  "title": "Infrastructure overview",
   "description": "Overview of all resources with counts",
   "annotations": {
     "readOnlyHint": true
