@@ -16,7 +16,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import type { ServerContext } from '@modelcontextprotocol/server';
-import { confirmDestructiveModern, summaryDigest } from '../lib/elicit.js';
+import { confirmDestructiveModern, createConfirmationCodec, summaryDigest } from '../lib/elicit.js';
 
 /** A sealed state that verifies, standing in for the SDK codec. */
 const SEALED = 'sealed-state';
@@ -233,5 +233,80 @@ describe('confirmDestructiveModern: when the pre-flight lookup fails', () => {
     // The human said yes to "I could not check". Now it can be checked, and
     // the answer is 12 applications they were never shown.
     expect(result).toMatchObject({ status: 'refused', reason: 'stale_confirmation' });
+  });
+});
+
+describe('the confirmation signing key', () => {
+  const swapKey = async (value: string | undefined, body: () => void): Promise<void> => {
+    const previous = process.env.MCP_REQUEST_STATE_KEY;
+    if (value === undefined) delete process.env.MCP_REQUEST_STATE_KEY;
+    else process.env.MCP_REQUEST_STATE_KEY = value;
+    try {
+      body();
+    } finally {
+      if (previous === undefined) delete process.env.MCP_REQUEST_STATE_KEY;
+      else process.env.MCP_REQUEST_STATE_KEY = previous;
+    }
+  };
+
+  it('refuses a configured key too short to be one', async () => {
+    await swapKey('too-short', () => {
+      // Failing at construction beats signing with a weak key and finding out
+      // never, because the failure mode of a weak key is silence.
+      expect(() => createConfirmationCodec()).toThrow(/at least 32 bytes/);
+      expect(() => createConfirmationCodec()).toThrow(/openssl rand -hex 32/);
+    });
+  });
+
+  it('accepts a configured key of exactly the minimum length', async () => {
+    await swapKey('x'.repeat(32), () => {
+      expect(() => createConfirmationCodec()).not.toThrow();
+    });
+  });
+
+  it('says so on stderr when it generates one for an internet-facing server', async () => {
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await swapKey(undefined, () => {
+        createConfirmationCodec({ announceGeneratedKey: true });
+      });
+      // A generated key is correct but has a consequence the operator cannot
+      // otherwise discover: confirmations in flight across a restart are
+      // refused, and a second replica cannot verify the first one's state.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('MCP_REQUEST_STATE_KEY');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('stays quiet about it on stdio, where one process serves every round', async () => {
+    const warn = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await swapKey(undefined, () => {
+        createConfirmationCodec();
+      });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reuses one generated key across server instances in a process', async () => {
+    await swapKey(undefined, () => {
+      // HTTP builds a fresh server per request, so a key generated per
+      // instance would mean the round that mints the state and the round that
+      // verifies it disagree, and no confirmation could ever succeed.
+      const a = createConfirmationCodec();
+      const b = createConfirmationCodec();
+      expect(a).not.toBe(b);
+    });
+    const ctx = {
+      mcpReq: { method: 'tools/call' },
+    } as unknown as Parameters<ReturnType<typeof createConfirmationCodec>['mint']>[1];
+    const minted = await createConfirmationCodec().mint({ digest: 'abc' }, ctx);
+    // Minted by one codec instance, verified by another: the round trip HTTP
+    // mode actually performs.
+    await expect(createConfirmationCodec().verify(minted, ctx)).resolves.toEqual({ digest: 'abc' });
   });
 });
