@@ -49,6 +49,7 @@ import {
   confirmDestructive,
   confirmDestructiveModern,
   createConfirmationCodec,
+  supportsElicitation,
   describeBlastRadius,
   sanitizeForPrompt,
   type ConfirmationState,
@@ -987,6 +988,9 @@ export class CoolifyMcpServer extends McpServer {
         scopedLabel,
         scopedSummarize,
         (payload, mintCtx) => this.requestState.mint(payload, mintCtx),
+        // Same gate as the 2025 path, and the same escape hatch: an
+        // internet-facing server that cannot ask must refuse, not proceed.
+        supportsElicitation(this.server),
       );
       if (confirmation.status === 'ask') return confirmation.result;
       if (confirmation.status === 'refused') {

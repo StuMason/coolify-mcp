@@ -41,9 +41,26 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { isInputRequiredResult } from '@modelcontextprotocol/server';
 
 /** What happened. `refused` is a decision, `error` is a fault — see {@link AuditRefusal}. */
-export type AuditOutcome = 'ok' | 'error' | 'refused';
+export type AuditOutcome =
+  | 'ok'
+  | 'error'
+  | 'refused'
+  /**
+   * The call raised a confirmation and has not been answered yet (#341).
+   *
+   * Protocol revision 2026-07-28 answers a guarded call with `input_required`
+   * and the client retries it, so one guarded operation writes two lines. The
+   * first one is a question, not a result: recording it as `ok` would report a
+   * destructive tool call as having succeeded when nothing ran, and anyone
+   * counting successful destructive operations would double every one.
+   *
+   * Worth counting in its own right — a confirmation raised and never answered
+   * is a thing an operator wants to be able to see.
+   */
+  | 'awaiting_confirmation';
 
 /**
  * Why a call was refused, as a category rather than prose.
@@ -213,6 +230,8 @@ export async function auditedCall<T>(
     const result = await callContext.run(slot, async () => run());
     if (slot.reason) {
       finish('refused', slot.reason);
+    } else if (isInputRequiredResult(result)) {
+      finish('awaiting_confirmation');
     } else if (isErrorResult(result)) {
       finish('error');
     } else {

@@ -39,6 +39,7 @@ const CHECKED_VARS = {
     'COOLIFY_BASE_URL',
     'COOLIFY_ACCESS_TOKEN',
     'MCP_PUBLIC_URL',
+    'MCP_REQUEST_STATE_KEY',
     'CF_ACCESS_CLIENT_ID',
     'CF_ACCESS_CLIENT_SECRET',
   ],
@@ -115,6 +116,20 @@ export function checkStartupConfig(
             'Re-paste it without it.',
         );
       }
+    }
+  }
+
+  // A key too short to sign with is a boot-time shape problem, not something to
+  // discover once per request when a confirmation fails deep inside a tool call
+  // (#341). The codec throws on it; this says so while the operator is still
+  // looking at the terminal.
+  const stateKey = env.MCP_REQUEST_STATE_KEY;
+  if (stateKey !== undefined && stateKey !== '' && !looksUnexpanded(stateKey)) {
+    if (Buffer.byteLength(stateKey, 'utf8') < 32) {
+      errors.push(
+        'MCP_REQUEST_STATE_KEY is shorter than 32 bytes, which is the minimum for the HMAC that ' +
+          'signs destructive-confirmation state. Generate one with: openssl rand -hex 32',
+      );
     }
   }
 

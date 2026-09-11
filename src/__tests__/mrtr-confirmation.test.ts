@@ -45,6 +45,7 @@ describe('confirmDestructiveModern: round one', () => {
       'Stop everything',
       () => 'stop 12 running applications?',
       mint as never,
+      true,
     );
 
     expect(result.status).toBe('ask');
@@ -63,6 +64,7 @@ describe('confirmDestructiveModern: round one', () => {
       'Stop everything',
       () => null,
       mint as never,
+      true,
     );
 
     // Asking a human to confirm a no-op is how they learn the dialog is noise.
@@ -75,6 +77,7 @@ describe('confirmDestructiveModern: round one', () => {
       'Stop everything',
       () => 'stop 12 running applications?',
       mint as never,
+      true,
     );
 
     if (result.status !== 'ask') throw new Error('unreachable');
@@ -99,6 +102,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => summary,
       mint as never,
+      true,
     );
 
     expect(result.status).toBe('approved');
@@ -110,6 +114,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => summary,
       mint as never,
+      true,
     );
 
     expect(result).toMatchObject({ status: 'refused', reason: 'declined' });
@@ -121,6 +126,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => summary,
       mint as never,
+      true,
     );
 
     // Dismissing a dialog is not the same act as answering no, and #408 is
@@ -134,6 +140,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => 'stop 14 running applications?',
       mint as never,
+      true,
     );
 
     // The approval described 12. Applying it to 14 is exactly the thing the
@@ -148,6 +155,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => summary,
       mint as never,
+      true,
     );
 
     // Fail closed: an accept nobody can tie to a question this server asked is
@@ -161,6 +169,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => summary,
       mint as never,
+      true,
     );
 
     expect(result).toMatchObject({ status: 'refused', reason: 'unavailable' });
@@ -172,6 +181,7 @@ describe('confirmDestructiveModern: round two', () => {
       'Stop everything',
       () => null,
       mint as never,
+      true,
     );
 
     // The estate went idle while the human was reading. Running the no-op is
@@ -191,6 +201,7 @@ describe('confirmDestructiveModern: when the pre-flight lookup fails', () => {
       'Stop everything',
       boom,
       mint as never,
+      true,
     );
 
     // A human confirming a vaguer question beats an unconfirmed destructive
@@ -206,11 +217,12 @@ describe('confirmDestructiveModern: when the pre-flight lookup fails', () => {
     const result = await confirmDestructiveModern(
       ctxFor({
         inputResponses: { confirm: { action: 'accept' } },
-        requestState: { digest: 'degraded' },
+        requestState: { digest: summaryDigest('degraded:Stop everything') },
       }),
       'Stop everything',
       boom,
       mint as never,
+      true,
     );
 
     // Digesting the error text would make "Coolify is still down" look like a
@@ -219,15 +231,35 @@ describe('confirmDestructiveModern: when the pre-flight lookup fails', () => {
     expect(result.status).toBe('approved');
   });
 
+  it('will not accept a degraded seal minted for a different operation', async () => {
+    const result = await confirmDestructiveModern(
+      ctxFor({
+        inputResponses: { confirm: { action: 'accept' } },
+        requestState: { digest: summaryDigest('degraded:Delete the database') },
+      }),
+      'Stop everything',
+      boom,
+      mint as never,
+      true,
+    );
+
+    // A shared constant here would let state sealed for one degraded
+    // confirmation verify against a different degraded operation from the same
+    // client inside the TTL, which is exactly the detachment the seal exists to
+    // prevent.
+    expect(result).toMatchObject({ status: 'refused', reason: 'stale_confirmation' });
+  });
+
   it('refuses a degraded approval once the estate is readable again', async () => {
     const result = await confirmDestructiveModern(
       ctxFor({
         inputResponses: { confirm: { action: 'accept' } },
-        requestState: { digest: 'degraded' },
+        requestState: { digest: summaryDigest('degraded:Stop everything') },
       }),
       'Stop everything',
       () => 'stop 12 running applications?',
       mint as never,
+      true,
     );
 
     // The human said yes to "I could not check". Now it can be checked, and
@@ -306,5 +338,31 @@ describe('the confirmation signing key', () => {
     // Minted by one codec instance, verified by another: the round trip HTTP
     // mode actually performs.
     await expect(createConfirmationCodec().verify(minted, ctx)).resolves.toEqual({ digest: 'abc' });
+  });
+});
+
+describe('confirmDestructiveModern: a client that cannot be asked', () => {
+  it('refuses with the actionable message rather than sending an unwanted request', async () => {
+    const result = await confirmDestructiveModern(
+      ctxFor({}),
+      'Stop everything',
+      () => 'stop 12 running applications?',
+      mint as never,
+      false,
+    );
+
+    // Same fail-closed outcome as the 2025 path, and the same prose: embedding
+    // a request in a client that never declared elicitation just moves the
+    // failure somewhere harder to read.
+    expect(result).toMatchObject({ status: 'refused', reason: 'no_elicitation' });
+    if (result.status !== 'refused') throw new Error('unreachable');
+    expect(result.message).toContain('use the stdio server locally');
+  });
+
+  it('does not even build the summary, so a broken Coolify cannot mask the refusal', async () => {
+    const summarize = jest.fn(() => 'stop 12 running applications?');
+    await confirmDestructiveModern(ctxFor({}), 'Stop everything', summarize, mint as never, false);
+
+    expect(summarize).not.toHaveBeenCalled();
   });
 });

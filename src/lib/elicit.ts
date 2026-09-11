@@ -314,7 +314,20 @@ export function sanitizeForPrompt(name: string): string {
 export function describeBlastRadius(noun: string, names: string[]): string {
   const count = `${names.length} ${noun}${names.length === 1 ? '' : 's'}`;
   if (names.length === 0) return count;
-  const safe = names.map(sanitizeForPrompt);
+  // Sorted, so the same set of resources always renders the same string.
+  //
+  // Coolify does not promise an order, and on revision 2026-07-28 this text is
+  // digested into the sealed confirmation and compared against a second render
+  // seconds later (#341). Unsorted, a reordering of the same twelve names — or
+  // a different twelve surviving the `and N more` truncation — reads as a
+  // changed blast radius and refuses an approval the human legitimately gave,
+  // with a re-run offering the same coin flip. A count change still refuses,
+  // which is the check that was wanted.
+  //
+  // Codepoint compare, not localeCompare: collation is locale-dependent, and a
+  // prompt that sorts differently on the operator's machine than on the server
+  // would reintroduce exactly the instability this removes.
+  const safe = [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map(sanitizeForPrompt);
   if (safe.length <= MAX_NAMED) return `${count} (${safe.join(', ')})`;
   const shown = safe.slice(0, MAX_NAMED).join(', ');
   return `${count} (${shown} and ${safe.length - MAX_NAMED} more)`;
@@ -365,7 +378,15 @@ export function summaryDigest(summary: string): string {
  * text would turn "Coolify is still down on the retry" into a spurious
  * stale-confirmation refusal after the human already said yes.
  */
-const DEGRADED_DIGEST = 'degraded';
+function degradedDigest(label: string): string {
+  // Deliberately derived from `label`, not from the error text. Two failures
+  // are rarely byte-identical, so digesting the message would refuse a
+  // legitimate approval; a bare constant would go the other way and let state
+  // sealed for a degraded `delete service X` verify against a degraded
+  // `stop_all_apps` from the same client inside the TTL. `label` is a static
+  // string per operation and needs no lookup, which is its whole purpose.
+  return summaryDigest(`degraded:${label}`);
+}
 
 async function describe(
   label: string,
@@ -380,7 +401,7 @@ async function describe(
       text:
         `${label}\n\nProceed? ` +
         `(Could not load the details first: ${error instanceof Error ? error.message : String(error)})`,
-      digest: DEGRADED_DIGEST,
+      digest: degradedDigest(label),
     };
   }
 }
@@ -419,7 +440,26 @@ export async function confirmDestructiveModern(
   label: string,
   summarize: () => string | null | Promise<string | null>,
   mint: (payload: ConfirmationState, ctx: ServerContext) => Promise<string>,
+  canAsk: boolean,
 ): Promise<ModernConfirmation> {
+  // Asking a client that never declared elicitation produces an embedded
+  // request it did not agree to receive, and whatever its SDK does with that
+  // becomes somebody's debugging session. Refuse with the message that says
+  // what to do instead — the same fail-closed outcome, legible.
+  //
+  // This is also where `COOLIFY_MCP_ELICITATION=off` is honoured, since it is
+  // folded into the same capability check.
+  if (!canAsk) {
+    return {
+      status: 'refused',
+      reason: 'no_elicitation',
+      message: abortText(
+        `this server requires human confirmation for destructive operations, and this client does not support elicitation. ` +
+          `Read-only tools work normally. For destructive operations, connect with a client that supports elicitation or use the stdio server locally`,
+      ),
+    };
+  }
+
   const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM_KEY);
 
   if (answer.kind === 'missing') {
@@ -501,9 +541,26 @@ const CONFIRMATION_TTL_SECONDS = 600;
  * Both fail closed — the operation is refused, never wrongly approved — so this
  * is an availability trade, not a security one.
  */
+/**
+ * Said once per process, beside the generation it describes.
+ *
+ * HTTP mode builds a fresh `CoolifyMcpServer` for every request, so warning
+ * from the codec factory would print this between every pair of audit lines —
+ * non-JSON prose interleaved through the audit stream, on the default
+ * configuration, forever.
+ */
+function announceGeneratedKey(): void {
+  console.error(
+    'coolify-mcp: MCP_REQUEST_STATE_KEY is unset, so confirmation state is signed with a key ' +
+      'generated on first use. Confirmations in flight across a restart will be refused and must ' +
+      'be re-confirmed. Set it to at least 32 bytes to survive restarts and to run more than ' +
+      'one replica.',
+  );
+}
+
 let generatedKey: Uint8Array | undefined;
 
-function confirmationKey(): Uint8Array | string {
+function confirmationKey(announce: boolean): Uint8Array | string {
   const configured = process.env.MCP_REQUEST_STATE_KEY;
   if (configured === undefined || configured === '') {
     // Per PROCESS, not per server instance. HTTP mode builds a fresh
@@ -513,7 +570,10 @@ function confirmationKey(): Uint8Array | string {
     // That is a real failure mode, caught by the interop test rather than by
     // reading: it fails closed, so it looks like tight security rather than a
     // bug.
-    generatedKey ??= randomBytes(32);
+    if (generatedKey === undefined) {
+      generatedKey = randomBytes(32);
+      if (announce) announceGeneratedKey();
+    }
     return generatedKey;
   }
   if (Buffer.byteLength(configured, 'utf8') < 32) {
@@ -539,17 +599,8 @@ function confirmationKey(): Uint8Array | string {
 export function createConfirmationCodec(options?: {
   announceGeneratedKey?: boolean;
 }): RequestStateCodec<ConfirmationState> {
-  const configured = process.env.MCP_REQUEST_STATE_KEY;
-  if ((configured === undefined || configured === '') && options?.announceGeneratedKey === true) {
-    console.error(
-      'coolify-mcp: MCP_REQUEST_STATE_KEY is unset, so confirmation state is signed with a key ' +
-        'generated at startup. Confirmations in flight across a restart will be refused and must ' +
-        'be re-confirmed. Set it to at least 32 bytes to survive restarts and to run more than ' +
-        'one replica.',
-    );
-  }
   return createRequestStateCodec<ConfirmationState>({
-    key: confirmationKey(),
+    key: confirmationKey(options?.announceGeneratedKey === true),
     ttlSeconds: CONFIRMATION_TTL_SECONDS,
     bind: (ctx) => `${ctx.mcpReq.method} ${ctx.http?.authInfo?.clientId ?? ''}`,
   });
