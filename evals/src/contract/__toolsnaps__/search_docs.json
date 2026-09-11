@@ -1,5 +1,6 @@
 {
   "name": "search_docs",
+  "title": "Search Coolify docs",
   "description": "Search the official Coolify docs index. Returns matching pages (title, url, one-line description) ranked by relevance — fetch the url for full detail.",
   "annotations": {
     "readOnlyHint": true

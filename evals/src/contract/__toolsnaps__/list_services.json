@@ -1,5 +1,6 @@
 {
   "name": "list_services",
+  "title": "List services",
   "description": "List services (summary)",
   "annotations": {
     "readOnlyHint": true

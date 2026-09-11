@@ -1,5 +1,6 @@
 {
   "name": "github_apps",
+  "title": "GitHub Apps",
   "description": "Manage GitHub Apps: list/get/create/update/delete/list_repos/list_branches",
   "annotations": {
     "destructiveHint": true

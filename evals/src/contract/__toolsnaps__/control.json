@@ -1,5 +1,6 @@
 {
   "name": "control",
+  "title": "Start, stop or restart",
   "description": "Start/stop/restart app, database, or service",
   "annotations": {
     "destructiveHint": true

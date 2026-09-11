@@ -1,5 +1,6 @@
 {
   "name": "diagnose_server",
+  "title": "Diagnose server",
   "description": "Server diagnostics by UUID/name/IP",
   "annotations": {
     "readOnlyHint": true

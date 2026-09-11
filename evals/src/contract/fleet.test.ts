@@ -57,6 +57,7 @@ describe('fleet tool contract', () => {
       JSON.stringify(
         {
           name: t!.name,
+          title: t!.title,
           description: t!.description,
           annotations: t!.annotations,
           inputSchema: t!.inputSchema,
@@ -76,10 +77,12 @@ describe('fleet tool contract', () => {
 
   it('fleet tool list token budget holds', () => {
     // The fleet surface costs ~46 copies of the `instance` property on top of
-    // the single-instance ~7.7k. Fleet users opt into that; the single-instance
-    // gate in toolsnaps.test.ts is the one that protects everyone else.
+    // the single-instance surface. Fleet users opt into that; the
+    // single-instance gate in toolsnaps.test.ts is the one that protects
+    // everyone else, and it carries the note about keeping this coupled to the
+    // published figure.
     const chars = JSON.stringify(ctx.toolInfo).length;
-    expect(chars / 4).toBeLessThan(9000);
+    expect(chars / 4).toBeLessThan(9200);
   });
 });
 

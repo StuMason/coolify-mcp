@@ -1,5 +1,6 @@
 {
   "name": "find_issues",
+  "title": "Find estate issues",
   "description": "Scan infrastructure for problems",
   "annotations": {
     "readOnlyHint": true

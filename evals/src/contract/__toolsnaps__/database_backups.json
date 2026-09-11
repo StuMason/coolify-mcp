@@ -1,5 +1,6 @@
 {
   "name": "database_backups",
+  "title": "Database backups",
   "description": "Manage backups: list_schedules/get_schedule/list_executions/get_execution/create/update/delete/delete_execution",
   "annotations": {
     "destructiveHint": true

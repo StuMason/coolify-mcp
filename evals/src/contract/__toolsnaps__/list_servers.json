@@ -1,5 +1,6 @@
 {
   "name": "list_servers",
+  "title": "List servers",
   "description": "List servers (summary)",
   "annotations": {
     "readOnlyHint": true

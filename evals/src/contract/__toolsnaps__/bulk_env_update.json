@@ -1,5 +1,6 @@
 {
   "name": "bulk_env_update",
+  "title": "Bulk update env var",
   "description": "Update env var across multiple apps",
   "annotations": {
     "destructiveHint": true

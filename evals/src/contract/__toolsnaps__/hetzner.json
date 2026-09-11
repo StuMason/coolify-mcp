@@ -1,5 +1,6 @@
 {
   "name": "hetzner",
+  "title": "Hetzner cloud",
   "description": "Hetzner cloud: list_locations/list_server_types/list_images/list_ssh_keys/create_server",
   "annotations": {
     "destructiveHint": false

@@ -1,5 +1,6 @@
 {
   "name": "restart_project_apps",
+  "title": "Restart project apps",
   "description": "Restart all apps in project",
   "annotations": {
     "destructiveHint": true

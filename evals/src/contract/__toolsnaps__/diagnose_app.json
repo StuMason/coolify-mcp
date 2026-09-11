@@ -1,5 +1,6 @@
 {
   "name": "diagnose_app",
+  "title": "Diagnose application",
   "description": "App diagnostics by UUID/name/domain",
   "annotations": {
     "readOnlyHint": true

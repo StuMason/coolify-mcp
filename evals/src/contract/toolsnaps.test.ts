@@ -65,6 +65,10 @@ describe('tool contract', () => {
           JSON.stringify(
             {
               name: t.name,
+              // Display label, not model-facing text, but it still ships on
+              // every tools/list and still costs tokens — so it belongs in the
+              // snapshot like everything else a client receives.
+              title: t.title,
               description: t.description,
               annotations: t.annotations,
               inputSchema: t.inputSchema,
@@ -101,11 +105,16 @@ describe('tool contract', () => {
   });
 
   it('tool list token budget holds', () => {
-    // ~4 chars/token heuristic over the serialized tools/list payload. The
-    // v2 redesign's headline is a ~6.6k-token surface; fail loudly before a
-    // description edit quietly doubles what every session pays to connect.
+    // ~4 chars/token heuristic over the serialized tools/list payload, which
+    // is what every session pays on connect.
+    //
+    // The ceiling tracks the figure published in README.md and docs/tools.md,
+    // with only a small margin above it. That coupling is the point: the old
+    // ceiling sat ~1,400 tokens above the published number, so the surface
+    // grew through 3.x without tripping anything and the docs quietly went
+    // stale. Move this and the published figure together, or not at all.
     const chars = JSON.stringify(ctx.toolInfo).length;
-    expect(chars / 4).toBeLessThan(8000);
+    expect(chars / 4).toBeLessThan(8400);
   });
 });
 

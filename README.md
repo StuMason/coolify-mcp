@@ -71,7 +71,7 @@ Every tool takes an `action`; run one with no arguments and it lists what it acc
 - **Move across the whole estate.** `bulk_env_update`, `redeploy_project`, `stop_all_apps`, each behind a human confirmation that states the blast radius.
 - **Search the Coolify docs** with `search_docs`.
 
-Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 6,600 tokens of context.
+Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 8,300 tokens of context.
 
 ## Workflows, not just tools
 

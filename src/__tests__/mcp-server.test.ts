@@ -2401,7 +2401,8 @@ describe('tool annotations (#260)', () => {
 
     // #260 claimed annotations were free because they ride the existing
     // tools/list response. They ride it, but they are not free — and this
-    // repo's headline is a ~6,600 token tool list, so the number needs a guard.
+    // repo's headline is a published token figure for the tool list, so the
+    // number needs a guard.
     // Measured on the real payload rather than a reconstruction of it.
     it('keeps the annotation payload small by emitting only non-default hints', async () => {
       const tools = await listTools();

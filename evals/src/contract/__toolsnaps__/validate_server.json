@@ -1,5 +1,6 @@
 {
   "name": "validate_server",
+  "title": "Validate server",
   "description": "Validate server connection",
   "annotations": {
     "destructiveHint": false,

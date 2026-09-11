@@ -43,7 +43,7 @@ appears. Single-instance installs never see either.
 ## How the surface is shaped
 
 - **Consolidated by action.** Related operations share one tool with an
-  `action` parameter, so the whole tool list costs roughly 6,600 tokens
+  `action` parameter, so the whole tool list costs roughly 8,300 tokens
   instead of the 43,000 a tool-per-endpoint design cost in v1. The server
   should not eat your context window before you have asked anything.
 - **Summaries by default.** `list_*` tools return `uuid`/`name`/`status`

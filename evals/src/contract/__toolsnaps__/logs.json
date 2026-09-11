@@ -1,5 +1,6 @@
 {
   "name": "logs",
+  "title": "Container logs",
   "description": "Get container logs for an application, database, or service. A service is a multi-container stack, so resource='service' requires `container` — the sub-service name, which you can list with the `service` tool's `list_containers` action. Use `lines` to bound the output and `show_timestamps` when you need to correlate events across resources (not supported on service containers).",
   "annotations": {
     "readOnlyHint": true

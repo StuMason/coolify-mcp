@@ -1,5 +1,6 @@
 {
   "name": "get_application",
+  "title": "Application details",
   "description": "App details. Credentials (webhook secrets, basic-auth password, compose bodies, labels) are masked by default; pass reveal: true when you explicitly need them.",
   "annotations": {
     "readOnlyHint": true
