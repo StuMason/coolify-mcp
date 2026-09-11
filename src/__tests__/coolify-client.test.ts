@@ -7135,3 +7135,127 @@ describe('move between environments (#299)', () => {
     );
   });
 });
+
+describe('volume backup schedules (#305)', () => {
+  let client: CoolifyClient;
+
+  beforeEach(() => {
+    mockFetch.mockClear();
+    global.fetch = mockFetch;
+    client = new CoolifyClient({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-api-key',
+    });
+  });
+
+  it.each([
+    ['setApplicationStorageBackup' as const, 'applications'],
+    ['setDatabaseStorageBackup' as const, 'databases'],
+    ['setServiceStorageBackup' as const, 'services'],
+  ])('%s PUTs the schedule to /%s/{uuid}/storages/{storage}/backups', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client[m]('res-1', 'stor-1', { frequency: '0 2 * * *' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups`,
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  it.each([
+    ['deleteApplicationStorageBackup' as const, 'applications'],
+    ['deleteDatabaseStorageBackup' as const, 'databases'],
+    ['deleteServiceStorageBackup' as const, 'services'],
+  ])('%s DELETEs /%s/{uuid}/storages/{storage}/backups', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'deleted' }));
+
+    await client[m]('res-1', 'stor-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it.each([
+    ['runApplicationStorageBackup' as const, 'applications'],
+    ['runDatabaseStorageBackup' as const, 'databases'],
+    ['runServiceStorageBackup' as const, 'services'],
+  ])('%s POSTs /%s/{uuid}/storages/{storage}/backups/run', async (m, collection) => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ message: 'queued' }));
+
+    await client[m]('res-1', 'stor-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `http://localhost:3000/api/v1/${collection}/res-1/storages/stor-1/backups/run`,
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('sends false and zero rather than dropping them', async () => {
+    // The upstream schema defaults `enabled` to true and the retention numbers
+    // to non-zero, so a request builder that strips falsy values would silently
+    // turn "disabled, keep nothing locally" into "enabled, keep 7". Only
+    // `undefined` may be dropped.
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client.setApplicationStorageBackup('res-1', 'stor-1', {
+      frequency: '0 2 * * *',
+      enabled: false,
+      save_s3: false,
+      retention_amount_locally: 0,
+      s3_storage_uuid: null,
+    });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toEqual({
+      frequency: '0 2 * * *',
+      enabled: false,
+      save_s3: false,
+      retention_amount_locally: 0,
+      s3_storage_uuid: null,
+    });
+  });
+
+  it('omits unset fields entirely rather than sending null for them', async () => {
+    // Omission means "take Coolify's default"; an explicit null would mean
+    // something different on `s3_storage_uuid`, the one nullable field.
+    mockFetch.mockResolvedValueOnce(mockResponse({ uuid: 'b1', message: 'ok' }));
+
+    await client.setApplicationStorageBackup('res-1', 'stor-1', { frequency: '@daily' });
+
+    const body = JSON.parse((mockFetch.mock.calls[0][1] as { body: string }).body) as object;
+    expect(body).toEqual({ frequency: '@daily' });
+  });
+});
+
+describe('volume backups on a pre-4.2 instance (#305)', () => {
+  it.each([
+    '/applications/app-1/storages/stor-1/backups',
+    '/databases/db-1/storages/stor-1/backups',
+    '/services/svc-1/storages/stor-1/backups/run',
+  ])('names the version requirement for %s', (path) => {
+    // Found by an end-to-end smoke test against a backend behaving like 4.1.2:
+    // without this the generic uuid-mismatch hint fired and told the user their
+    // uuid was the wrong resource type, sending them after a problem that does
+    // not exist. Same failure `/move` had.
+    expect(errorHint(404, path)).toMatch(/v4\.2\+/);
+  });
+
+  it('does NOT claim v4.2 for the long-standing database dump schedules', () => {
+    // `/databases/{uuid}/backups` is `database_backups`, which works on 4.0.
+    // The `/storages/` segment is the whole difference.
+    const hint = errorHint(404, '/databases/db-1/backups');
+    expect(hint ?? '').not.toMatch(/Volume backup schedules require/);
+  });
+
+  it('mentions database_backups so the two are not confused', () => {
+    expect(errorHint(404, '/applications/app-1/storages/stor-1/backups')).toContain(
+      'database_backups',
+    );
+  });
+});

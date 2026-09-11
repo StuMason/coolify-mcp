@@ -9,6 +9,8 @@ import type {
   DeleteOptions,
   MessageResponse,
   MoveResourceResponse,
+  VolumeBackupScheduleRequest,
+  VolumeBackupScheduleResponse,
   UuidResponse,
   // Server types
   Server,
@@ -354,6 +356,17 @@ export function errorHint(status: number, path: string): string | undefined {
     // uuid-mismatch hint below claims the uuid is the wrong type, which sends
     // the reader looking for a problem that is not there.
     return 'Moving a resource between environments requires Coolify v4.2+ (POST /move, coollabsio/coolify#8968) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or the target environment_uuid may be wrong, or belong to a different resource type than this route. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
+  }
+  if (status === 404 && /\/storages\/[\w-]+\/backups(\/run)?$/.test(path)) {
+    // Volume backup schedules are v4.2+ and simply absent before it, so an
+    // older instance answers through the routing catch-all. Without this the
+    // generic uuid-mismatch branch below claims the uuid is the wrong resource
+    // type, which is the same misleading message `/move` used to give.
+    //
+    // The `/storages/` segment is what keeps this off `/databases/{uuid}/backups`
+    // — that is the long-standing database dump schedule, which exists on 4.0
+    // and must not be told it needs 4.2.
+    return 'Volume backup schedules require Coolify v4.2+ (coollabsio/coolify volume backups) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or storage_uuid may be wrong. Note this is different from `database_backups`, which schedules database dumps and works on older versions. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
@@ -2106,6 +2119,97 @@ export class CoolifyClient {
     return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Volume backup schedules (Coolify v4.2+, #305)
+  //
+  // Written out per resource type with the collection as a LITERAL, rather than
+  // shared through one helper taking `collection` as a parameter. The DRY version
+  // reads better and is wrong: `check:spec-drift` extracts the template passed to
+  // `this.request()` and turns every `${...}` into a wildcard segment, so
+  // `/${collection}/${uuid}/storages/${storageUuid}/backups` collapses to
+  // `/*/*/storages/*/backups` — one route that matches any of the three, proving
+  // none of them. Three literal call sites are three checked routes.
+  //
+  // There is deliberately no `get`/`list` here. Upstream's VolumeBackupsController
+  // defines only PUT, DELETE and the run POST — no GET route for a schedule exists
+  // — and the storages listing returns the raw volume models without the backup
+  // relation loaded. "Does this volume have a backup?" is unanswerable through the
+  // Coolify API today, not merely unimplemented here.
+  // ---------------------------------------------------------------------------
+
+  async setApplicationStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/applications/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async setDatabaseStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/databases/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async setServiceStorageBackup(
+    uuid: string,
+    storageUuid: string,
+    schedule: VolumeBackupScheduleRequest,
+  ): Promise<VolumeBackupScheduleResponse> {
+    return this.request<VolumeBackupScheduleResponse>(
+      `/services/${uuid}/storages/${storageUuid}/backups`,
+      { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
+    );
+  }
+
+  async deleteApplicationStorageBackup(
+    uuid: string,
+    storageUuid: string,
+  ): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/applications/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups`, {
+      method: 'DELETE',
+    });
+  }
+
+  async runApplicationStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(
+      `/applications/${uuid}/storages/${storageUuid}/backups/run`,
+      { method: 'POST' },
+    );
+  }
+
+  async runDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups/run`, {
+      method: 'POST',
+    });
+  }
+
+  async runServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
+    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups/run`, {
+      method: 'POST',
     });
   }
 

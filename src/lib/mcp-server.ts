@@ -39,6 +39,7 @@ import type {
   UpdateServiceApplicationRequest,
   UpdateServiceRequest,
   Database,
+  VolumeBackupScheduleRequest,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
 import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
@@ -3493,12 +3494,38 @@ export class CoolifyMcpServer extends McpServer {
     // =========================================================================
     this.defineTool(
       'storages',
-      'Manage persistent/file storages for app, database, or service: list/create/update/delete',
+      'Manage persistent/file storages for app, database, or service: list/create/update/delete, ' +
+        'plus volume backups (v4.2+): backup_set/backup_delete/backup_run. backup_set REPLACES ' +
+        'the schedule — omitted fields revert to defaults and there is no read-back endpoint, so ' +
+        'send it whole. backup_delete deletes the archives too.',
       {
         resource: z.enum(['application', 'database', 'service']),
-        action: z.enum(['list', 'create', 'update', 'delete']),
+        action: z.enum([
+          'list',
+          'create',
+          'update',
+          'delete',
+          'backup_set',
+          'backup_delete',
+          'backup_run',
+        ]),
         uuid: z.string(),
         storage_uuid: z.string().optional(),
+        // Volume backup schedule (backup_set only). Names and defaults mirror
+        // VolumeBackupScheduleRequest exactly; see the replace-semantics note there.
+        frequency: z.string().optional().describe('backup_set: cron, e.g. `0 2 * * *`. Required.'),
+        enabled: z.boolean().optional(),
+        save_s3: z.boolean().optional(),
+        disable_local_backup: z.boolean().optional(),
+        stop_during_backup: z.boolean().optional().describe('Downtime: stops the container.'),
+        s3_storage_uuid: z.string().optional(),
+        retention_amount_locally: z.number().optional(),
+        retention_days_locally: z.number().optional(),
+        retention_max_storage_locally: z.number().optional(),
+        retention_amount_s3: z.number().optional(),
+        retention_days_s3: z.number().optional(),
+        retention_max_storage_s3: z.number().optional(),
+        timeout: z.number().optional(),
         type: z.enum(['persistent', 'file']).optional(),
         mount_path: z.string().optional(),
         name: z.string().optional(),
@@ -3508,16 +3535,53 @@ export class CoolifyMcpServer extends McpServer {
         fs_path: z.string().optional(),
         is_preview_suffix_enabled: z.boolean().optional(),
       },
-      async (args) => {
+      async (args, extra) => {
         const { resource, action, uuid, storage_uuid } = args;
         if (action === 'create' && (!args.type || !args.mount_path))
           return { content: [{ type: 'text' as const, text: 'Error: type, mount_path required' }] };
+        if (action.startsWith('backup_') && !storage_uuid)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Error: storage_uuid required. List the storages first to find it.',
+              },
+            ],
+          };
+        if (action === 'backup_set' && !args.frequency)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Error: frequency required (cron, e.g. `0 2 * * *`). backup_set replaces the whole schedule, so send every field you want kept — Coolify has no endpoint to read the current one back.',
+              },
+            ],
+          };
         if (action === 'update' && (!args.type || !storage_uuid))
           return {
             content: [{ type: 'text' as const, text: 'Error: type, storage_uuid required' }],
           };
         if (action === 'delete' && !storage_uuid)
           return { content: [{ type: 'text' as const, text: 'Error: storage_uuid required' }] };
+        // Built once, read by all three resource branches. Undefined fields are
+        // dropped by `cleanRequestData`, so an omitted field takes Coolify's
+        // default rather than being sent as null — which is the replace
+        // behaviour the tool description warns about, made explicit here.
+        const backupSchedule = (): VolumeBackupScheduleRequest => ({
+          frequency: args.frequency!,
+          enabled: args.enabled,
+          save_s3: args.save_s3,
+          disable_local_backup: args.disable_local_backup,
+          stop_during_backup: args.stop_during_backup,
+          s3_storage_uuid: args.s3_storage_uuid,
+          retention_amount_locally: args.retention_amount_locally,
+          retention_days_locally: args.retention_days_locally,
+          retention_max_storage_locally: args.retention_max_storage_locally,
+          retention_amount_s3: args.retention_amount_s3,
+          retention_days_s3: args.retention_days_s3,
+          retention_max_storage_s3: args.retention_max_storage_s3,
+          timeout: args.timeout,
+        });
         const methods: Record<string, Record<string, () => Promise<unknown>>> = {
           application: {
             list: () => this.client.listApplicationStorages(uuid),
@@ -3544,6 +3608,10 @@ export class CoolifyMcpServer extends McpServer {
                 is_preview_suffix_enabled: args.is_preview_suffix_enabled,
               }),
             delete: () => this.client.deleteApplicationStorage(uuid, storage_uuid!),
+            backup_set: () =>
+              this.client.setApplicationStorageBackup(uuid, storage_uuid!, backupSchedule()),
+            backup_delete: () => this.client.deleteApplicationStorageBackup(uuid, storage_uuid!),
+            backup_run: () => this.client.runApplicationStorageBackup(uuid, storage_uuid!),
           },
           database: {
             list: () => this.client.listDatabaseStorages(uuid),
@@ -3570,6 +3638,10 @@ export class CoolifyMcpServer extends McpServer {
                 is_preview_suffix_enabled: args.is_preview_suffix_enabled,
               }),
             delete: () => this.client.deleteDatabaseStorage(uuid, storage_uuid!),
+            backup_set: () =>
+              this.client.setDatabaseStorageBackup(uuid, storage_uuid!, backupSchedule()),
+            backup_delete: () => this.client.deleteDatabaseStorageBackup(uuid, storage_uuid!),
+            backup_run: () => this.client.runDatabaseStorageBackup(uuid, storage_uuid!),
           },
           service: {
             list: () => this.client.listServiceStorages(uuid),
@@ -3596,8 +3668,30 @@ export class CoolifyMcpServer extends McpServer {
                 is_preview_suffix_enabled: args.is_preview_suffix_enabled,
               }),
             delete: () => this.client.deleteServiceStorage(uuid, storage_uuid!),
+            backup_set: () =>
+              this.client.setServiceStorageBackup(uuid, storage_uuid!, backupSchedule()),
+            backup_delete: () => this.client.deleteServiceStorageBackup(uuid, storage_uuid!),
+            backup_run: () => this.client.runServiceStorageBackup(uuid, storage_uuid!),
           },
         };
+        if (action === 'backup_delete') {
+          // The only genuinely destructive action in this tool that takes data
+          // with it. Upstream: "Delete the backup schedule and its local and S3
+          // archives" — so this is not "stop backing up", it is "stop backing up
+          // AND throw away every backup you already have". Those are different
+          // decisions and the prompt has to say which one is happening.
+          return this.guardDestructive(
+            extra.mcpReq.signal,
+            `Delete a volume backup schedule and every archive it has taken.`,
+            () =>
+              `Delete the backup schedule for storage ${sanitizeForPrompt(storage_uuid!)} on ` +
+              `${resource} ${sanitizeForPrompt(uuid)}?\n\n` +
+              `Its local and S3 archives are deleted with it, so existing backups of this volume ` +
+              `are gone and cannot be restored. Stopping future backups without discarding the ` +
+              `archives is \`backup_set\` with \`enabled: false\` instead. This cannot be undone.`,
+            () => methods[resource][action](),
+          );
+        }
         return wrap(() => methods[resource][action]());
       },
     );
