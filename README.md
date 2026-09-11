@@ -113,7 +113,7 @@ Other third-party Coolify MCP servers exist. Choose on transport, on how many in
 
 ```text
 Give me an overview of my infrastructure
-Diagnose my stuartmason.co.uk app
+Diagnose my shop.example.com app
 Find any issues in my infrastructure
 Deploy application {uuid} and wait for it to finish
 Update the DATABASE_URL env var for application {uuid}
