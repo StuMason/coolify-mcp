@@ -87,9 +87,14 @@ Where the code does this: `src/lib/audit.ts`.
 ## Stored data
 
 In HTTP mode the OAuth authorisation server keeps issued client registrations
-and tokens in a state file on your own disk, at the path you set with
-`MCP_OAUTH_STATE_FILE`. In local mode nothing is persisted beyond the bundled
-documentation index that ships inside the package.
+and tokens in a state file on your own disk, written with `0600` permissions. It
+goes to the path you set with `MCP_OAUTH_STATE_FILE`, or to
+`/data/oauth-state.json` if you set nothing.
+
+In local stdio mode there is no authorisation server and nothing is written to
+disk at all. The documentation index ships inside the package, and a refresh
+replaces it in memory only, so a refreshed index is not cached anywhere and does
+not survive a restart.
 
 ## Retention and deletion
 
@@ -114,4 +119,4 @@ Material changes to this policy are recorded in
 
 Open an issue at
 <https://github.com/StuMason/coolify-mcp/issues>, or email
-`stu@stuartmason.co.uk`.
+<hey@stumason.dev>.
