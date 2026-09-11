@@ -31,6 +31,22 @@ export interface DeleteOptions {
   deleteConnectedNetworks?: boolean;
 }
 
+/**
+ * Response from `POST /{applications,databases,services}/{uuid}/move` (Coolify v4.2+).
+ *
+ * Upstream frames the move as "a purely organizational change — running
+ * containers are not affected", so this returns the resource's new coordinates
+ * rather than a deployment. The delayed consequence is in `environment_uuid`:
+ * on its next deployment the resource picks up the *target* environment's
+ * shared environment variables.
+ */
+export interface MoveResourceResponse {
+  message: string;
+  uuid?: string;
+  project_uuid?: string;
+  environment_uuid?: string;
+}
+
 export interface MessageResponse {
   message: string;
 }

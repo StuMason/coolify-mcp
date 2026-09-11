@@ -8,6 +8,7 @@ import type {
   ErrorResponse,
   DeleteOptions,
   MessageResponse,
+  MoveResourceResponse,
   UuidResponse,
   // Server types
   Server,
@@ -345,6 +346,14 @@ export function errorHint(status: number, path: string): string | undefined {
     // Both causes look identical from the status, so name both rather than
     // pointing confidently at the wrong one.
     return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
+  }
+  if (status === 404 && /\/move$/.test(path)) {
+    // `/move` is new in v4.2 and never existed before it, so there is no method
+    // to fall back to — an older instance simply has no such route and answers
+    // through `Route::any('/{any}')`. Without this branch the generic
+    // uuid-mismatch hint below claims the uuid is the wrong type, which sends
+    // the reader looking for a problem that is not there.
+    return 'Moving a resource between environments requires Coolify v4.2+ (POST /move, coollabsio/coolify#8968) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or the target environment_uuid may be wrong, or belong to a different resource type than this route. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
@@ -1255,6 +1264,45 @@ export class CoolifyClient {
       body: JSON.stringify(payload),
     });
     return app;
+  }
+
+  /**
+   * Move a resource to another environment (Coolify v4.2+).
+   *
+   * Each collection is a LITERAL at its own `this.request()` call site rather
+   * than a shared helper taking `collection` as a parameter. The DRY version
+   * reads better and silently weakens the gate: `check:spec-drift` extracts the
+   * template passed to `this.request()` and turns every `${...}` into a wildcard
+   * segment, so `/${collection}/${uuid}/move` collapses to a two-wildcard path
+   * ending in `move` — one route that matches any of the three, and therefore
+   * proves none of them.
+   *
+   * Sent as an unconditional POST. Unlike the enable/disable/validate group,
+   * `/move` has no pre-4.2 GET form, so {@link postWithLegacyGetFallback} would
+   * be wrong here: a retry could only ever hit the same absent route, and on an
+   * instance that did route it a second call would be a second move. An older
+   * instance surfaces the catch-all 404, which {@link errorHint} turns into a
+   * version message.
+   */
+  async moveApplication(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.request<MoveResourceResponse>(`/applications/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
+  }
+
+  async moveDatabase(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.request<MoveResourceResponse>(`/databases/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
+  }
+
+  async moveService(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
+    return this.request<MoveResourceResponse>(`/services/${uuid}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ environment_uuid: environmentUuid }),
+    });
   }
 
   async deleteApplication(uuid: string, options?: DeleteOptions): Promise<MessageResponse> {

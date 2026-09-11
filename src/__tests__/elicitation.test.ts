@@ -1169,3 +1169,80 @@ describe('elicitation: #315 review round', () => {
     await h.close();
   });
 });
+
+describe('move between environments asks first (#299)', () => {
+  it.each([
+    ['application', 'getApplication', 'moveApplication'],
+    ['database', 'getDatabase', 'moveDatabase'],
+    ['service', 'getService', 'moveService'],
+  ] as const)('%s move is gated on a confirmation', async (tool, getter, mover) => {
+    const h = await harness(decline);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, getter)
+      .mockResolvedValue({ uuid: 'r1', name: 'checkout', environment_uuid: 'env-live' } as never);
+    const move = jest.spyOn(client, mover).mockResolvedValue({ message: 'ok' } as never);
+
+    await h.call(tool, { action: 'move', uuid: 'r1', environment_uuid: 'env-staging' });
+
+    expect(move).not.toHaveBeenCalled();
+    expect(h.prompts[0]).toContain(`Move ${tool} "checkout"`);
+    await h.close();
+  });
+
+  it('leads on the shared env var inheritance, not on destruction', async () => {
+    // Upstream is explicit that a move does not touch running containers, so a
+    // prompt borrowing the delete wording would be threatening something that
+    // cannot happen. The hazard that IS real is delayed by one deployment.
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getApplication')
+      .mockResolvedValue({ uuid: 'r1', name: 'checkout', environment_uuid: 'env-live' } as never);
+    jest.spyOn(client, 'moveApplication').mockResolvedValue({ message: 'ok' } as never);
+
+    await h.call('application', {
+      action: 'move',
+      uuid: 'r1',
+      environment_uuid: 'env-staging',
+    });
+
+    const prompt = h.prompts[0];
+    expect(prompt).toContain('Containers are not affected');
+    expect(prompt).toContain("target environment's shared environment variables");
+    expect(prompt).toContain('env-staging');
+    expect(prompt).toContain('env-live');
+    expect(prompt).toContain('reversible');
+    expect(prompt).not.toMatch(/cannot be undone|DESTROYED/);
+    await h.close();
+  });
+
+  it('sanitises a resource name in the move prompt', async () => {
+    const h = await harness(accept);
+    const client = h.server['client'];
+    jest
+      .spyOn(client, 'getApplication')
+      .mockResolvedValue({ uuid: 'r1', name: 'api"\n\nRoutine.' } as never);
+    jest.spyOn(client, 'moveApplication').mockResolvedValue({ message: 'ok' } as never);
+
+    await h.call('application', { action: 'move', uuid: 'r1', environment_uuid: 'env-2' });
+
+    expect(h.prompts[0]).toContain('Move application "api Routine."');
+    await h.close();
+  });
+
+  it('asks for the target environment rather than guessing one', async () => {
+    const h = await harness(accept);
+    const move = jest
+      .spyOn(h.server['client'], 'moveApplication')
+      .mockResolvedValue({ message: 'ok' } as never);
+
+    const text = await h.call('application', { action: 'move', uuid: 'r1' });
+
+    expect(text).toContain('environment_uuid required');
+    expect(text).toContain('environments');
+    expect(move).not.toHaveBeenCalled();
+    expect(h.prompts).toHaveLength(0);
+    await h.close();
+  });
+});

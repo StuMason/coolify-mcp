@@ -1,6 +1,6 @@
 {
   "name": "database",
-  "description": "Manage database: create/update/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.",
+  "description": "Manage database: create/update/move/delete. `update` is how you expose an existing database on a public port (`is_public` + `public_port`) or change limits/credentials. Credential fields must match the engine (postgres_* on postgresql, and so on); changing any *_user/*_password on update asks for confirmation, since every app holding the old value breaks.",
   "annotations": {
     "destructiveHint": true
   },
@@ -12,6 +12,7 @@
         "enum": [
           "create",
           "update",
+          "move",
           "delete"
         ]
       },
@@ -38,6 +39,10 @@
         "type": "string"
       },
       "environment_name": {
+        "type": "string"
+      },
+      "environment_uuid": {
+        "description": "Target environment for `move`; find it with the `environments` tool.",
         "type": "string"
       },
       "destination_uuid": {
