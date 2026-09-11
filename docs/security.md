@@ -97,6 +97,44 @@ tamper-evident untrusted-data boundary with a per-call nonce, so a poisoned
 log line reads as data, not instructions. The evals red-team suite regresses
 this: see [evals/README.md](../evals/README.md).
 
+## Rotating the token without a restart
+
+`COOLIFY_ACCESS_TOKEN` is read once when the process starts. A stdio server is
+spawned once per client session, and a subprocess never sees a later change to
+its parent's environment, so rotating that variable does not reach a server that
+is already running: the new token only takes effect when the whole client
+session restarts.
+
+That matters more than it sounds, because rotation is the remediation step for a
+leaked token. The moment you most need a new token to take effect is the moment
+the old design made you restart everything.
+
+Point `COOLIFY_ACCESS_TOKEN_FILE` at a file instead:
+
+```bash
+COOLIFY_BASE_URL="https://coolify.example.com" \
+COOLIFY_ACCESS_TOKEN_FILE="$HOME/.coolify/token" \
+npx @masonator/coolify-mcp
+```
+
+The file is read at startup and re-read whenever its modification time changes,
+so writing a new token into it takes effect on the next tool call with nothing
+to restart. It is the same shape as a Kubernetes or Docker secret mount. When
+both variables are set the file wins.
+
+Two details worth knowing:
+
+- **A trailing newline is stripped.** `echo token > file` appends one, and a
+  bearer header carrying a newline is rejected as malformed rather than as a bad
+  token, which sends people hunting a permissions problem they do not have.
+- **A `401` triggers exactly one retry**, and only when re-reading the file
+  actually produced a different token. A rotation that lands mid-call recovers
+  instead of surfacing an error; a genuinely invalid token still fails on the
+  first call rather than doubling every failure.
+
+`doctor` reports which source the token came from, and for a file its path and
+how long ago it changed. It never prints the value.
+
 ## Startup and doctor never print a secret
 
 The startup self-check and [`doctor`](doctor.md) report variable names and
