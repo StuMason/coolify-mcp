@@ -53,10 +53,24 @@ export type AuditOutcome = 'ok' | 'error' | 'refused';
  * does not group.
  */
 export type AuditRefusal =
-  /** A human saw the confirmation and said no, or cancelled it. */
+  /** A human saw the confirmation and actively said no. */
   | 'declined'
-  /** HTTP mode, client cannot elicit, so the destructive guard failed closed. */
+  /** A human dismissed the confirmation without answering it. */
+  | 'cancelled'
+  /** HTTP mode, client cannot elicit at all, so the guard failed closed. */
   | 'no_elicitation'
+  /**
+   * The client was asked and no answer could be obtained: a timeout, a
+   * cancelled call, a transport failure, or a client that advertised the
+   * capability and then refused the request.
+   *
+   * Distinct from `declined` on purpose. Someone reading this log to answer
+   * "did a human approve this?" gets the wrong answer if a failed ask is
+   * recorded as a refusal by a person who was never asked (#408).
+   */
+  | 'unavailable'
+  /** The estate changed between the confirmation and the answer (#341). */
+  | 'stale_confirmation'
   /** Arguments did not satisfy the handler (missing uuid, unknown instance). */
   | 'validation';
 

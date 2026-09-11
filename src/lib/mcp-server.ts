@@ -13,6 +13,9 @@ import type {
   ToolCallback,
   ListResourcesResult,
   ReadResourceResult,
+  InputRequiredResult,
+  RequestStateCodec,
+  ServerContext,
 } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
@@ -42,7 +45,14 @@ import type {
   VolumeBackupScheduleRequest,
 } from '../types/coolify.js';
 import { DocsSearchEngine } from './docs-search.js';
-import { confirmDestructive, describeBlastRadius, sanitizeForPrompt } from './elicit.js';
+import {
+  confirmDestructive,
+  confirmDestructiveModern,
+  createConfirmationCodec,
+  describeBlastRadius,
+  sanitizeForPrompt,
+  type ConfirmationState,
+} from './elicit.js';
 import { auditEnabled, auditedCall, markRefused } from './audit.js';
 import { DEFAULT_INSTANCE_NAME, InstanceRegistry, type InstanceDefinition } from './instances.js';
 import { buildInstructions } from './instructions.js';
@@ -742,6 +752,18 @@ export class CoolifyMcpServer extends McpServer {
    * follows the call through every await, promise and timer.
    */
   private readonly instanceContext = new AsyncLocalStorage<InstanceDefinition>();
+  /**
+   * The context of the tool call in hand.
+   *
+   * `guardDestructive` needs the era, the echoed `inputResponses` and the
+   * verified `requestState`, and it is reached from 21 handlers that would
+   * otherwise all have to thread a parameter they never look at. Same
+   * async-local mechanism as {@link instanceContext} rather than a field on
+   * `this`, because concurrent tool calls on one server would race on a field.
+   */
+  private readonly callContext = new AsyncLocalStorage<ServerContext>();
+  /** Seals the confirmation state that round-trips through the client (#341). */
+  private readonly requestState: RequestStateCodec<ConfirmationState>;
   private readonly serverOptions: CoolifyMcpServerOptions;
   /** Resolved once at construction: env overrides the transport's default (#370). */
   private readonly auditing: boolean;
@@ -850,16 +872,27 @@ export class CoolifyMcpServer extends McpServer {
               instance: this.registry.isFleet
                 ? ((args as { instance?: string }).instance ?? this.registry.default.name)
                 : undefined,
-              clientId: (extra as { authInfo?: { clientId?: string } }).authInfo?.clientId,
+              // `http.authInfo`, not `authInfo`: the SDK hangs the validated
+              // token off the HTTP sub-context. Read from the wrong path this
+              // is silently always `undefined`, which is how every audit line
+              // this server has written in HTTP mode has been missing its
+              // `client_id` — the field looked implemented and never was.
+              clientId: extra.http?.authInfo?.clientId,
             },
             () => scoped(args, extra),
           ) as ReturnType<ToolCallback<z.ZodObject<Args>>>;
+
+    // Outermost, so everything below it — audit, instance routing, the
+    // handler, and the destructive guard the handler calls — can reach the
+    // context of the call in hand without 21 handlers threading a parameter.
+    const contextual: ToolCallback<z.ZodObject<Args>> = (args, extra) =>
+      this.callContext.run(extra, () => audited(args, extra));
 
     this.registeredTools.add(name);
     this.registerTool(
       name,
       { title: TOOL_TITLES[name], description, inputSchema: z.object(shape), annotations },
-      audited as unknown as ToolCallback<z.ZodObject<typeof shape>>,
+      contextual as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
   }
 
@@ -924,7 +957,7 @@ export class CoolifyMcpServer extends McpServer {
     label: string,
     summarize: () => string | null | Promise<string | null>,
     operation: () => Promise<T>,
-  ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  ): Promise<{ content: Array<{ type: 'text'; text: string }> } | InputRequiredResult> {
     // Fleet mode (#367): every confirmation names the instance. Cross-instance
     // fat-fingering is the failure mode a second instance invents, and the
     // prompt is where it gets caught — "Delete api-server on prod?".
@@ -936,16 +969,41 @@ export class CoolifyMcpServer extends McpServer {
           return summary === null ? null : `Instance: ${instance.name}\n${summary}`;
         }
       : summarize;
+    // Protocol revision 2026-07-28 removed server-initiated requests during a
+    // call, so `elicitInput` throws there and the confirmation has to be a
+    // two-round-trip exchange instead (#341). Both eras are live in the wild —
+    // claude.ai is on the new one, other clients are not — so this branches on
+    // the era of the call in hand rather than on a build-time switch.
+    // How to tell the eras apart from inside a handler: the 2026-07-28 wire
+    // requires a per-request `_meta` envelope on every request, and the
+    // protocol layer lifts it onto `ctx.mcpReq.envelope`. A 2025-era request
+    // has none, and a request that claims the envelope and malforms it is
+    // rejected by the SDK before any handler runs — so presence is a decision,
+    // not a guess.
+    const ctx = this.callContext.getStore();
+    if (ctx?.mcpReq.envelope !== undefined) {
+      const confirmation = await confirmDestructiveModern(
+        ctx,
+        scopedLabel,
+        scopedSummarize,
+        (payload, mintCtx) => this.requestState.mint(payload, mintCtx),
+      );
+      if (confirmation.status === 'ask') return confirmation.result;
+      if (confirmation.status === 'refused') {
+        markRefused(confirmation.reason);
+        return { content: [{ type: 'text' as const, text: confirmation.message }] };
+      }
+      return wrap(operation);
+    }
+
     const outcome = await confirmDestructive(this.server, scopedLabel, scopedSummarize, signal, {
       requireHuman: this.serverOptions.requireElicitation,
     });
     if (!outcome.approved) {
-      // Two different refusals wearing the same shape: a human who said no, and
-      // a client that could not be asked at all. Collapsing them would hide the
-      // second, which is a configuration problem rather than a decision.
-      markRefused(
-        outcome.message.includes('does not support elicitation') ? 'no_elicitation' : 'declined',
-      );
+      // The branch that knows why says why (#408). This used to read the
+      // category back out of the prose, which classified every timeout and
+      // transport failure as a human decline.
+      markRefused(outcome.reason);
       return { content: [{ type: 'text' as const, text: outcome.message }] };
     }
     return wrap(operation);
@@ -956,6 +1014,13 @@ export class CoolifyMcpServer extends McpServer {
       config instanceof InstanceRegistry
         ? config
         : new InstanceRegistry([{ name: DEFAULT_INSTANCE_NAME, ...config }]);
+    // Built before `super` because the verifier has to be handed to the SDK in
+    // the same options object: the seam runs `verify` on an echoed
+    // `requestState` BEFORE the handler is entered, so a forged or expired one
+    // never reaches a guarded operation at all.
+    const requestState = createConfirmationCodec({
+      announceGeneratedKey: options?.requireElicitation === true,
+    });
     // `instructions` rides `initialize`, not `tools/list`, so shaping it by
     // mode costs the single-instance tool list nothing (#339).
     super(
@@ -967,8 +1032,10 @@ export class CoolifyMcpServer extends McpServer {
           readonly: options?.readonly === true,
           requireElicitation: options?.requireElicitation === true,
         }),
+        requestState: { verify: (state, ctx) => requestState.verify(state, ctx) },
       },
     );
+    this.requestState = requestState;
     this.registry = registry;
     for (const instance of this.registry.all) {
       this.clients.set(instance.name, new CoolifyClient(instance));

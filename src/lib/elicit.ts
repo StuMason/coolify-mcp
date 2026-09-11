@@ -24,7 +24,19 @@
  * {@link ConfirmOutcome}.
  */
 
-import type { Server } from '@modelcontextprotocol/server';
+import { createHash, randomBytes } from 'node:crypto';
+
+import {
+  createRequestStateCodec,
+  inputRequired,
+  inputResponse,
+  type InputRequiredResult,
+  type RequestStateCodec,
+  type Server,
+  type ServerContext,
+} from '@modelcontextprotocol/server';
+
+import type { AuditRefusal } from './audit.js';
 
 /**
  * How long to wait for a human.
@@ -73,8 +85,18 @@ export function supportsElicitation(server: Server): boolean {
 
 export type ConfirmOutcome =
   | { approved: true }
-  /** `message` is user-facing text explaining why nothing ran. */
-  | { approved: false; message: string };
+  /**
+   * `message` is user-facing text explaining why nothing ran. `reason` is the
+   * same fact as a category, carried structurally rather than left for the
+   * caller to recover by matching on the prose.
+   *
+   * The prose and the category used to be one field, and the audit layer
+   * recovered the category with `message.includes(...)`. That silently
+   * classified every timeout, cancellation and protocol refusal as a human
+   * decline (#408) — a wrong answer to the one question the audit log exists
+   * to answer. The branch that knows why already knows; it says so here.
+   */
+  | { approved: false; reason: AuditRefusal; message: string };
 
 /**
  * Text returned to the model when the human says no.
@@ -123,6 +145,7 @@ export async function confirmDestructive(
     if (options?.requireHuman) {
       return {
         approved: false,
+        reason: 'no_elicitation',
         message: abortText(
           `this server requires human confirmation for destructive operations, and this client does not support elicitation. ` +
             `Read-only tools work normally. For destructive operations, connect with a client that supports elicitation or use the stdio server locally`,
@@ -182,6 +205,11 @@ export async function confirmDestructive(
     // no yes.
     return {
       approved: false,
+      // Asked, no answer obtainable. NOT a decline: nobody said no, and on the
+      // 2026-07-28 revision this is the branch a legacy-shaped server takes
+      // every single time, so collapsing it into `declined` would fill the log
+      // with human decisions that never happened.
+      reason: 'unavailable',
       message: abortText(
         `could not confirm with the user (${error instanceof Error ? error.message : String(error)})`,
       ),
@@ -194,6 +222,7 @@ export async function confirmDestructive(
 
   return {
     approved: false,
+    reason: result.action === 'decline' ? 'declined' : 'cancelled',
     message: abortText(
       result.action === 'decline' ? 'the user declined' : 'the user cancelled the prompt',
     ),
@@ -289,4 +318,239 @@ export function describeBlastRadius(noun: string, names: string[]): string {
   if (safe.length <= MAX_NAMED) return `${count} (${safe.join(', ')})`;
   const shown = safe.slice(0, MAX_NAMED).join(', ');
   return `${count} (${shown} and ${safe.length - MAX_NAMED} more)`;
+}
+
+/**
+ * The confirmation key used for the embedded elicitation request, and the key
+ * the retried call's `inputResponses` is read back under. One guarded
+ * operation is in flight per call, so a constant is enough.
+ */
+export const CONFIRM_KEY = 'confirm';
+
+/** What travels inside the sealed `requestState` across the two round trips. */
+export interface ConfirmationState {
+  /** Digest of the summary the human was actually shown. */
+  digest: string;
+}
+
+/**
+ * Outcome of the 2026-07-28 confirmation flow.
+ *
+ * `ask` is not a refusal and not an approval: it is the first half of a
+ * two-round-trip exchange, and the caller must return `result` to the client
+ * unchanged so the client can fulfil it and retry.
+ */
+export type ModernConfirmation =
+  | { status: 'ask'; result: InputRequiredResult }
+  | { status: 'approved' }
+  | { status: 'nothing-to-do' }
+  | { status: 'refused'; reason: AuditRefusal; message: string };
+
+/** Stable digest of the text a human was shown, for the staleness check. */
+export function summaryDigest(summary: string): string {
+  return createHash('sha256').update(summary).digest('hex').slice(0, 32);
+}
+
+/**
+ * The text a human is shown, plus the digest sealed alongside it.
+ *
+ * `summarize()` reaches a live Coolify and can fail. The 2025 path deliberately
+ * asks anyway, because a human confirming a vaguer question is a better outcome
+ * than an unconfirmed destructive call — and a flaky Coolify is exactly when
+ * someone is most likely to be clicking through things quickly. This era has to
+ * behave the same way or the two paths diverge on the case that matters most.
+ *
+ * A degraded prompt seals a fixed sentinel rather than a digest of the error.
+ * Two failures rarely produce byte-identical messages, and digesting the error
+ * text would turn "Coolify is still down on the retry" into a spurious
+ * stale-confirmation refusal after the human already said yes.
+ */
+const DEGRADED_DIGEST = 'degraded';
+
+async function describe(
+  label: string,
+  summarize: () => string | null | Promise<string | null>,
+): Promise<{ text: string; digest: string } | null> {
+  try {
+    const summary = await summarize();
+    if (summary === null) return null;
+    return { text: summary, digest: summaryDigest(summary) };
+  } catch (error) {
+    return {
+      text:
+        `${label}\n\nProceed? ` +
+        `(Could not load the details first: ${error instanceof Error ? error.message : String(error)})`,
+      digest: DEGRADED_DIGEST,
+    };
+  }
+}
+
+/**
+ * Ask the human to approve a destructive operation, on protocol revision
+ * 2026-07-28.
+ *
+ * The 2025 shape — server pushes `elicitation/create` mid-request and awaits
+ * the answer — does not exist on this revision; `elicitInput` throws. Instead
+ * the handler returns an `input_required` result, the **client** fulfils the
+ * embedded request and retries the original call with `inputResponses`, and
+ * the handler runs a second time from the top.
+ *
+ * Two consequences shape everything here.
+ *
+ * **The handler is re-entered, so it must know which half it is in.** That is
+ * the `inputResponse` read at the top: absent means round one, present means
+ * the human has answered.
+ *
+ * **`summarize()` runs again on round two.** It has to: the estate is live,
+ * and the whole point of the prompt is the blast radius it quoted. So the
+ * digest of what was shown is sealed into `requestState` on the way out and
+ * compared on the way back. If an emergency stop said "12 applications" and
+ * 14 are running by the time the human clicks yes, the approval no longer
+ * describes the operation and this refuses rather than widening it silently.
+ *
+ * The requested schema is deliberately **empty**. The answer is the client's
+ * accept/decline action, not a field: a `confirm: true` property is a value
+ * something upstream could supply on the retry, and the evals already record a
+ * model issuing a real restart 5 runs out of 5 while explicitly told not to.
+ * The confirmation has to come from outside the model, or it is theatre.
+ */
+export async function confirmDestructiveModern(
+  ctx: ServerContext,
+  label: string,
+  summarize: () => string | null | Promise<string | null>,
+  mint: (payload: ConfirmationState, ctx: ServerContext) => Promise<string>,
+): Promise<ModernConfirmation> {
+  const answer = inputResponse(ctx.mcpReq.inputResponses, CONFIRM_KEY);
+
+  if (answer.kind === 'missing') {
+    const summary = await describe(label, summarize);
+    // `null` means the pre-flight found nothing to do. Same rule as the legacy
+    // path: asking a human to confirm a no-op teaches them the dialog is noise.
+    if (summary === null) return { status: 'nothing-to-do' };
+    return {
+      status: 'ask',
+      result: inputRequired({
+        inputRequests: {
+          [CONFIRM_KEY]: inputRequired.elicit({
+            message: summary.text,
+            requestedSchema: { type: 'object', properties: {} },
+          }),
+        },
+        requestState: await mint({ digest: summary.digest }, ctx),
+      }),
+    };
+  }
+
+  if (answer.kind !== 'elicit') {
+    // A response arrived under our key that is not an elicitation answer.
+    // Nobody said yes, so nothing runs.
+    return {
+      status: 'refused',
+      reason: 'unavailable',
+      message: abortText(`the confirmation came back as a ${answer.kind} response, not an answer`),
+    };
+  }
+
+  if (answer.action !== 'accept') {
+    return {
+      status: 'refused',
+      reason: answer.action === 'decline' ? 'declined' : 'cancelled',
+      message: abortText(
+        answer.action === 'decline' ? 'the user declined' : 'the user cancelled the prompt',
+      ),
+    };
+  }
+
+  const sealed = ctx.mcpReq.requestState<ConfirmationState>();
+  const current = await describe(label, summarize);
+  if (current === null) return { status: 'nothing-to-do' };
+  if (!sealed || sealed.digest !== current.digest) {
+    return {
+      status: 'refused',
+      reason: 'stale_confirmation',
+      message: abortText(
+        `what this would do changed between the confirmation and the answer, so the approval no longer describes it. ` +
+          `Nothing was changed. Re-run ${JSON.stringify(label)} to see the current blast radius and confirm that`,
+      ),
+    };
+  }
+
+  return { status: 'approved' };
+}
+
+/**
+ * How long a minted confirmation stays answerable.
+ *
+ * Ten minutes is the codec default and the right order of magnitude: long
+ * enough that a human can read "stop ALL 12 applications?", think, and answer;
+ * short enough that a dialog left open over lunch does not still authorise a
+ * deletion afterwards.
+ */
+const CONFIRMATION_TTL_SECONDS = 600;
+
+/**
+ * The HMAC key for {@link createConfirmationCodec}.
+ *
+ * `requestState` is handed to the client and comes back as attacker-controlled
+ * input, so it is signed. The key is read from `MCP_REQUEST_STATE_KEY` when set
+ * and generated per process otherwise.
+ *
+ * The generated fallback is correct but has two consequences worth knowing:
+ * confirmations in flight across a restart or redeploy stop verifying, and more
+ * than one replica behind a load balancer cannot verify each other's state.
+ * Both fail closed — the operation is refused, never wrongly approved — so this
+ * is an availability trade, not a security one.
+ */
+let generatedKey: Uint8Array | undefined;
+
+function confirmationKey(): Uint8Array | string {
+  const configured = process.env.MCP_REQUEST_STATE_KEY;
+  if (configured === undefined || configured === '') {
+    // Per PROCESS, not per server instance. HTTP mode builds a fresh
+    // `CoolifyMcpServer` for every request, so a key generated in the
+    // constructor would differ between the round that mints the state and the
+    // round that verifies it, and every confirmation would fail as forged.
+    // That is a real failure mode, caught by the interop test rather than by
+    // reading: it fails closed, so it looks like tight security rather than a
+    // bug.
+    generatedKey ??= randomBytes(32);
+    return generatedKey;
+  }
+  if (Buffer.byteLength(configured, 'utf8') < 32) {
+    throw new Error(
+      'MCP_REQUEST_STATE_KEY must be at least 32 bytes. Generate one with: openssl rand -hex 32',
+    );
+  }
+  return configured;
+}
+
+/**
+ * Seals the confirmation that round-trips through the client (#341).
+ *
+ * Bound to the authenticated principal and the method, so state minted for one
+ * caller cannot be echoed by another — the spec's user-binding requirement for
+ * state that influences authorization, and this state authorises a deletion.
+ * The binding value is stored as a keyed tag rather than in clear, so the
+ * client never holds a readable principal identifier.
+ *
+ * Signed, not encrypted. The payload is a digest and an expiry, both of which a
+ * client may read without harm; nothing secret goes in it.
+ */
+export function createConfirmationCodec(options?: {
+  announceGeneratedKey?: boolean;
+}): RequestStateCodec<ConfirmationState> {
+  const configured = process.env.MCP_REQUEST_STATE_KEY;
+  if ((configured === undefined || configured === '') && options?.announceGeneratedKey === true) {
+    console.error(
+      'coolify-mcp: MCP_REQUEST_STATE_KEY is unset, so confirmation state is signed with a key ' +
+        'generated at startup. Confirmations in flight across a restart will be refused and must ' +
+        'be re-confirmed. Set it to at least 32 bytes to survive restarts and to run more than ' +
+        'one replica.',
+    );
+  }
+  return createRequestStateCodec<ConfirmationState>({
+    key: confirmationKey(),
+    ttlSeconds: CONFIRMATION_TTL_SECONDS,
+    bind: (ctx) => `${ctx.mcpReq.method} ${ctx.http?.authInfo?.clientId ?? ''}`,
+  });
 }
