@@ -28,6 +28,7 @@ describe('checkStartupConfig', () => {
     for (const name of [
       'COOLIFY_BASE_URL',
       'MCP_PUBLIC_URL',
+      'MCP_HOST',
       'CF_ACCESS_CLIENT_ID',
       'CF_ACCESS_CLIENT_SECRET',
     ]) {
@@ -45,6 +46,13 @@ describe('checkStartupConfig', () => {
     // stop a stdio server that would run fine.
     const env = cleanEnv();
     env.MCP_PUBLIC_URL = '${SERVICE_FQDN_COOLIFYMCP}';
+    expect(checkStartupConfig(env, 'stdio')).toEqual({ errors: [], warnings: [] });
+    expect(checkStartupConfig(env, 'http').errors).toHaveLength(1);
+  });
+
+  it('ignores MCP_HOST on stdio, where it is never read', () => {
+    const env = cleanEnv();
+    env.MCP_HOST = '${HOST}';
     expect(checkStartupConfig(env, 'stdio')).toEqual({ errors: [], warnings: [] });
     expect(checkStartupConfig(env, 'http').errors).toHaveLength(1);
   });

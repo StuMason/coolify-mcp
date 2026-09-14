@@ -187,6 +187,7 @@ internet-facing service.
 | `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                      |
 | `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                     |
 | `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                            |
+| `MCP_HOST`                | all interfaces           | Listen address; `127.0.0.1` keeps it on loopback       |
 | `MCP_READONLY`            | `false`                  | Register only read-only tools                          |
 | `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                         |
 | `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                        |
@@ -197,6 +198,17 @@ internet-facing service.
 | `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)     |
 | `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md)) |
 | `COOLIFY_MCP_AUDIT`       | `on` in HTTP mode        | `off` disables the [audit log](#audit-log)             |
+
+### Running outside a container
+
+Unset, `MCP_HOST` means every interface. In a container that is what you
+want: the platform's proxy reaches the server over the container network.
+Run `dist/http.js` directly on a workstation and the same default makes it
+reachable from every network the machine joins. `/mcp` still demands OAuth,
+but the authorize page, registration and health endpoints answer anyone who
+can reach the port, and a process holding a Coolify token has no reason to be
+listening on a shared network. Set `MCP_HOST=127.0.0.1` (or `::1`) and the
+startup line confirms the address, e.g. `coolify-mcp http mode on 127.0.0.1:8080`.
 
 ### Running a fleet over HTTP
 
