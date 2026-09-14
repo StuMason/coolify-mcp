@@ -23,10 +23,10 @@ export interface StartupCheckResult {
 
 /**
  * The env vars whose values we sanity-check, per transport. Secrets among
- * them are only ever described, never echoed. MCP_PUBLIC_URL is HTTP-only:
- * stdio never reads it, so a broken value there (say, a shared .env with an
- * unexpanded Coolify magic var) must not stop a stdio server that would run
- * fine.
+ * them are only ever described, never echoed. MCP_PUBLIC_URL and MCP_HOST
+ * are HTTP-only: stdio never reads them, so a broken value there (say, a
+ * shared .env with an unexpanded Coolify magic var) must not stop a stdio
+ * server that would run fine.
  */
 const CHECKED_VARS = {
   stdio: [
@@ -39,6 +39,7 @@ const CHECKED_VARS = {
     'COOLIFY_BASE_URL',
     'COOLIFY_ACCESS_TOKEN',
     'MCP_PUBLIC_URL',
+    'MCP_HOST',
     'MCP_REQUEST_STATE_KEY',
     'CF_ACCESS_CLIENT_ID',
     'CF_ACCESS_CLIENT_SECRET',
