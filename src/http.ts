@@ -9,7 +9,12 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createHttpApp, normalizePublicUrl } from './lib/http-server.js';
+import {
+  createHttpApp,
+  describeListen,
+  listenOptionsFromEnv,
+  normalizePublicUrl,
+} from './lib/http-server.js';
 import { checkStartupConfig } from './lib/startup-check.js';
 import { registryFromEnv, type InstanceRegistry } from './lib/instances.js';
 import type { CoolifyConfig } from './types/coolify.js';
@@ -133,7 +138,7 @@ function main(): void {
     process.exit(1);
   }
   const coolify: CoolifyConfig = registry.default;
-  const port = Number(process.env.MCP_PORT || process.env.PORT || 8080);
+  const listen = listenOptionsFromEnv(process.env);
   const readonly = process.env.MCP_READONLY === 'true';
 
   const app = createHttpApp({
@@ -172,9 +177,9 @@ function main(): void {
   server.headersTimeout = 15_000;
   server.requestTimeout = 30_000;
 
-  server.listen(port, () => {
+  server.listen(listen, () => {
     console.error(
-      `coolify-mcp http mode on :${port} (public: ${publicUrl}${readonly ? ', read-only' : ''})`,
+      `coolify-mcp http mode on ${describeListen(listen)} (public: ${publicUrl}${readonly ? ', read-only' : ''})`,
     );
   });
 

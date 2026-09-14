@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`MCP_HOST` sets the HTTP listen address.** HTTP mode has always listened on every interface. That is right in a container and wrong on a workstation, where the server answered on whatever network the machine was attached to. Unset keeps today's behaviour, so existing deployments are untouched; `MCP_HOST=127.0.0.1` keeps it on loopback. When set, the startup line names the bound address, and an unexpanded `${VAR}` in it is a startup error like the other HTTP variables.
+
 ## [3.4.0] - 2026-09-11
 
 ### Added
