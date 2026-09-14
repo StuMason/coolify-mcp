@@ -59,6 +59,39 @@ export function normalizePublicUrl(raw: string): string {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
+/** Where the HTTP listener binds: the argument handed to `server.listen()`. */
+export interface ListenOptions {
+  port: number;
+  host?: string;
+}
+
+/**
+ * Resolve the listen address from the environment. `MCP_PORT` (or `PORT`)
+ * picks the port, exactly as before. `MCP_HOST` picks the interface.
+ *
+ * Unset or blank means every interface, which is what a container needs: the
+ * platform's proxy reaches it over the container network. Run the same server
+ * on a workstation and that default puts a process holding a Coolify token on
+ * every network the machine joins, so `MCP_HOST=127.0.0.1` keeps it on
+ * loopback. The `host` key is left out rather than set to `undefined`, so an
+ * unconfigured server binds exactly as it did before this option existed.
+ */
+export function listenOptionsFromEnv(env: NodeJS.ProcessEnv): ListenOptions {
+  const port = Number(env.MCP_PORT || env.PORT || 8080);
+  const host = env.MCP_HOST?.trim();
+  return host ? { port, host } : { port };
+}
+
+/**
+ * The address for the startup log line. Unset host keeps the historical
+ * `:8080` form that deploy logs and the docs grep for; an IPv6 literal gets
+ * brackets so the port stays readable.
+ */
+export function describeListen({ port, host }: ListenOptions): string {
+  if (host === undefined) return `:${port}`;
+  return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
+}
+
 /**
  * Tier-2 proof of access: does this Coolify API token belong to someone with
  * access to the instance this container manages? `GET /teams/current` 401s on
