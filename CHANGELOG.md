@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-09-14
+
 ### Added
 
-- **`MCP_HOST` sets the HTTP listen address.** HTTP mode has always listened on every interface. That is right in a container and wrong on a workstation, where the server answered on whatever network the machine was attached to. Unset keeps today's behaviour, so existing deployments are untouched; `MCP_HOST=127.0.0.1` keeps it on loopback. When set, the startup line names the bound address, and an unexpanded `${VAR}` in it is a startup error like the other HTTP variables.
+- **`MCP_HOST` sets the HTTP listen address** (#418, @artgas1). HTTP mode has always listened on every interface. That is right in a container and wrong on a workstation, where the server answered on whatever network the machine was attached to. Unset keeps today's behaviour, so existing deployments are untouched; `MCP_HOST=127.0.0.1` keeps it on loopback. When set, the startup line names the bound address, and an unexpanded `${VAR}` in it is a startup error like the other HTTP variables.
+
+### Changed
+
+- **`search_docs` covers the restructured Coolify docs** (#420). Coolify reorganised its documentation, and the bundled index grew from 271 pages to 845, including the full API endpoint reference and the CLI. Results now link to current paths rather than to URLs that only redirect.
+
+### Upgrading from 3.4
+
+- **Drop-in.** No configuration changes. HTTP mode still listens on every
+  interface unless you set `MCP_HOST`, so container deployments behave exactly
+  as before.
+- **Running `coolify-mcp-http` outside a container?** Set `MCP_HOST=127.0.0.1`
+  so the server stops answering on every network your machine joins.
 
 ## [3.4.0] - 2026-09-11
 
