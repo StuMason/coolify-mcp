@@ -5,6 +5,8 @@
 import { jest } from '@jest/globals';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -15,6 +17,8 @@ import {
 } from '../lib/oauth.js';
 import {
   createHttpApp,
+  describeListen,
+  listenOptionsFromEnv,
   normalizePublicUrl,
   validateCoolifyToken,
   RateLimiter,
@@ -820,6 +824,60 @@ describe('normalizePublicUrl', () => {
     expect(() => normalizePublicUrl('   ')).toThrow();
     expect(() => normalizePublicUrl('ftp://mcp.example.com')).toThrow('unsupported protocol');
     expect(() => normalizePublicUrl('http://')).toThrow();
+  });
+});
+
+describe('listenOptionsFromEnv', () => {
+  // Bind a real listener with the resolved options and report the address the
+  // kernel actually gave it — the thing a port scan from the LAN would see.
+  async function boundAddress(env: NodeJS.ProcessEnv): Promise<string> {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(listenOptionsFromEnv(env), resolve));
+    try {
+      return (server.address() as AddressInfo).address;
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
+  it('leaves the host out when MCP_HOST is unset or blank, so listen() is called as before', () => {
+    expect(listenOptionsFromEnv({})).toEqual({ port: 8080 });
+    expect(listenOptionsFromEnv({ MCP_HOST: '' })).toEqual({ port: 8080 });
+    expect(listenOptionsFromEnv({ MCP_HOST: '  ' })).toEqual({ port: 8080 });
+    expect(Object.keys(listenOptionsFromEnv({}))).toEqual(['port']);
+  });
+
+  it('keeps the port precedence: MCP_PORT, then PORT, then 8080', () => {
+    expect(listenOptionsFromEnv({ PORT: '3000' })).toEqual({ port: 3000 });
+    expect(listenOptionsFromEnv({ MCP_PORT: '9000', PORT: '3000' })).toEqual({ port: 9000 });
+  });
+
+  it('passes MCP_HOST through, trimmed', () => {
+    expect(listenOptionsFromEnv({ MCP_HOST: ' 127.0.0.1\n', MCP_PORT: '9000' })).toEqual({
+      port: 9000,
+      host: '127.0.0.1',
+    });
+    expect(listenOptionsFromEnv({ MCP_HOST: '::1' })).toEqual({ port: 8080, host: '::1' });
+  });
+
+  it('binds loopback only when MCP_HOST=127.0.0.1', async () => {
+    expect(await boundAddress({ MCP_HOST: '127.0.0.1', MCP_PORT: '0' })).toBe('127.0.0.1');
+  });
+
+  it('still binds every interface when MCP_HOST is unset', async () => {
+    expect(['::', '0.0.0.0']).toContain(await boundAddress({ MCP_PORT: '0' }));
+  });
+});
+
+describe('describeListen', () => {
+  it('keeps the historical :port form when no host is set', () => {
+    expect(describeListen({ port: 8080 })).toBe(':8080');
+  });
+
+  it('prefixes the host, bracketing IPv6 literals', () => {
+    expect(describeListen({ port: 8080, host: '127.0.0.1' })).toBe('127.0.0.1:8080');
+    expect(describeListen({ port: 8080, host: 'localhost' })).toBe('localhost:8080');
+    expect(describeListen({ port: 8080, host: '::1' })).toBe('[::1]:8080');
   });
 });
 
