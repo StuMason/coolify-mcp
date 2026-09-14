@@ -15,8 +15,13 @@ on:
 
 jobs:
   claude-review:
-    # Skip Dependabot PRs - they don't have access to secrets
-    if: github.actor != 'dependabot[bot]'
+    # Skip PRs that don't get secrets or an OIDC token: Dependabot's, and
+    # anything from a fork. A fork run can only fail red, and making it work
+    # means pull_request_target + allowed_non_write_users, which hands any
+    # stranger's diff a Claude run on our token. Review forks on request.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
 
     runs-on: ubuntu-latest
     permissions:
