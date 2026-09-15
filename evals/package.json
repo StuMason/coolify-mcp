@@ -9,6 +9,7 @@
     "snapshots": "vitest run src/contract",
     "snapshots:update": "vitest run src/contract -u",
     "evals": "vitest run src/selection src/injection",
+    "evals:tasks": "vitest run src/tasks",
     "redteam": "tsx redteam.ts",
     "redteam:view": "tsx redteam.ts --view",
     "lint": "eslint .",

@@ -167,13 +167,13 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
           200,
           DEPLOYMENTS.filter((d) => d.status !== 'finished'),
         );
-      if ((m = p.match(/^\/deployments\/applications\/([^/]+)$/))) {
+      // The client pages this endpoint (`?skip=&take=`) and reads the real API's
+      // `{ count, deployments }` envelope. Matching the bare path and returning an
+      // array made `deployment list_for_app` report zero deployments for every app.
+      if ((m = p.match(/^\/deployments\/applications\/([^/?]+)(?:\?|$)/))) {
         const app = APPLICATIONS.find((a) => a.uuid === m![1]);
-        return json(
-          res,
-          200,
-          DEPLOYMENTS.filter((d) => d.application_id === app?.id),
-        );
+        const deployments = DEPLOYMENTS.filter((d) => d.application_id === app?.id);
+        return json(res, 200, { count: deployments.length, deployments });
       }
       if ((m = p.match(/^\/deployments\/([^/]+)$/)))
         return json(
