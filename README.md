@@ -6,6 +6,7 @@
 [![Claude Desktop one-click install](https://img.shields.io/badge/Claude%20Desktop-one--click%20install-d97757)](https://github.com/StuMason/coolify-mcp/releases/latest/download/coolify-mcp.mcpb)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.StuMason%2Fcoolify-blue)](https://registry.modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa)](https://github.com/sponsors/StuMason)
 
 Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 tools for deploying, debugging, and operating your self-hosted PaaS in plain English. Destructive operations ask a human first; secrets stay masked.
 
@@ -168,4 +169,4 @@ Full detail, including where in the code each claim is implemented, is in
 - [laravel-coolify](https://github.com/StuMason/laravel-coolify): deploy Laravel to Coolify with a dashboard, Artisan commands, and generated Dockerfiles
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 
-MIT © [Stu Mason](https://stumason.dev). If this is useful, ⭐ the repo.
+MIT © [Stu Mason](https://stumason.dev). If this is useful, ⭐ the repo. If it saved you an evening, [sponsor a coffee](https://github.com/sponsors/StuMason).
