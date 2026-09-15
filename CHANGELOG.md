@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Outcome-scored task evals** (`evals/src/tasks`, `npm run evals:tasks`). The tool-selection score counts a hit when an expected tool name appears anywhere in the transcript, so a model that calls many tools scores well: a 3B model reached 15/15 while restarting services on a read request (`evals/FINDINGS.md` #7). The new suite runs 16 multi-step requests and passes one only when the exact request landed or the exact arguments were sent, the answer carries the fact that was asked for, and nothing else was written, including after a declined confirmation. It also counts schema-invalid arguments and invented ids, repeats cases with `EVALS_TRIALS`, and is not part of `npm run evals`, so CI cost is unchanged.
+
+### Fixed
+
+- **The eval fixture reported no deployments for any app.** The client pages `/deployments/applications/{uuid}` and reads a `{ count, deployments }` envelope; the fixture matched only the bare path and returned an array, so `deployment list_for_app` came back empty in every eval.
+
 ## [3.5.0] - 2026-09-14
 
 ### Added
