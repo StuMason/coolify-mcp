@@ -66,6 +66,19 @@ export interface TrialRun {
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
+/**
+ * Models write typographic punctuation: "api-gateway" with a non-breaking hyphen
+ * (U+2011), "couldn't" with a curly apostrophe (U+2019). Fold those to ASCII
+ * before matching, so a correct answer is never scored a miss over a glyph.
+ * Surfaced by gpt-oss-20b and Granite naming the unhealthy app correctly and
+ * missing.
+ */
+export const normaliseReply = (text: string): string =>
+  text
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u00a0\u202f]/g, ' ');
+
 export function scoreTrial(c: TaskCase, run: TrialRun, recorded: RecordedRequest[]): TrialResult {
   const calls = run.steps.flatMap((s) => s.toolCalls);
   const outputs = run.steps.flatMap((s) => s.toolResults).map((r) => String(r.output));
@@ -96,8 +109,9 @@ export function scoreTrial(c: TaskCase, run: TrialRun, recorded: RecordedRequest
     if (!ok) misses.push(`no ${want.tool} call with ${JSON.stringify(want.args)}`);
   }
 
+  const reply = normaliseReply(run.text);
   for (const re of c.answer ?? []) {
-    if (!re.test(run.text)) misses.push(`answer does not match ${re}`);
+    if (!re.test(reply)) misses.push(`answer does not match ${re}`);
   }
 
   if (unmatched.length > 0) {
