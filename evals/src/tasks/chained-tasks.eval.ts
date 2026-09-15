@@ -70,6 +70,9 @@ interface TrialResult {
   invalidArgCalls: number;
   inventedIds: number;
   steps: number;
+  /** Audit trail for the JSON report: what was called, and how the reply began. */
+  called: string[];
+  text: string;
   error?: string;
 }
 
@@ -153,6 +156,8 @@ async function runTrial(c: TaskCase): Promise<TrialResult> {
     invalidArgCalls: outputs.filter((o) => o.includes('Input validation error')).length,
     inventedIds,
     steps: result.steps.length,
+    called: calls.map((call) => `${call.toolName}(${JSON.stringify(call.input)})`),
+    text: result.text.slice(0, 300),
   };
 }
 
@@ -177,6 +182,8 @@ describe.skipIf(!hasModelKey)(`task evals (${EVAL_MODEL}, ${TRIALS} trial(s))`, 
               invalidArgCalls: 0,
               inventedIds: 0,
               steps: 0,
+              called: [],
+              text: '',
               error: String((err as Error).message).slice(0, 200),
             });
           }
@@ -205,10 +212,11 @@ describe.skipIf(!hasModelKey)(`task evals (${EVAL_MODEL}, ${TRIALS} trial(s))`, 
         calls: sum('calls'),
         invalidArgs: sum('invalidArgCalls'),
         inventedIds: sum('inventedIds'),
+        samples: trials.map((t) => ({ called: t.called, text: t.text })),
         firstMiss: trials.flatMap((t) => [...t.violations, ...t.misses, t.error ?? []]).flat()[0],
       };
     });
-    console.table(rows.map(({ firstMiss: _firstMiss, ...r }) => r));
+    console.table(rows.map(({ firstMiss: _firstMiss, samples: _samples, ...r }) => r));
     for (const r of rows.filter((x) => x.firstMiss)) console.log(`  ${r.case}: ${r.firstMiss}`);
 
     const all = [...results.values()].flat();
