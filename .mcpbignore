@@ -6,6 +6,7 @@ site/
 skills/
 scripts/
 coverage/
+evals/
 .github/
 .husky/
 .claude/
