@@ -180,24 +180,24 @@ internet-facing service.
 
 ## Configuration reference
 
-| Variable                  | Default                  | Purpose                                                |
-| ------------------------- | ------------------------ | ------------------------------------------------------ |
-| `MCP_TRANSPORT`           | stdio                    | `http` selects HTTP mode                               |
-| `COOLIFY_BASE_URL`        | required                 | The Coolify instance to manage                         |
-| `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                      |
-| `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                     |
-| `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                            |
-| `MCP_HOST`                | all interfaces           | Listen address; `127.0.0.1` keeps it on loopback       |
-| `MCP_READONLY`            | `false`                  | Register only read-only tools                          |
-| `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                         |
-| `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                        |
-| `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence                                |
-| `MCP_REQUEST_STATE_KEY`   | generated at startup     | HMAC key for confirmation state (>=32 bytes)           |
-| `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL   |
-| `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)     |
-| `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)     |
-| `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md)) |
-| `COOLIFY_MCP_AUDIT`       | `on` in HTTP mode        | `off` disables the [audit log](#audit-log)             |
+| Variable                  | Default                  | Purpose                                                                             |
+| ------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `MCP_TRANSPORT`           | stdio                    | `http` selects HTTP mode                                                            |
+| `COOLIFY_BASE_URL`        | required                 | The Coolify instance to manage                                                      |
+| `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                                                   |
+| `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                                                  |
+| `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                                                         |
+| `MCP_HOST`                | all interfaces           | Listen address; `127.0.0.1` keeps it on loopback                                    |
+| `MCP_READONLY`            | `false`                  | Register only read-only tools                                                       |
+| `MCP_ACCESS_TOKEN_TTL`    | `3600`                   | Access token lifetime, seconds                                                      |
+| `MCP_REFRESH_TOKEN_TTL`   | `28800`                  | Refresh token lifetime, seconds                                                     |
+| `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence; set it [outside a container](#running-outside-a-container) |
+| `MCP_REQUEST_STATE_KEY`   | generated at startup     | HMAC key for confirmation state (>=32 bytes)                                        |
+| `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL                                |
+| `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)                                  |
+| `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)                                  |
+| `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md))                              |
+| `COOLIFY_MCP_AUDIT`       | `on` in HTTP mode        | `off` disables the [audit log](#audit-log)                                          |
 
 ### Running outside a container
 
@@ -209,6 +209,18 @@ but the authorize page, registration and health endpoints answer anyone who
 can reach the port, and a process holding a Coolify token has no reason to be
 listening on a shared network. Set `MCP_HOST=127.0.0.1` (or `::1`) and the
 startup line confirms the address, e.g. `coolify-mcp http mode on 127.0.0.1:8080`.
+
+The OAuth state file needs the same treatment. Its default,
+`/data/oauth-state.json`, is a directory the image creates and mounts as a
+volume; on a workstation it does not exist, or belongs to root. Set
+`MCP_OAUTH_STATE_FILE` to a path your user can write, e.g.
+`MCP_OAUTH_STATE_FILE=./oauth-state.json`. The server checks this at startup
+and refuses to start otherwise, naming the path, so the failure cannot wait
+for the first client to register. Should the directory become unwritable
+while the server is running, a failed write logs one line, `/healthz`
+reports `"persistence": "degraded"` until a write succeeds again, and the
+server keeps serving from memory; what is lost is state across the next
+restart, not the running server.
 
 ### Running a fleet over HTTP
 

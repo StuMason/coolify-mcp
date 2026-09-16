@@ -278,7 +278,12 @@ export function createHttpApp(config: HttpServerConfig): {
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
 
     if (path === '/healthz') {
-      return json({ status: 'ok' });
+      // Still "ok": the server is answering. But state that lives only in
+      // memory (#417) is one restart from vanishing, and this is where the
+      // thing doing the restarting looks.
+      return json(
+        provider.persistenceDegraded ? { status: 'ok', persistence: 'degraded' } : { status: 'ok' },
+      );
     }
 
     if (
