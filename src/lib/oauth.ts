@@ -299,6 +299,16 @@ export class OAuthProvider {
   private readonly codes = new Map<string, AuthorizationCode>();
   private readonly tokens = new Map<string, StoredToken>();
   private persistTimer: NodeJS.Timeout | null = null;
+  private persistBroken = false;
+
+  /**
+   * True while the last state write failed (#417): every registration and
+   * token is in memory only and gone at the next restart. Surfaced on
+   * /healthz so whatever restarts on health can see it before it does.
+   */
+  get persistenceDegraded(): boolean {
+    return this.persistBroken;
+  }
 
   constructor(private readonly options: OAuthProviderOptions) {
     this.load();
@@ -836,10 +846,30 @@ export class OAuthProvider {
       tokens: [...this.tokens.values()],
     };
     const file = this.options.stateFile;
-    mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
-    renameSync(tmp, file);
+    try {
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+      const tmp = `${file}.tmp`;
+      writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
+      renameSync(tmp, file);
+      if (this.persistBroken) {
+        this.persistBroken = false;
+        console.error(`oauth: state persists again to ${file}`);
+      }
+    } catch (error) {
+      // This runs from a debounced timer, where a throw is an uncaught
+      // exception and the end of the process (#417). A write that fails
+      // loses nothing the server is currently using: every registration and
+      // token is still in memory, so it keeps answering. What it loses is
+      // survival across a restart. Logged on the transition only: a volume
+      // gone read-only under a busy server would otherwise say the same
+      // thing every 250ms, and the line operators actually want is the one
+      // above, when it is writing again.
+      if (this.persistBroken) return;
+      this.persistBroken = true;
+      console.error(
+        `oauth: could not persist state to ${file}; serving from memory. ${(error as Error).message}`,
+      );
+    }
   }
 
   private load(): void {

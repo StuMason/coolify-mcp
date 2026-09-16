@@ -1,5 +1,13 @@
 import { describe, it, expect } from '@jest/globals';
-import { checkStartupConfig, cfAccessHeaders, mergeCfAccessHeaders } from '../lib/startup-check.js';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  checkStartupConfig,
+  cfAccessHeaders,
+  mergeCfAccessHeaders,
+  ensureStateFileWritable,
+} from '../lib/startup-check.js';
 
 // A base env that passes every check, so each test breaks exactly one thing.
 const cleanEnv = (): NodeJS.ProcessEnv => ({
@@ -263,5 +271,125 @@ describe('checkStartupConfig: the confirmation signing key (#341)', () => {
     // cause is useful, so the length check stands aside for it.
     expect(errors).toHaveLength(1);
     expect(errors[0]).not.toContain('32 bytes');
+  });
+});
+
+describe('ensureStateFileWritable (#417)', () => {
+  const scratch = (): string => mkdtempSync(join(tmpdir(), 'state-check-'));
+
+  // A path whose parent is a regular file. Every user gets ENOTDIR from it,
+  // root included, which makes it a portable stand-in for the report's
+  // root-owned /data on machines where the chmod case below cannot run.
+  const behindAFile = (dir: string): string => {
+    const blocker = join(dir, 'not-a-dir');
+    writeFileSync(blocker, '');
+    return join(blocker, 'state.json');
+  };
+
+  it('treats the empty path as in-memory and touches nothing', () => {
+    expect(ensureStateFileWritable('', false)).toBeUndefined();
+  });
+
+  it('passes a file in a directory this process can write', () => {
+    const dir = scratch();
+    try {
+      expect(ensureStateFileWritable(join(dir, 'state.json'), true)).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('creates a missing directory rather than objecting to it', () => {
+    // The write path has always created it on demand; the check must not be
+    // stricter than the thing it stands in for, or a first boot on a fresh
+    // volume would refuse to start.
+    const dir = scratch();
+    try {
+      const file = join(dir, 'nested', 'deeper', 'state.json');
+      expect(ensureStateFileWritable(file, true)).toBeUndefined();
+      expect(existsSync(join(dir, 'nested', 'deeper'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a stale temp file this process cannot replace, which access(2) would pass', () => {
+    // Server run once as root and then as this user, say. The directory is
+    // writable, so an access check says yes; the write the provider actually
+    // performs says no. A directory in the temp file's place gives every
+    // user the same answer, root included.
+    const dir = scratch();
+    try {
+      const file = join(dir, 'state.json');
+      mkdirSync(`${file}.tmp`);
+      const problem = ensureStateFileWritable(file, true);
+      expect(problem).toContain('MCP_OAUTH_STATE_FILE points at');
+      expect(problem).toContain('EISDIR');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves nothing behind when the write succeeds', () => {
+    const dir = scratch();
+    try {
+      const file = join(dir, 'state.json');
+      expect(ensureStateFileWritable(file, true)).toBeUndefined();
+      expect(existsSync(`${file}.tmp`)).toBe(false);
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a directory that cannot be created, naming the variable and the path', () => {
+    const dir = scratch();
+    try {
+      const file = behindAFile(dir);
+      const problem = ensureStateFileWritable(file, true);
+      expect(problem).toContain('MCP_OAUTH_STATE_FILE points at');
+      expect(problem).toContain(file);
+      // Node reports a file in the way of a recursive mkdir as EEXIST on some
+      // versions and ENOTDIR on others; either is the errno the operator needs.
+      expect(problem).toMatch(/E(EXIST|NOTDIR)/);
+      // The operator typed this path. Telling them about the container image
+      // would be answering a question they did not ask.
+      expect(problem).not.toContain('container image');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('explains where the default comes from when nothing was configured', () => {
+    const dir = scratch();
+    try {
+      const file = behindAFile(dir);
+      const problem = ensureStateFileWritable(file, false);
+      expect(problem).toContain(`defaults to ${file}`);
+      expect(problem).toContain('container image');
+      expect(problem).toContain('MCP_OAUTH_STATE_FILE=');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The report's actual shape: the directory exists and belongs to someone
+  // else. A recursive mkdir on an existing directory is a silent no-op, so
+  // only the access probe after it catches this. Root can write anywhere, so
+  // the case is unobservable as root and skipped rather than faked.
+  const asNonRoot = process.getuid?.() === 0 ? it.skip : it;
+  asNonRoot('refuses a directory that exists but cannot be written into', () => {
+    const dir = scratch();
+    const locked = join(dir, 'locked');
+    mkdirSync(locked);
+    chmodSync(locked, 0o500);
+    try {
+      const problem = ensureStateFileWritable(join(locked, 'state.json'), false);
+      expect(problem).toContain('EACCES');
+      expect(problem).toContain(locked);
+    } finally {
+      chmodSync(locked, 0o700);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
