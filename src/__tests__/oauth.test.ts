@@ -4,7 +4,7 @@
 
 import { jest } from '@jest/globals';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -1848,6 +1848,71 @@ describe('discovery and token stay inside the 10s connection budget (#340)', () 
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
+    }
+  });
+});
+
+describe('persistence when the state file cannot be written (#417)', () => {
+  // A path whose parent is a regular file: every user gets ENOTDIR from it,
+  // root included, so it stands in for the report's root-owned /data on any
+  // machine the suite runs on.
+  const behindAFile = (dir: string): string => {
+    const blocker = join(dir, 'not-a-dir');
+    writeFileSync(blocker, '');
+    return join(blocker, 'state.json');
+  };
+
+  it('logs the failure on flush and keeps serving from memory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-unwritable-'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const file = behindAFile(dir);
+      const provider = makeProvider(file);
+      const clientId = registerTestClient(provider);
+      const { verifier, challenge } = pkcePair();
+      const { code } = authorize(provider, clientId, challenge);
+      const tokens = provider.exchange(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          code,
+          redirect_uri: 'https://client.example.com/callback',
+          code_verifier: verifier,
+        }),
+      );
+
+      // The shutdown hook calls this. A throw here was the report's exit 1
+      // on a plain SIGTERM.
+      expect(() => provider.flush()).not.toThrow();
+      const lines = stderr.mock.calls.map(([line]) => String(line));
+      expect(lines.some((line) => line.includes(file) && /E(EXIST|NOTDIR)/.test(line))).toBe(true);
+
+      // Nothing the server is currently using was lost with the write.
+      await expect(
+        provider.verifyAccessToken(tokens.access_token as string),
+      ).resolves.toMatchObject({ clientId });
+    } finally {
+      stderr.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('survives the debounced write that used to end the process', async () => {
+    // The report's first repro: POST /register answers 201, and 250ms later
+    // the timer fires into an uncaught exception. Real timers on purpose; the
+    // debounce and its unref() are the code under test.
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-unwritable-'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const provider = makeProvider(behindAFile(dir));
+      registerTestClient(provider);
+      expect(stderr).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(stderr).toHaveBeenCalledTimes(1);
+      expect(String(stderr.mock.calls[0]?.[0])).toContain('serving from memory');
+    } finally {
+      stderr.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

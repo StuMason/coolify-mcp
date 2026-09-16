@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **HTTP mode outside the container no longer dies on the first client registration** (#417, reported by @artgas1). The OAuth state file defaults to `/data/oauth-state.json`, a directory that only exists in the image. Run `coolify-mcp-http` on a workstation without `MCP_OAUTH_STATE_FILE` and the server started, answered `/healthz`, accepted the first `POST /register` with a 201, then exited 1 about 250ms later when the debounced state write threw from a timer. A plain SIGTERM did the same through the shutdown flush. The server now checks at startup that the state file's directory exists or can be created and is writable, and lists the failure with the other reasons it cannot start, naming the path and how to set one. A write that fails later, say a volume that goes read-only under a running server, logs one line and the server keeps serving from memory instead of ending.
+
+### Upgrading from 3.5
+
+- **Container deployments are unaffected.** The image's `/data` volume passes the new check.
+- **Running `coolify-mcp-http` outside a container?** Set `MCP_OAUTH_STATE_FILE`
+  to a path your user can write, e.g. `./oauth-state.json`. Until now that
+  omission crashed the server after its first registration; it is now a
+  startup error that says so.
+
 ## [3.5.0] - 2026-09-14
 
 ### Added

@@ -836,10 +836,22 @@ export class OAuthProvider {
       tokens: [...this.tokens.values()],
     };
     const file = this.options.stateFile;
-    mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
-    renameSync(tmp, file);
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      const tmp = `${file}.tmp`;
+      writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
+      renameSync(tmp, file);
+    } catch (error) {
+      // This runs from a debounced timer, where a throw is an uncaught
+      // exception and the end of the process (#417). A write that fails
+      // loses nothing the server is currently using: every registration and
+      // token is still in memory, so it keeps answering. What it loses is
+      // survival across a restart, which is worth one line each time rather
+      // than the whole server.
+      console.error(
+        `oauth: could not persist state to ${file}; serving from memory. ${(error as Error).message}`,
+      );
+    }
   }
 
   private load(): void {

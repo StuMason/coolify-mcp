@@ -14,6 +14,9 @@
  * token.
  */
 
+import { accessSync, constants, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+
 export interface StartupCheckResult {
   /** Fatal: the server must refuse to start and print these. */
   errors: string[];
@@ -178,6 +181,44 @@ export function checkStartupConfig(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * Whether the OAuth state file can actually be written (#417).
+ *
+ * The default path lives under `/data`, which the image creates and mounts as
+ * a volume. Run `dist/http.js` on a workstation instead and that directory
+ * does not exist, or exists and belongs to root. Nothing noticed until the
+ * first client registration, when the debounced write threw from a timer
+ * and took the process with it: `POST /register` had already answered 201.
+ *
+ * This asks the same question at boot. Creating the directory here is not
+ * new behaviour, the write path has always done that; the difference is
+ * that the answer now arrives while the operator is looking at the
+ * terminal, listed with the other reasons the server cannot start.
+ *
+ * An existing directory makes the recursive mkdir a silent no-op even when
+ * this process cannot write into it, which is exactly the root-owned `/data`
+ * case, so the access probe after it is the step that matters there.
+ */
+export function stateFileProblem(file: string, configured: boolean): string | undefined {
+  if (file === '') return undefined; // In-memory: nothing to write.
+  const dir = dirname(file);
+  try {
+    mkdirSync(dir, { recursive: true });
+    accessSync(dir, constants.W_OK);
+    return undefined;
+  } catch (error) {
+    // fs errors already read "EACCES: permission denied, access '/data'":
+    // the code, the operation and the path, which is the whole diagnosis.
+    const cause = (error as Error).message;
+    return configured
+      ? `MCP_OAUTH_STATE_FILE points at ${file}, but its directory cannot be written by this process (${cause}). ` +
+          'Set it to a path this user can write, e.g. ./oauth-state.json'
+      : `The OAuth state file defaults to ${file}, and its directory cannot be written by this process (${cause}). ` +
+          'That default only exists inside the container image. Outside it, set MCP_OAUTH_STATE_FILE ' +
+          'to a path this user can write, e.g. MCP_OAUTH_STATE_FILE=./oauth-state.json';
+  }
 }
 
 /**
