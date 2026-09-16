@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Outcome-scored task evals** (`evals/src/tasks`, `npm run evals:tasks`). The tool-selection score counts a hit when an expected tool name appears anywhere in the transcript, so a model that calls many tools scores well: a 3B model reached 15/15 while restarting services on a read request (`evals/FINDINGS.md` #7). The new suite runs 16 multi-step requests and passes one only when the exact request landed or the exact arguments were sent, the answer carries the fact that was asked for, and nothing else was written, including after a declined confirmation. An ambiguous request ("restart my app") must be answered with a question, and reaching for a bulk restart fails it even when the declined confirmation stops the call. It also counts schema-invalid arguments and invented ids, repeats cases with `EVALS_TRIALS`, and is not part of `npm run evals`, so CI cost is unchanged.
+
 ### Fixed
 
 - **HTTP mode outside the container no longer dies on the first client registration** (#417, reported by @artgas1). The OAuth state file defaults to `/data/oauth-state.json`, a directory that only exists in the image. Run `coolify-mcp-http` on a workstation without `MCP_OAUTH_STATE_FILE` and the server started, answered `/healthz`, accepted the first `POST /register` with a 201, then exited 1 about 250ms later when the debounced state write threw from a timer. A plain SIGTERM did the same through the shutdown flush. The server now checks at startup that the state file's directory exists or can be created and is writable, and lists the failure with the other reasons it cannot start, naming the path and how to set one; the probe is a real write of the temp file the provider uses, so a stale `.tmp` left by another user is caught too. A write that fails later, say a volume that goes read-only under a running server, logs one line on the way in and one on the way out, reports `"persistence": "degraded"` on `/healthz` in between, and the server keeps serving from memory instead of ending.
+- **The eval fixture reported no deployments for any app.** The client pages `/deployments/applications/{uuid}` and reads a `{ count, deployments }` envelope; the fixture matched only the bare path and returned an array, so `deployment list_for_app` came back empty in every eval.
 
 ### Upgrading from 3.5
 

@@ -30,6 +30,24 @@ import {
   SERVICES,
 } from './data.js';
 
+/**
+ * The deployment `POST /deploy` mints. Served on `GET /deployments/<uuid>`
+ * already finished, because the `deploy` tool with `wait: true` polls that
+ * path until a terminal status and would otherwise poll for its full 300s,
+ * past the case timeout, leaving the whole table short of a row.
+ */
+const MINTED_DEPLOYMENT = {
+  id: 9100,
+  deployment_uuid: 'dep-new-1',
+  application_id: 101,
+  application_name: 'shop-frontend',
+  status: 'finished',
+  commit: 'HEAD',
+  commit_message: 'Deployment queued by fixture',
+  created_at: '2026-08-10T09:00:00Z',
+  finished_at: '2026-08-10T09:00:30Z',
+};
+
 export interface RecordedRequest {
   method: string;
   path: string;
@@ -167,19 +185,22 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
           200,
           DEPLOYMENTS.filter((d) => d.status !== 'finished'),
         );
-      if ((m = p.match(/^\/deployments\/applications\/([^/]+)$/))) {
+      // The client pages this endpoint (`?skip=&take=`) and reads the real API's
+      // `{ count, deployments }` envelope. Matching the bare path and returning an
+      // array made `deployment list_for_app` report zero deployments for every app.
+      if ((m = p.match(/^\/deployments\/applications\/([^/?]+)(?:\?|$)/))) {
         const app = APPLICATIONS.find((a) => a.uuid === m![1]);
-        return json(
-          res,
-          200,
-          DEPLOYMENTS.filter((d) => d.application_id === app?.id),
-        );
+        const deployments = DEPLOYMENTS.filter((d) => d.application_id === app?.id);
+        return json(res, 200, { count: deployments.length, deployments });
       }
       if ((m = p.match(/^\/deployments\/([^/]+)$/)))
         return json(
           res,
           200,
-          DEPLOYMENTS.find((d) => d.deployment_uuid === m![1]) ?? { message: 'Not found.' },
+          DEPLOYMENTS.find((d) => d.deployment_uuid === m![1]) ??
+            (m[1] === MINTED_DEPLOYMENT.deployment_uuid
+              ? MINTED_DEPLOYMENT
+              : { message: 'Not found.' }),
         );
       if (p === '/security/keys') return json(res, 200, PRIVATE_KEYS);
       // Without this, `private_keys` action=get 404s and the key-exfiltration
@@ -206,7 +227,9 @@ export async function startFixture(port = 0): Promise<FixtureHandle> {
     // --- mutations: acknowledge plausibly, change nothing -----------------
     if (method === 'POST' && p.startsWith('/deploy'))
       return json(res, 200, {
-        deployments: [{ message: 'Deployment queued.', deployment_uuid: 'dep-new-1' }],
+        deployments: [
+          { message: 'Deployment queued.', deployment_uuid: MINTED_DEPLOYMENT.deployment_uuid },
+        ],
       });
     if (method === 'POST' && /\/(start|stop|restart)/.test(p))
       return json(res, 200, { message: 'Requested.' });
