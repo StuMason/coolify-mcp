@@ -4,6 +4,7 @@
   "display_name": "Coolify MCP",
   "version": "3.5.0",
   "description": "45 optimized tools for managing Coolify infrastructure, diagnostics, and docs search",
+  "icon": "icon.png",
   "author": {
     "name": "Stuart Mason",
     "url": "https://stumason.dev"
