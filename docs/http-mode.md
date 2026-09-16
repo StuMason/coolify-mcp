@@ -217,9 +217,10 @@ volume; on a workstation it does not exist, or belongs to root. Set
 `MCP_OAUTH_STATE_FILE=./oauth-state.json`. The server checks this at startup
 and refuses to start otherwise, naming the path, so the failure cannot wait
 for the first client to register. Should the directory become unwritable
-while the server is running, a failed write logs one line and the server
-keeps serving from memory; what is lost is state across the next restart,
-not the running server.
+while the server is running, a failed write logs one line, `/healthz`
+reports `"persistence": "degraded"` until a write succeeds again, and the
+server keeps serving from memory; what is lost is state across the next
+restart, not the running server.
 
 ### Running a fleet over HTTP
 

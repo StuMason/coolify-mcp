@@ -14,7 +14,7 @@
  * token.
  */
 
-import { accessSync, constants, mkdirSync } from 'node:fs';
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export interface StartupCheckResult {
@@ -183,8 +183,11 @@ export function checkStartupConfig(
   return { errors, warnings };
 }
 
+/** Where HTTP mode keeps OAuth state unless `MCP_OAUTH_STATE_FILE` says otherwise. */
+export const DEFAULT_OAUTH_STATE_FILE = '/data/oauth-state.json';
+
 /**
- * Whether the OAuth state file can actually be written (#417).
+ * Make sure the OAuth state file can actually be written (#417), or say why not.
  *
  * The default path lives under `/data`, which the image creates and mounts as
  * a volume. Run `dist/http.js` on a workstation instead and that directory
@@ -192,30 +195,37 @@ export function checkStartupConfig(
  * first client registration, when the debounced write threw from a timer
  * and took the process with it: `POST /register` had already answered 201.
  *
- * This asks the same question at boot. Creating the directory here is not
- * new behaviour, the write path has always done that; the difference is
- * that the answer now arrives while the operator is looking at the
- * terminal, listed with the other reasons the server cannot start.
+ * This asks the same question at boot, and it asks it for real: the
+ * directory is created if missing (the write path has always done that), and
+ * the temp file the provider writes is written and removed. A real write
+ * rather than access(2) because a stale `.tmp` left by another user passes
+ * an access check and fails every write, and because access(2) disagrees
+ * with ACLs, NFS and Windows. The one side effect is the directory, which is
+ * left behind even when boot then fails for another reason; every problem
+ * still reports in one boot, which matters more.
  *
- * An existing directory makes the recursive mkdir a silent no-op even when
- * this process cannot write into it, which is exactly the root-owned `/data`
- * case, so the access probe after it is the step that matters there.
+ * Returns the problem to list with the other reasons the server cannot
+ * start, or undefined when the path is usable. `configured` picks the
+ * message: the operator who typed the path is told the path, the one who
+ * typed nothing is told where the default comes from.
  */
-export function stateFileProblem(file: string, configured: boolean): string | undefined {
-  if (file === '') return undefined; // In-memory: nothing to write.
+export function ensureStateFileWritable(file: string, configured: boolean): string | undefined {
+  if (file === '') return undefined; // In-memory, as the provider treats it.
   const dir = dirname(file);
   try {
-    mkdirSync(dir, { recursive: true });
-    accessSync(dir, constants.W_OK);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, '', { mode: 0o600 });
+    unlinkSync(tmp);
     return undefined;
   } catch (error) {
-    // fs errors already read "EACCES: permission denied, access '/data'":
+    // fs errors already read "EACCES: permission denied, mkdir '/data'":
     // the code, the operation and the path, which is the whole diagnosis.
     const cause = (error as Error).message;
     return configured
-      ? `MCP_OAUTH_STATE_FILE points at ${file}, but its directory cannot be written by this process (${cause}). ` +
+      ? `MCP_OAUTH_STATE_FILE points at ${file}, but this process cannot write there (${cause}). ` +
           'Set it to a path this user can write, e.g. ./oauth-state.json'
-      : `The OAuth state file defaults to ${file}, and its directory cannot be written by this process (${cause}). ` +
+      : `The OAuth state file defaults to ${file}, and this process cannot write there (${cause}). ` +
           'That default only exists inside the container image. Outside it, set MCP_OAUTH_STATE_FILE ' +
           'to a path this user can write, e.g. MCP_OAUTH_STATE_FILE=./oauth-state.json';
   }

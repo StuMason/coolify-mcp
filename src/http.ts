@@ -15,7 +15,11 @@ import {
   listenOptionsFromEnv,
   normalizePublicUrl,
 } from './lib/http-server.js';
-import { checkStartupConfig, stateFileProblem } from './lib/startup-check.js';
+import {
+  checkStartupConfig,
+  DEFAULT_OAUTH_STATE_FILE,
+  ensureStateFileWritable,
+} from './lib/startup-check.js';
 import { registryFromEnv, type InstanceRegistry } from './lib/instances.js';
 import type { CoolifyConfig } from './types/coolify.js';
 
@@ -118,8 +122,11 @@ function main(): void {
   // The OAuth state file (#417). Its default is right in the image and wrong
   // everywhere else, and the write that finds out runs on a timer after the
   // first registration has already answered 201. Ask now instead.
-  const stateFile = process.env.MCP_OAUTH_STATE_FILE || '/data/oauth-state.json';
-  const stateProblem = stateFileProblem(stateFile, Boolean(process.env.MCP_OAUTH_STATE_FILE));
+  const stateFile = process.env.MCP_OAUTH_STATE_FILE || DEFAULT_OAUTH_STATE_FILE;
+  const stateProblem = ensureStateFileWritable(
+    stateFile,
+    Boolean(process.env.MCP_OAUTH_STATE_FILE),
+  );
   if (stateProblem) problems.push(stateProblem);
 
   // Warnings print even when startup then fails: the operator staring at the

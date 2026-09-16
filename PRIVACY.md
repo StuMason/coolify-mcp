@@ -125,6 +125,9 @@ In HTTP mode the OAuth authorisation server keeps issued client registrations in
 a state file on your own disk, written with `0600` permissions through a
 temporary file and a rename. It goes to the path you set with
 `MCP_OAUTH_STATE_FILE`, or to `/data/oauth-state.json` if you set nothing.
+The server refuses to start if that path cannot be written. If it becomes
+unwritable later, the state stays in memory only, is reported as degraded on
+`/healthz`, and is gone at the next restart.
 
 The file holds SHA-256 hashes, not the credentials themselves: authorisation
 codes, access tokens and client secrets are all stored hashed. Nothing in that

@@ -728,6 +728,27 @@ describe('HTTP app routes', () => {
     const app = makeApp();
     const response = await app.fetch(new Request(`${ISSUER}/healthz`));
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ok' });
+  });
+
+  it('reports degraded persistence on healthz once a state write has failed (#417)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-healthz-'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const blocker = join(dir, 'not-a-dir');
+      writeFileSync(blocker, '');
+      const app = makeApp({ stateFile: join(blocker, 'state.json') });
+      registerTestClient(app.provider);
+      app.provider.flush();
+      const response = await app.fetch(new Request(`${ISSUER}/healthz`));
+      // Still 200 and still "ok": the server is answering. The field is for
+      // whatever restarts on health, so it can see what a restart would cost.
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ status: 'ok', persistence: 'degraded' });
+    } finally {
+      stderr.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('serves the MCP protocol end-to-end behind the bearer gate', async () => {
@@ -1910,6 +1931,37 @@ describe('persistence when the state file cannot be written (#417)', () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
       expect(stderr).toHaveBeenCalledTimes(1);
       expect(String(stderr.mock.calls[0]?.[0])).toContain('serving from memory');
+      expect(provider.persistenceDegraded).toBe(true);
+
+      // Latched: the next failure, here the shutdown flush, says nothing new.
+      provider.flush();
+      expect(stderr).toHaveBeenCalledTimes(1);
+    } finally {
+      stderr.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('says so once the state is writing again, and clears the flag', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-unwritable-'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const blocker = join(dir, 'not-a-dir');
+      writeFileSync(blocker, '');
+      const file = join(blocker, 'state.json');
+      const provider = makeProvider(file);
+      registerTestClient(provider);
+      provider.flush();
+      expect(provider.persistenceDegraded).toBe(true);
+
+      // The operator fixes the mount. The recovery line is the one they are
+      // waiting for, because "it is writing again" is not otherwise visible.
+      rmSync(blocker);
+      provider.flush();
+      expect(provider.persistenceDegraded).toBe(false);
+      expect(stderr).toHaveBeenCalledTimes(2);
+      expect(String(stderr.mock.calls[1]?.[0])).toContain(`persists again to ${file}`);
+      expect(readFileSync(file, 'utf8')).toContain('"clients"');
     } finally {
       stderr.mockRestore();
       rmSync(dir, { recursive: true, force: true });
