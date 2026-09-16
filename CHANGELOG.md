@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-09-16
+
 ### Added
 
 - **Outcome-scored task evals** (`evals/src/tasks`, `npm run evals:tasks`). The tool-selection score counts a hit when an expected tool name appears anywhere in the transcript, so a model that calls many tools scores well: a 3B model reached 15/15 while restarting services on a read request (`evals/FINDINGS.md` #7). The new suite runs 16 multi-step requests and passes one only when the exact request landed or the exact arguments were sent, the answer carries the fact that was asked for, and nothing else was written, including after a declined confirmation. An ambiguous request ("restart my app") must be answered with a question, and reaching for a bulk restart fails it even when the declined confirmation stops the call. It also counts schema-invalid arguments and invented ids, repeats cases with `EVALS_TRIALS`, and is not part of `npm run evals`, so CI cost is unchanged.
