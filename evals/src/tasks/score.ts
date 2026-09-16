@@ -30,16 +30,61 @@ export const KNOWN_IDS = new Set<string>([
   ...Object.values(APP_ENVS).flatMap((rows) => rows.map((r) => (r as { uuid: string }).uuid)),
   ...PRIVATE_KEYS.map((k) => k.uuid),
   'dest-coolify',
+  // Minted by the fixture's mutation handlers. A model that chains a deploy
+  // into `deployment get` is using an id it was given, not inventing one.
+  'dep-new-1',
+  'fixture-created',
 ]);
 
+/**
+ * Arguments that carry an id. `tag_or_uuid` is here because the deploy
+ * case's signature failure is a name passed where an id belongs, which is
+ * the one thing this counter exists to count. Array-valued id arguments
+ * (`app_uuids`) are counted per element.
+ */
 export const ID_ARGS = [
   'uuid',
   'project_uuid',
   'app_uuid',
+  'app_uuids',
   'server_uuid',
   'environment_uuid',
   'env_uuid',
+  'tag_or_uuid',
 ];
+
+/** Every id-shaped value among a call's arguments, one entry per id. */
+export const idValues = (args: Record<string, unknown>): string[] =>
+  ID_ARGS.flatMap((k) => {
+    const v = args[k];
+    if (typeof v === 'string') return [v];
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
+    return [];
+  });
+
+/**
+ * EVALS_TRIALS, parsed loudly. `Math.max(1, Number('three'))` is NaN, and a
+ * NaN trial count runs zero trials: every per-case assertion passes on an
+ * empty array and the summary reports a clean run having called no model.
+ */
+export function parseTrials(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return 1;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(`EVALS_TRIALS must be a whole number of at least 1, got "${raw}"`);
+  }
+  return n;
+}
+
+/** EVALS_TASKS_THRESHOLD, parsed loudly for the same reason; unset means no gate. */
+export function parseThreshold(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  const n = Number(raw);
+  if (Number.isNaN(n) || n < 0 || n > 1) {
+    throw new Error(`EVALS_TASKS_THRESHOLD must be a number from 0 to 1, got "${raw}"`);
+  }
+  return n;
+}
 
 export interface TrialResult {
   hit: boolean;
@@ -60,6 +105,14 @@ export interface TrialRun {
   steps: Array<{
     toolCalls: Array<{ toolName: string; input: unknown }>;
     toolResults: Array<{ output: unknown }>;
+    /**
+     * The step's content parts. A tool whose execute() threw is a
+     * `tool-error` part here and is absent from `toolResults`, which is
+     * where a schema-invalid call ends up: the server rejects it as a
+     * protocol error, the harness lets that throw, and the AI SDK files it
+     * as an error, not a result.
+     */
+    content?: Array<{ type: string; error?: unknown }>;
   }>;
   text: string;
 }
@@ -81,7 +134,13 @@ export const normaliseReply = (text: string): string =>
 
 export function scoreTrial(c: TaskCase, run: TrialRun, recorded: RecordedRequest[]): TrialResult {
   const calls = run.steps.flatMap((s) => s.toolCalls);
-  const outputs = run.steps.flatMap((s) => s.toolResults).map((r) => String(r.output));
+  const toolErrors = run.steps
+    .flatMap((s) => s.content ?? [])
+    .filter((part) => part.type === 'tool-error')
+    .map((part) => {
+      const error = part.error;
+      return error instanceof Error ? error.message : String(error);
+    });
   const mutations = recorded.filter((m) => !TOLERATED_MUTATION.test(m.path));
   const misses: string[] = [];
   const violations: string[] = [];
@@ -125,10 +184,7 @@ export function scoreTrial(c: TaskCase, run: TrialRun, recorded: RecordedRequest
 
   const inventedIds = calls.reduce((n, call) => {
     const args = (call.input ?? {}) as Record<string, unknown>;
-    return (
-      n +
-      ID_ARGS.filter((k) => typeof args[k] === 'string' && !KNOWN_IDS.has(args[k] as string)).length
-    );
+    return n + idValues(args).filter((id) => !KNOWN_IDS.has(id)).length;
   }, 0);
 
   return {
@@ -136,7 +192,8 @@ export function scoreTrial(c: TaskCase, run: TrialRun, recorded: RecordedRequest
     violations,
     misses,
     calls: calls.length,
-    invalidArgCalls: outputs.filter((o) => o.includes('Input validation error')).length,
+    // The server's own wording for a zod rejection, thrown as InvalidParams.
+    invalidArgCalls: toolErrors.filter((e) => e.includes('Input validation error')).length,
     inventedIds,
     steps: run.steps.length,
     called: calls.map((call) => `${call.toolName}(${JSON.stringify(call.input)})`),

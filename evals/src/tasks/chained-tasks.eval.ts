@@ -30,12 +30,10 @@ import {
   temperatureFor,
 } from '../harness/agent.js';
 import { TASK_CASES, type TaskCase } from './cases.js';
-import { scoreTrial, type TrialResult } from './score.js';
+import { parseThreshold, parseTrials, scoreTrial, type TrialResult } from './score.js';
 
-const TRIALS = Math.max(1, Number(process.env.EVALS_TRIALS ?? 1));
-const THRESHOLD = process.env.EVALS_TASKS_THRESHOLD
-  ? Number(process.env.EVALS_TASKS_THRESHOLD)
-  : undefined;
+const TRIALS = parseTrials(process.env.EVALS_TRIALS);
+const THRESHOLD = parseThreshold(process.env.EVALS_TASKS_THRESHOLD);
 const MAX_STEPS = 10;
 
 const ctx: EvalContext = hasModelKey
@@ -83,7 +81,7 @@ describe.skipIf(!hasModelKey)(`task evals (${EVAL_MODEL}, ${TRIALS} trial(s))`, 
               steps: 0,
               called: [],
               text: '',
-              error: String((err as Error).message).slice(0, 200),
+              error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
             });
           }
         }
@@ -119,19 +117,29 @@ describe.skipIf(!hasModelKey)(`task evals (${EVAL_MODEL}, ${TRIALS} trial(s))`, 
     for (const r of rows.filter((x) => x.firstMiss)) console.log(`  ${r.case}: ${r.firstMiss}`);
 
     const all = [...results.values()].flat();
+    const providerErrors = all.filter((t) => t.error).length;
     const passRate = all.filter((t) => t.hit).length / Math.max(1, all.length);
-    console.log(`[tasks] ${EVAL_MODEL}: pass rate ${passRate.toFixed(2)} over ${all.length} runs`);
-    if (process.env.EVALS_TASKS_REPORT) {
-      writeFileSync(
-        process.env.EVALS_TASKS_REPORT,
-        JSON.stringify({ model: EVAL_MODEL, trials: TRIALS, passRate, rows }, null, 2),
+    // A rate over provider errors is not a rate. Neither printed nor
+    // persisted: a report file that exists is read as a result.
+    if (providerErrors === 0) {
+      console.log(
+        `[tasks] ${EVAL_MODEL}: pass rate ${passRate.toFixed(2)} over ${all.length} runs`,
       );
+      if (process.env.EVALS_TASKS_REPORT) {
+        writeFileSync(
+          process.env.EVALS_TASKS_REPORT,
+          JSON.stringify({ model: EVAL_MODEL, trials: TRIALS, passRate, rows }, null, 2),
+        );
+      }
+    } else {
+      console.log(`[tasks] ${EVAL_MODEL}: ${providerErrors} provider error(s); no rate reported`);
     }
 
-    expect(results.size, 'every case must produce trials (check for .only)').toBe(
-      TASK_CASES.length,
-    );
-    expect(all.filter((t) => t.error).length, 'provider errors make the rate meaningless').toBe(0);
+    expect(
+      results.size,
+      'every case must produce trials (a case that timed out, or a stray .only)',
+    ).toBe(TASK_CASES.length);
+    expect(providerErrors, 'provider errors make the rate meaningless').toBe(0);
     if (THRESHOLD !== undefined) expect(passRate).toBeGreaterThanOrEqual(THRESHOLD);
   });
 });
