@@ -7025,6 +7025,14 @@ describe('isRunningStatus', () => {
 });
 
 describe('errorHint', () => {
+  it('explains a storage 422, naming host_path as removed in 4.3.22 (#416)', () => {
+    const hint = errorHint(422, '/applications/app-uuid/storages');
+    expect(hint).toMatch(/host_path.*4\.3\.22/);
+    expect(hint).toMatch(/mount_path/);
+    expect(errorHint(422, '/databases/db-uuid/storages')).toBe(hint);
+    expect(errorHint(422, '/applications/app-uuid/storages/st-uuid/backups')).toBeUndefined();
+  });
+
   it('hints at the command-length limit for a 500 on a scheduled-tasks path', () => {
     expect(errorHint(500, '/applications/app-uuid/scheduled-tasks')).toMatch(/varchar\(255\)/);
     expect(errorHint(500, '/services/svc-uuid/scheduled-tasks/task-uuid')).toMatch(

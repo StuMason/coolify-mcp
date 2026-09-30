@@ -63,10 +63,15 @@ paths:
                   type: string
                   example: og888os
                   description: 'The UUID of the private key.'
+                server_role:
+                  type: string
+                  enum: [deployment, build, both]
+                  example: both
+                  description: 'Server role.'
                 is_build_server:
                   type: boolean
-                  example: false
-                  description: 'Is build server.'
+                  deprecated: true
+                  description: 'Deprecated: use server_role instead. true sets server_role to build, false sets it to both. Must not conflict with server_role.'
                 instant_validate:
                   type: boolean
                   example: false
@@ -224,6 +229,22 @@ paths:
           required: true
           schema:
             type: string
+        -
+          name: force
+          in: query
+          description: 'Also delete all resources on the server.'
+          required: false
+          schema:
+            type: boolean
+            default: false
+        -
+          name: delete_from_provider
+          in: query
+          description: 'Also delete the server from its cloud provider (Hetzner, Vultr or DigitalOcean). This cannot be undone.'
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: 'Server deleted.'
@@ -283,9 +304,14 @@ paths:
                 private_key_uuid:
                   type: string
                   description: 'The UUID of the private key.'
+                server_role:
+                  type: string
+                  enum: [deployment, build, both]
+                  description: 'Server role.'
                 is_build_server:
                   type: boolean
-                  description: 'Is build server.'
+                  deprecated: true
+                  description: 'Deprecated: use server_role instead. true sets server_role to build, false changes a build server to both and leaves other roles unchanged. Must not conflict with server_role.'
                 instant_validate:
                   type: boolean
                   description: 'Instant validate.'
@@ -308,6 +334,9 @@ paths:
                 server_disk_usage_check_frequency:
                   type: string
                   description: 'Cron expression for disk usage check frequency.'
+                server_disk_usage_notification_interval_hours:
+                  type: integer
+                  description: 'Minimum hours between high disk usage notifications (1-720). Default: 24.'
                 connection_timeout:
                   type: integer
                   description: 'SSH connection timeout in seconds (1-300). Default: 10.'
@@ -327,40 +356,6 @@ paths:
           $ref: '#/components/responses/404'
         '422':
           $ref: '#/components/responses/422'
-      security:
-        -
-          bearerAuth: []
-  '/servers/{uuid}/claim':
-    post:
-      tags:
-        - Servers
-      summary: 'Claim imported server'
-      description: 'Claim a managed host for this instance: write ownership file and rebind Sentinel.'
-      operationId: claim-server
-      parameters:
-        -
-          name: uuid
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                write_remote:
-                  type: boolean
-                  default: true
-                rebind_sentinel:
-                  type: boolean
-                  default: true
-              type: object
-      responses:
-        '200':
-          description: 'Claim result'
-        '404':
-          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
@@ -823,78 +818,6 @@ paths:
       security:
         -
           bearerAuth: []
-  '/servers/{uuid}/export':
-    get:
-      tags:
-        - Servers
-      summary: 'Export server transfer bundle'
-      description: 'Export a server and all resources hosted on it as a versioned transfer bundle for moving between Coolify instances. Requires read:sensitive.'
-      operationId: export-server-transfer-bundle
-      parameters:
-        -
-          name: uuid
-          in: path
-          required: true
-          schema:
-            type: string
-        -
-          name: encrypt
-          in: query
-          description: 'If true and passphrase is provided, return an encrypted envelope.'
-          required: false
-          schema:
-            type: boolean
-        -
-          name: passphrase
-          in: query
-          description: 'Passphrase used when encrypt=true.'
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 'Transfer bundle'
-        '401':
-          $ref: '#/components/responses/401'
-        '403':
-          description: 'Missing sensitive permission'
-        '404':
-          $ref: '#/components/responses/404'
-      security:
-        -
-          bearerAuth: []
-  '/servers/{uuid}/export/mailbox':
-    post:
-      tags:
-        - Servers
-      summary: 'Write transfer bundle to server mailbox'
-      description: 'Write an export bundle to /data/coolify/exports on the managed host for air-gapped import.'
-      operationId: export-server-transfer-mailbox
-      parameters:
-        -
-          name: uuid
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                passphrase:
-                  type: [string, 'null']
-              type: object
-      responses:
-        '200':
-          description: 'Mailbox write result'
-        '403':
-          description: 'Missing sensitive permission'
-        '404':
-          $ref: '#/components/responses/404'
-      security:
-        -
-          bearerAuth: []
   '/servers/{uuid}/log-drains':
     get:
       tags:
@@ -986,60 +909,6 @@ paths:
           $ref: '#/components/responses/404'
         '422':
           $ref: '#/components/responses/422'
-      security:
-        -
-          bearerAuth: []
-  '/servers/{uuid}/migrate':
-    post:
-      tags:
-        - Servers
-      summary: 'Migrate server to another Coolify instance'
-      description: 'One-shot handoff: export this server, import+claim on the target instance (using the provided token), then disable automations here. Requires read:sensitive and write.'
-      operationId: migrate-server-between-instances
-      parameters:
-        -
-          name: uuid
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
-                - target_url
-                - target_token
-              properties:
-                target_url:
-                  type: string
-                  example: 'https://coolify-b.example.com'
-                target_token:
-                  description: 'API token on the target instance (root or write)'
-                  type: string
-                write_remote:
-                  type: boolean
-                  default: false
-                rebind_sentinel:
-                  type: boolean
-                  default: true
-                preserve_uuids:
-                  type: boolean
-                  default: true
-                adopt_mode:
-                  type: boolean
-                  default: true
-              type: object
-      responses:
-        '200':
-          description: Migrated
-        '403':
-          description: 'Missing sensitive permission'
-        '404':
-          $ref: '#/components/responses/404'
-        '422':
-          description: 'Validation or remote import failed'
       security:
         -
           bearerAuth: []
@@ -1224,6 +1093,179 @@ paths:
       security:
         -
           bearerAuth: []
+  '/servers/{uuid}/registries':
+    get:
+      tags:
+        - Servers
+      summary: 'List server registry logins'
+      description: 'List the Docker registries a server is logged in to and the registries its resources pull from or push to. Reads the Docker config of the server over SSH. Credentials are never returned, only registry names and usernames. Requires the `read:sensitive` ability.'
+      operationId: list-server-registries
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Registry logins of the server.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  registries: { type: array, items: { properties: { registry: { type: string, example: ghcr.io }, logged_in: { type: boolean, example: true }, source: { description: 'Where the Docker config stores the credentials.', type: [string, 'null'], enum: [auths, credHelpers] }, username: { type: [string, 'null'], example: octocat }, used_by: { type: array, items: { properties: { type: { type: string, example: Application }, name: { type: string }, link: { type: [string, 'null'] } }, type: object } } }, type: object } }
+                  error: { description: 'Set when the logins could not be read from the server.', type: [string, 'null'] }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    post:
+      tags:
+        - Servers
+      summary: 'Log in to a registry on a server'
+      description: 'Run docker login on the server, writing to the Docker config that deployments use. Logging in again to the same registry replaces the saved login.'
+      operationId: login-server-registry
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - registry
+                - username
+                - password
+              properties:
+                registry:
+                  description: 'Registry host, optionally with a port. Use docker.io for Docker Hub.'
+                  type: string
+                  example: ghcr.io
+                username:
+                  type: string
+                  example: octocat
+                password:
+                  description: 'Password or access token. Never returned.'
+                  type: string
+              type: object
+      responses:
+        '200':
+          description: 'Logged in.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Logged in to ghcr.io.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/registries/{registry}':
+    delete:
+      tags:
+        - Servers
+      summary: 'Log out from a registry on a server'
+      description: 'Run docker logout on the server for a registry.'
+      operationId: logout-server-registry
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: registry
+          in: path
+          description: 'Registry host, optionally with a port, for example registry.example.com:5000.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Logged out.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'Logged out from ghcr.io.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/servers/{uuid}/registries/{registry}/check':
+    post:
+      tags:
+        - Servers
+      summary: 'Check a registry login on a server'
+      description: 'Check that the saved login of the server for a registry still works. Runs docker login with the saved credentials on the server.'
+      operationId: check-server-registry-login
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Server UUID'
+          required: true
+          schema:
+            type: string
+        -
+          name: registry
+          in: path
+          description: 'Registry host, optionally with a port, for example registry.example.com:5000.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'The login works.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string, example: 'The login for ghcr.io works.' }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   '/servers/{uuid}/resources':
     get:
       tags:
@@ -1278,7 +1320,7 @@ paths:
             application/json:
               schema:
                 properties:
-                  is_sentinel_enabled: { type: boolean }
+                  is_sentinel_enabled: { description: 'Sentinel is mandatory on regular managed servers.', type: boolean, readOnly: true }
                   is_metrics_enabled: { type: boolean }
                   is_sentinel_debug_enabled: { type: boolean }
                   sentinel_token: { description: 'Only present with read:sensitive.', type: string }
@@ -1287,6 +1329,13 @@ paths:
                   sentinel_push_interval_seconds: { type: integer }
                   sentinel_custom_url: { description: 'Only present with read:sensitive.', type: string }
                   sentinel_updated_at: { type: [string, 'null'] }
+                  traffic_topn: { type: integer }
+                  traffic_sample_threshold: { type: integer }
+                  traffic_retention_1h_days: { type: integer }
+                  traffic_retention_1d_days: { type: integer }
+                  is_geoip_enabled: { type: boolean }
+                  geoip_refresh_days: { type: integer }
+                  geoip_maxmind_license_key: { description: 'Only present with read:sensitive.', type: string }
                 type: object
         '401':
           $ref: '#/components/responses/401'
@@ -1317,8 +1366,6 @@ paths:
           application/json:
             schema:
               properties:
-                is_sentinel_enabled:
-                  type: boolean
                 is_metrics_enabled:
                   type: boolean
                 is_sentinel_debug_enabled:
@@ -1336,6 +1383,25 @@ paths:
                   minimum: 10
                 sentinel_custom_url:
                   type: [string, 'null']
+                traffic_topn:
+                  type: integer
+                  minimum: 1
+                traffic_sample_threshold:
+                  type: integer
+                  minimum: 0
+                traffic_retention_1h_days:
+                  type: integer
+                  minimum: 1
+                traffic_retention_1d_days:
+                  type: integer
+                  minimum: 1
+                is_geoip_enabled:
+                  type: boolean
+                geoip_refresh_days:
+                  type: integer
+                  minimum: 1
+                geoip_maxmind_license_key:
+                  type: [string, 'null']
               type: object
       responses:
         '200':
@@ -1348,38 +1414,6 @@ paths:
           $ref: '#/components/responses/404'
         '422':
           $ref: '#/components/responses/422'
-      security:
-        -
-          bearerAuth: []
-  '/servers/{uuid}/transfer/complete':
-    post:
-      tags:
-        - Servers
-      summary: 'Mark server transferred'
-      description: 'Source-instance step: disable automations after a successful export/import handoff.'
-      operationId: complete-server-transfer
-      parameters:
-        -
-          name: uuid
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                export_id:
-                  type: [string, 'null']
-                target_instance_url:
-                  type: [string, 'null']
-              type: object
-      responses:
-        '200':
-          description: 'Marked transferred'
-        '404':
-          $ref: '#/components/responses/404'
       security:
         -
           bearerAuth: []
@@ -1548,59 +1582,6 @@ paths:
           $ref: '#/components/responses/422'
         '429':
           $ref: '#/components/responses/429'
-      security:
-        -
-          bearerAuth: []
-  /servers/import:
-    post:
-      tags:
-        - Servers
-      summary: 'Import server transfer bundle'
-      description: 'Import a server transfer bundle into this Coolify instance (adopt mode by default).'
-      operationId: import-server-transfer-bundle
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              properties:
-                bundle:
-                  description: 'Plain or encrypted transfer bundle'
-                  type: object
-                passphrase:
-                  type: [string, 'null']
-                dry_run:
-                  type: boolean
-                  default: false
-                preserve_uuids:
-                  type: boolean
-                  default: true
-                adopt_mode:
-                  description: 'Import without forcing redeploy; keep statuses for adoption'
-                  type: boolean
-                  default: true
-                claim:
-                  description: 'Automatically claim the host for this instance after import'
-                  type: boolean
-                  default: true
-                write_remote:
-                  description: 'When claiming, write ownership file on the host via SSH'
-                  type: boolean
-                  default: false
-                rebind_sentinel:
-                  description: 'When claiming, rebind Sentinel to this instance'
-                  type: boolean
-                  default: true
-              type: object
-      responses:
-        '200':
-          description: 'Dry-run result'
-        '201':
-          description: Imported
-        '401':
-          $ref: '#/components/responses/401'
-        '422':
-          description: 'Validation failed'
       security:
         -
           bearerAuth: []

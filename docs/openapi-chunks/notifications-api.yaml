@@ -45,7 +45,7 @@ paths:
       tags:
         - Notifications
       summary: 'Get email notification settings'
-      description: 'Get the current team email notification settings. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
+      description: 'Get the current team email notification settings, including `smtp_ehlo_domain`, the hostname sent with SMTP EHLO. Encrypted secrets are only returned when the token has `read:sensitive` (or `root`) and the user is a team admin/owner.'
       operationId: get-current-team-email-notifications
       responses:
         '200':
@@ -61,7 +61,7 @@ paths:
       tags:
         - Notifications
       summary: 'Update email notification settings'
-      description: 'Update the current team email notification settings.'
+      description: 'Update the current team email notification settings. Set `smtp_ehlo_domain` to a valid hostname to control the SMTP EHLO domain, or `null` to use the system default.'
       operationId: update-current-team-email-notifications
       responses:
         '200':

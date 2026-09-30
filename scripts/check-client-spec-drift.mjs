@@ -63,7 +63,7 @@ export const CLIENT_PATH = path.join(ROOT, 'src/lib/coolify-client.ts');
  */
 export const ALLOWLIST = [
   // Currently empty: every client route matches a spec path as of the
-  // 2026-09-09 re-vendor (#347). Add entries here only when upstream's
+  // 2026-09-30 re-vendor (#416). Add entries here only when upstream's
   // openapi.yaml genuinely hasn't caught up with a client-called endpoint
   // yet. Routes the matcher masks rather than misses are listed in the
   // header comment, not here.
