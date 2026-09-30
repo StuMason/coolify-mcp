@@ -83,7 +83,8 @@
           "required": [
             "key",
             "value"
-          ]
+          ],
+          "additionalProperties": {}
         }
       }
     },
