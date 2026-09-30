@@ -7332,16 +7332,76 @@ describe('dashboard links (#342)', () => {
 
     expect(await client.resourceUrl(resource, uuid)).toEqual({
       url: `${UI}${path}`,
-      ui_url_configured: true,
+      internal: false,
     });
   });
 
-  it('builds on the base URL and says so when no UI URL is configured', async () => {
-    const client = makeClient();
-    expect(await client.resourceUrl('server', 'srv-1')).toEqual({
+  it('flags a link built on an internal base URL, and only that', async () => {
+    expect(await makeClient().resourceUrl('server', 'srv-1')).toEqual({
       url: 'http://coolify:8080/server/srv-1',
-      ui_url_configured: false,
+      internal: true,
     });
+    const publicBase = new CoolifyClient({
+      baseUrl: 'https://coolify.example.com',
+      accessToken: 'test-token',
+    });
+    expect((await publicBase.resourceUrl('server', 'srv-1')).internal).toBe(false);
+  });
+
+  it('keeps every other link working when one project cannot be read, and names it', async () => {
+    const client = makeClient(UI);
+    const { list, get } = stubEstate(client);
+    list.mockResolvedValue([
+      { id: 1, uuid: 'proj-1', name: 'p' },
+      { id: 2, uuid: 'proj-locked', name: 'q' },
+    ] as never);
+    const detail = get.getMockImplementation()!;
+    get.mockImplementation(async (uuid: string) => {
+      if (uuid === 'proj-locked') throw new Error('HTTP 403');
+      return detail(uuid);
+    });
+
+    await expect(client.resourceUrl('application', 'app-1')).resolves.toMatchObject({
+      url: `${UI}/project/proj-1/environment/env-prod/application/app-1`,
+    });
+    jest.spyOn(client, 'getService').mockResolvedValue({ environment_id: 99 } as never);
+    await expect(client.resourceUrl('service', 'svc-9')).rejects.toThrow(
+      'Could not read 1 project(s): proj-locked.',
+    );
+  });
+
+  it('counts a project detail with no environments list as unread', async () => {
+    const client = makeClient(UI);
+    const { get } = stubEstate(client);
+    get.mockResolvedValue({ id: 1, uuid: 'proj-1', name: 'p' } as never);
+
+    await expect(client.resourceUrl('application', 'app-1')).rejects.toThrow(
+      'Could not read 1 project(s): proj-1.',
+    );
+  });
+
+  it('says so when Coolify returns no environment for the resource', async () => {
+    const client = makeClient(UI);
+    stubEstate(client);
+    jest.spyOn(client, 'getApplication').mockResolvedValue({} as never);
+
+    await expect(client.resourceUrl('application', 'app-1')).rejects.toThrow(
+      'Coolify did not return an environment for application app-1.',
+    );
+  });
+
+  it('links a deployment by its deployment_uuid, whichever id was passed', async () => {
+    const client = makeClient(UI);
+    stubEstate(client);
+    jest.spyOn(client, 'getDeployment').mockResolvedValue({
+      uuid: 'row-7',
+      deployment_uuid: 'dep-1',
+      application_uuid: 'app-1',
+    } as never);
+
+    expect((await client.resourceUrl('deployment', 'row-7')).url).toBe(
+      `${UI}/project/proj-1/environment/env-prod/application/app-1/deployment/dep-1`,
+    );
   });
 
   it('builds the environment index once and reuses it', async () => {

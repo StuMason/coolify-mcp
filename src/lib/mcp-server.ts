@@ -20,6 +20,7 @@ import type {
 import { z } from 'zod';
 import {
   CoolifyClient,
+  UI_RESOURCES,
   isRunningStatus,
   type ServerSummary,
   type ProjectSummary,
@@ -856,7 +857,7 @@ export class CoolifyMcpServer extends McpServer {
     }
     // Call sites keep the raw-shape ergonomics; the z.object wrap happens here
     // because SDK v2 deprecates the raw-shape registerTool overload and this
-    // is the one place all 45 registrations pass through.
+    // is the one place every registration passes through.
     //
     // Fleet mode (#367) adds the optional `instance` argument here, once for
     // every tool — and only when there is more than one instance to choose
@@ -1735,29 +1736,20 @@ export class CoolifyMcpServer extends McpServer {
       'coolify_url',
       'Dashboard URL for a resource. Never write a Coolify URL by hand.',
       {
-        resource: z.enum([
-          'application',
-          'database',
-          'service',
-          'deployment',
-          'server',
-          'project',
-          'environment',
-          'private_key',
-        ]),
+        resource: z.enum(UI_RESOURCES),
         uuid: z.string(),
       },
       async ({ resource, uuid }) =>
         wrap(async () => {
           const link = await this.client.resourceUrl(resource, uuid);
-          // Without COOLIFY_UI_URL the link is built on the API base URL,
-          // which is wrong when that is an internal address (#342).
-          return link.ui_url_configured
-            ? { url: link.url }
-            : {
+          // An internal API address with no COOLIFY_UI_URL makes a link that
+          // opens nowhere; say so rather than hand it over as fine (#342).
+          return link.internal
+            ? {
                 url: link.url,
-                note: 'Built on COOLIFY_BASE_URL. If that is an internal address, set COOLIFY_UI_URL to the dashboard URL.',
-              };
+                note: 'Built on an internal COOLIFY_BASE_URL, so it will not open in a browser. Set COOLIFY_UI_URL to the dashboard address.',
+              }
+            : { url: link.url };
         }),
     );
 

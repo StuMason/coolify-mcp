@@ -123,6 +123,7 @@ import type {
   Tag,
   AttachTagsRequest,
 } from '../types/coolify.js';
+import { looksInternalBaseUrl } from './startup-check.js';
 import { TokenSource } from './token-source.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
 
@@ -721,15 +722,17 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
  * HTTP client for the Coolify API
  */
 /** Resources that have a page of their own in the Coolify dashboard (#342). */
-export type UiResource =
-  | 'application'
-  | 'database'
-  | 'service'
-  | 'deployment'
-  | 'server'
-  | 'project'
-  | 'environment'
-  | 'private_key';
+export const UI_RESOURCES = [
+  'application',
+  'database',
+  'service',
+  'deployment',
+  'server',
+  'project',
+  'environment',
+  'private_key',
+] as const;
+export type UiResource = (typeof UI_RESOURCES)[number];
 
 interface EnvironmentLocation {
   project_uuid: string;
@@ -739,6 +742,8 @@ interface EnvironmentLocation {
 interface EnvironmentIndex {
   byId: Map<number, EnvironmentLocation>;
   byUuid: Map<string, EnvironmentLocation>;
+  /** Projects whose detail failed or carried no environments list. */
+  unread: string[];
 }
 
 export class CoolifyClient {
@@ -1116,9 +1121,12 @@ export class CoolifyClient {
   async resourceUrl(
     resource: UiResource,
     uuid: string,
-  ): Promise<{ url: string; ui_url_configured: boolean }> {
+  ): Promise<{ url: string; internal: boolean }> {
     const path = await this.resourcePath(resource, uuid);
-    return { url: `${this.uiUrl}${path}`, ui_url_configured: this.uiUrlConfigured };
+    return {
+      url: `${this.uiUrl}${path}`,
+      internal: !this.uiUrlConfigured && looksInternalBaseUrl(this.baseUrl),
+    };
   }
 
   private async resourcePath(resource: UiResource, uuid: string): Promise<string> {
@@ -1137,12 +1145,15 @@ export class CoolifyClient {
       case 'application':
       case 'database':
       case 'service': {
-        const found =
+        // Independent, so in parallel: the index build is 1 + P requests.
+        const [found] = await Promise.all([
           resource === 'application'
-            ? await this.getApplication(uuid)
+            ? this.getApplication(uuid)
             : resource === 'database'
-              ? await this.getDatabase(uuid)
-              : await this.getService(uuid);
+              ? this.getDatabase(uuid)
+              : this.getService(uuid),
+          this.loadEnvironmentIndex(),
+        ]);
         const environmentId = found.environment_id;
         if (typeof environmentId !== 'number') {
           throw new Error(`Coolify did not return an environment for ${resource} ${uuid}.`);
@@ -1159,7 +1170,8 @@ export class CoolifyClient {
           throw new Error(`Deployment ${uuid} does not name its application.`);
         }
         const app = await this.resourcePath('application', deployment.application_uuid);
-        return `${app}/deployment/${id}`;
+        // The route segment is the deployment uuid, whichever id was passed.
+        return `${app}/deployment/${encodeURIComponent(deployment.deployment_uuid || uuid)}`;
       }
     }
   }
@@ -1170,12 +1182,23 @@ export class CoolifyClient {
     what: string,
   ): Promise<EnvironmentLocation> {
     const cached = this.environmentIndex !== null;
-    let hit = pick(await this.loadEnvironmentIndex());
+    const used = this.loadEnvironmentIndex();
+    let index = await used;
+    let hit = pick(index);
     if (!hit && cached) {
-      this.environmentIndex = null;
-      hit = pick(await this.loadEnvironmentIndex());
+      // Invalidate only the build this lookup used: a concurrent lookup may
+      // already have replaced it with a fresh one.
+      if (this.environmentIndex === used) this.environmentIndex = null;
+      index = await this.loadEnvironmentIndex();
+      hit = pick(index);
     }
-    if (!hit) throw new Error(`Could not find the project and environment for ${what}.`);
+    if (!hit) {
+      const unread =
+        index.unread.length > 0
+          ? ` Could not read ${index.unread.length} project(s): ${index.unread.join(', ')}.`
+          : '';
+      throw new Error(`Could not find the project and environment for ${what}.${unread}`);
+    }
     return hit;
   }
 
@@ -1196,16 +1219,22 @@ export class CoolifyClient {
    * Project schema lists neither).
    */
   private async buildEnvironmentIndex(): Promise<EnvironmentIndex> {
-    const projects = (await this.listProjects()) as Project[];
-    const detailed = await Promise.all(projects.map((project) => this.getProject(project.uuid)));
-    const index: EnvironmentIndex = { byId: new Map(), byUuid: new Map() };
-    for (const project of detailed) {
-      for (const environment of project.environments ?? []) {
-        const at = { project_uuid: project.uuid, environment_uuid: environment.uuid };
+    const uuids = (await this.listProjects()).map((project) => project.uuid);
+    // allSettled: one project this token cannot read must not take every
+    // other link down with it. Its resources miss, and the error names it.
+    const detailed = await Promise.allSettled(uuids.map((uuid) => this.getProject(uuid)));
+    const index: EnvironmentIndex = { byId: new Map(), byUuid: new Map(), unread: [] };
+    detailed.forEach((result, i) => {
+      if (result.status === 'rejected' || !Array.isArray(result.value.environments)) {
+        index.unread.push(uuids[i]);
+        return;
+      }
+      for (const environment of result.value.environments) {
+        const at = { project_uuid: uuids[i], environment_uuid: environment.uuid };
         index.byId.set(environment.id, at);
         index.byUuid.set(environment.uuid, at);
       }
-    }
+    });
     return index;
   }
 

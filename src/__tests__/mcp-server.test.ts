@@ -3707,7 +3707,7 @@ describe('coolify_url tool (#342)', () => {
     });
   });
 
-  it('says when the link is built on the API base URL', async () => {
+  it('says when the link is built on an internal base URL', async () => {
     const result = await call();
     expect(result.url).toBe('http://coolify:8080/server/srv-1');
     expect(result.note).toContain('COOLIFY_UI_URL');
