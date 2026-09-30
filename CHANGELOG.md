@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Desktop extension icon.** `manifest.json` now declares `icon.png` (512 x 512, the site's ferry mark drawn as paths) so the `.mcpb` shows an icon in Claude Desktop and meets the Connectors Directory submission form (#406). The bundle also stops shipping `evals/`, which `.mcpbignore` never excluded.
+- **`application` accepts Coolify's preview settings** (#434, reported by @KasperHonore): `is_preview_deployments_enabled`, `is_pr_deployments_public_enabled` and `preview_url_template`, on `update` and on every `create_*` action. Coolify creates each app with previews off, and until now no tool could turn them on. The schema stripped the unknown keys, so an `update` carrying only the flag sent Coolify an empty body ("Invalid request"), and one carrying the flag alongside a known field returned 200 with previews still off. The first two fields need Coolify 4.2, `preview_url_template` 4.3.
+
+## [3.5.1] - 2026-09-16
+
+### Added
+
 - **Outcome-scored task evals** (`evals/src/tasks`, `npm run evals:tasks`). The tool-selection score counts a hit when an expected tool name appears anywhere in the transcript, so a model that calls many tools scores well: a 3B model reached 15/15 while restarting services on a read request (`evals/FINDINGS.md` #7). The new suite runs 16 multi-step requests and passes one only when the exact request landed or the exact arguments were sent, the answer carries the fact that was asked for, and nothing else was written, including after a declined confirmation. An ambiguous request ("restart my app") must be answered with a question, and reaching for a bulk restart fails it even when the declined confirmation stops the call. It also counts schema-invalid arguments and invented ids, repeats cases with `EVALS_TRIALS`, and is not part of `npm run evals`, so CI cost is unchanged.
 
 ### Fixed

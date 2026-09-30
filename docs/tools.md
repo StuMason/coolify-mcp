@@ -130,6 +130,10 @@ otherwise odd-looking behaviour.
   Project filtering goes through the project's environment ids; server counts
   go through `destination.server_id` (and Coolify's built-in localhost server
   is id `0`, which is falsy).
+- **Coolify creates every application with preview deployments off.** A PR
+  webhook then answers "Preview deployments disabled." and builds nothing.
+  Set `is_preview_deployments_enabled: true` on `application` create or
+  update (Coolify 4.2+); `preview_url_template` needs 4.3+.
 - **Compose-based applications are services.** `POST /applications/dockercompose`
   was removed upstream in v4.1.0; use the `service` tool.
 

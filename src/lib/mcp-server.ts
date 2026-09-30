@@ -1902,6 +1902,22 @@ export class CoolifyMcpServer extends McpServer {
             'Comma-separated DNS aliases for app-to-app traffic (update only). App containers have no stable uuid hostname — only databases do.',
           ),
         instant_deploy: z.boolean().optional(),
+        // Preview (pull-request) deployment settings. Coolify creates every app
+        // with previews off, so a PR webhook builds nothing until this is set (#434).
+        is_preview_deployments_enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            'Build a preview deployment for each pull request (Coolify 4.2+). Off by default on new apps.',
+          ),
+        is_pr_deployments_public_enabled: z
+          .boolean()
+          .optional()
+          .describe('Build previews for pull requests from forks too (Coolify 4.2+).'),
+        preview_url_template: z
+          .string()
+          .optional()
+          .describe('Preview domain template, e.g. `{{pr_id}}.{{domain}}` (Coolify 4.3+).'),
         // Health check fields
         health_check_enabled: z.boolean().optional(),
         health_check_path: z.string().optional(),
@@ -1990,6 +2006,9 @@ export class CoolifyMcpServer extends McpServer {
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,
+                is_preview_deployments_enabled: args.is_preview_deployments_enabled,
+                is_pr_deployments_public_enabled: args.is_pr_deployments_public_enabled,
+                preview_url_template: args.preview_url_template,
               }),
             );
           case 'create_github':
@@ -2047,6 +2066,9 @@ export class CoolifyMcpServer extends McpServer {
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,
+                is_preview_deployments_enabled: args.is_preview_deployments_enabled,
+                is_pr_deployments_public_enabled: args.is_pr_deployments_public_enabled,
+                preview_url_template: args.preview_url_template,
               }),
             );
           case 'create_key':
@@ -2104,6 +2126,9 @@ export class CoolifyMcpServer extends McpServer {
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,
+                is_preview_deployments_enabled: args.is_preview_deployments_enabled,
+                is_pr_deployments_public_enabled: args.is_pr_deployments_public_enabled,
+                preview_url_template: args.preview_url_template,
               }),
             );
           case 'create_dockerimage':
@@ -2154,6 +2179,9 @@ export class CoolifyMcpServer extends McpServer {
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,
+                is_preview_deployments_enabled: args.is_preview_deployments_enabled,
+                is_pr_deployments_public_enabled: args.is_pr_deployments_public_enabled,
+                preview_url_template: args.preview_url_template,
               }),
             );
           case 'create_dockerfile':
@@ -2185,6 +2213,9 @@ export class CoolifyMcpServer extends McpServer {
                 custom_docker_run_options: args.custom_docker_run_options,
                 custom_labels: args.custom_labels,
                 instant_deploy: args.instant_deploy,
+                is_preview_deployments_enabled: args.is_preview_deployments_enabled,
+                is_pr_deployments_public_enabled: args.is_pr_deployments_public_enabled,
+                preview_url_template: args.preview_url_template,
               }),
             );
           case 'update': {
