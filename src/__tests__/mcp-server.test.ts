@@ -7,6 +7,7 @@
  */
 import { createRequire } from 'module';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import type { z } from 'zod';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import {
   CoolifyMcpServer,
@@ -1079,6 +1080,81 @@ describe('CoolifyMcpServer v2', () => {
         'app-uuid',
         expect.objectContaining({ custom_network_aliases: 'media-asr' }),
       );
+    });
+
+    // #434: Coolify creates every app with previews off, and the schema used to
+    // strip these keys, so update sent an empty body and creates dropped them.
+    const previewSettings = {
+      is_preview_deployments_enabled: true,
+      is_pr_deployments_public_enabled: false,
+      preview_url_template: '{{pr_id}}.{{domain}}',
+    };
+
+    it('forwards preview settings through update on their own (#434)', async () => {
+      const spy = jest.spyOn(server['client'], 'updateApplication').mockResolvedValue({} as never);
+
+      await callApplication(server, { action: 'update', uuid: 'app-uuid', ...previewSettings });
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', previewSettings);
+    });
+
+    it('keeps preview settings when the input schema parses the call (#434)', () => {
+      const tool = (
+        server as unknown as {
+          _registeredTools: Record<string, { inputSchema: z.ZodType }>;
+        }
+      )._registeredTools['application'];
+
+      const parsed = tool.inputSchema.parse({
+        action: 'update',
+        uuid: 'app-uuid',
+        ...previewSettings,
+      });
+
+      expect(parsed).toMatchObject(previewSettings);
+    });
+
+    it.each([
+      ['create_public', 'createApplicationPublic', baseCreatePublic],
+      [
+        'create_github',
+        'createApplicationPrivateGH',
+        { ...baseCreatePublic, action: 'create_github', github_app_uuid: 'gh-app' },
+      ],
+      [
+        'create_key',
+        'createApplicationPrivateKey',
+        { ...baseCreatePublic, action: 'create_key', private_key_uuid: 'key-uuid' },
+      ],
+      [
+        'create_dockerimage',
+        'createApplicationDockerImage',
+        {
+          action: 'create_dockerimage',
+          project_uuid: 'proj-uuid',
+          server_uuid: 'server-uuid',
+          docker_registry_image_name: 'nginx',
+          ports_exposes: '80',
+        },
+      ],
+      [
+        'create_dockerfile',
+        'createApplicationDockerfile',
+        {
+          action: 'create_dockerfile',
+          project_uuid: 'proj-uuid',
+          server_uuid: 'server-uuid',
+          dockerfile: 'FROM nginx',
+        },
+      ],
+    ] as const)('forwards preview settings in %s (#434)', async (_action, method, args) => {
+      const spy = jest
+        .spyOn(server['client'], method)
+        .mockResolvedValue({ uuid: 'app-1' } as never);
+
+      await callApplication(server, { ...args, ...previewSettings });
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining(previewSettings));
     });
   });
 
