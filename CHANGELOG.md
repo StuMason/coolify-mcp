@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-09-30
+
 ### Added
 
 - **Desktop extension icon.** `manifest.json` now declares `icon.png` (512 x 512, the site's ferry mark drawn as paths) so the `.mcpb` shows an icon in Claude Desktop and meets the Connectors Directory submission form (#406). The bundle also stops shipping `evals/`, which `.mcpbignore` never excluded.
 - **`application` accepts Coolify's preview settings** (#434, reported by @KasperHonore): `is_preview_deployments_enabled`, `is_pr_deployments_public_enabled` and `preview_url_template`, on `update` and on every `create_*` action. Coolify creates each app with previews off, and until now no tool could turn them on. The schema stripped the unknown keys, so an `update` carrying only the flag sent Coolify an empty body ("Invalid request"), and one carrying the flag alongside a known field returned 200 with previews still off. The first two fields need Coolify 4.2, `preview_url_template` 4.3.
+
+### Security
+
+- **Lockfile bumped past three `brace-expansion` advisories** (#439). `npm audit fix` moves the transitive `brace-expansion` from 5.0.9 to 5.0.12 (high: CPU and stack-exhaustion DoS, GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p). Dev tooling only; the server never expands untrusted brace patterns.
 
 ## [3.5.1] - 2026-09-16
 
