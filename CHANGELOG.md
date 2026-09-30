@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Cache hints on 2026-07-28 list results** (#337). Without them the SDK sent `ttlMs: 0`, telling a client to re-list on every use. The tool, prompt and template lists are fixed for the life of the process and now say an hour; `resources/list` names live applications and says a minute; `resources/read` stays 0. All `private`. 2025-era responses are unchanged. The interop test now asserts both eras against one HTTP server, including that a pinned 2026-07-28 client gets through `server/discover`, and a new test pins the tool order as stable.
+
+### Changed
+
 - **Vendored Coolify OpenAPI spec re-synced with upstream `main`** (#416): 275 → 287 operations. 18 are new (preview update and logs, database imports, SQLite databases, per-server registries, application secret managers, email settings, integration tokens, `PATCH /team`) and 6 are gone (the server transfer routes). Every route the client calls is still present, and none of them gained a required field.
 - **`storages` `host_path` is documented as ending at Coolify 4.3.21.** Upstream removed host paths in 4.3.22, and the storage endpoints now reject the field with 422. It is kept for older instances; the field's description and `docs/tools.md` say where it stops.
 

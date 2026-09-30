@@ -737,6 +737,30 @@ export interface CoolifyMcpServerOptions {
  */
 const INSTANCE_ARG = z.string().optional().describe('Instance name');
 
+/**
+ * Cache hints for the 2026-07-28 cacheable results (#337); 2025-era responses
+ * never carry them. Without these the SDK emits `ttlMs: 0`, which tells a
+ * client to re-list on every use.
+ *
+ * - The tool, prompt and template lists are fixed for the life of the process
+ *   (registration happens once, in the constructor, and no `list_changed` is
+ *   ever sent), so an hour is honest. An upgrade restarts the process, and a
+ *   client re-lists on reconnect.
+ * - `resources/list` names the live applications, and every listing fans out
+ *   to each instance (#393), so it gets a minute: enough to spare a burst of
+ *   re-lists, short enough that a new app shows up soon.
+ * - `resources/read` is live estate state and keeps the default of 0.
+ *
+ * All `private`: the resource list names the caller's applications, and the
+ * static lists gain nothing from a cache shared between users.
+ */
+const CACHE_HINTS = {
+  'tools/list': { ttlMs: 3_600_000, cacheScope: 'private' },
+  'prompts/list': { ttlMs: 3_600_000, cacheScope: 'private' },
+  'resources/templates/list': { ttlMs: 3_600_000, cacheScope: 'private' },
+  'resources/list': { ttlMs: 60_000, cacheScope: 'private' },
+} as const;
+
 export class CoolifyMcpServer extends McpServer {
   private readonly registry: InstanceRegistry;
   /**
@@ -1094,6 +1118,7 @@ export class CoolifyMcpServer extends McpServer {
           requireElicitation: options?.requireElicitation === true,
         }),
         requestState: { verify: (state, ctx) => requestState.verify(state, ctx) },
+        cacheHints: CACHE_HINTS,
       },
     );
     this.requestState = requestState;

@@ -3647,3 +3647,34 @@ describe('unknown argument keys are dropped out loud (#438)', () => {
     }
   });
 });
+
+describe('tools/list order is deterministic (#337)', () => {
+  // 2026-07-28 says tools SHOULD come back in a stable order: a client that
+  // prompt-caches the list loses the cache on any reorder. Registration order
+  // is the order, so two servers and two calls must agree.
+  const listNames = async (): Promise<string[][]> => {
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const first = (await client.listTools()).tools.map((t) => t.name);
+      const second = (await client.listTools()).tools.map((t) => t.name);
+      return [first, second];
+    } finally {
+      await client.close();
+    }
+  };
+
+  it('is identical across calls and across server instances', async () => {
+    const [a1, a2] = await listNames();
+    const [b1] = await listNames();
+
+    expect(a1.length).toBeGreaterThan(40);
+    expect(a2).toEqual(a1);
+    expect(b1).toEqual(a1);
+  });
+});
