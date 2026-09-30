@@ -324,6 +324,17 @@ missing, so OAuth state dies with the container. Add it under Storages.
   client SDK and runs an MCP session against this server. A change that
   breaks a real client fails CI before it ships.
 
+## Cache hints on protocol revision 2026-07-28
+
+Clients on this revision are told how long they may reuse list results. The
+tool, prompt and resource-template lists say five minutes: they only change when
+the server is upgraded, and because the revision has no sessions, that TTL is
+also the longest a client keeps an old tool list after an in-place upgrade or
+while replicas run different versions. `resources/list` names your applications
+and says one minute; a listing taken while an instance was unreachable is kept
+for that minute too. Resource reads are never cached. Every hint is `private`.
+2025-era clients see none of this.
+
 ## Confirmation state on protocol revision 2026-07-28
 
 Clients on this revision confirm destructive operations across two round trips

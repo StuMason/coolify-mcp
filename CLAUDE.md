@@ -58,6 +58,12 @@ When adding new Coolify API endpoints, follow this order:
 - **docs/coolify-openapi.yaml** - vendored upstream OpenAPI spec; ground truth for "does Coolify support X"
 - **docs/openapi-chunks/** - the same spec split by resource for reference. **Generated** — run `npm run build:chunks` after re-vendoring the spec, never hand-edit. `npm run check:chunk-drift` fails CI if they diverge.
 
+### Protocol eras (#337)
+
+The server speaks both 2025-era MCP and revision 2026-07-28. stdio always connects through the 2025 handshake; only HTTP mode (`createMcpHandler`) reaches 2026-07-28, which is where `server/discover` (installed by the SDK), `input_required` confirmations (#341) and cache fields apply. `CACHE_HINTS` in `mcp-server.ts` sets `ttlMs`/`cacheScope` on the list results; without it the SDK emits `ttlMs: 0`. Tools are listed in registration order, which a test pins as stable.
+
+**Roots, Sampling and Logging are deliberately not adopted.** They are on a 12-month deprecation clock from 2026-07-28 (SEP-2577), and nothing here needs them: paths are Coolify uuids, not client roots; the server never asks the client's model for anything; diagnostics go to stderr and the audit log.
+
 ### Context-Optimized Responses
 
 List endpoints return summaries (uuid, name, status) not full objects. This reduces response sizes by 90-99%. Use `get_*` tools for full details of a single resource.

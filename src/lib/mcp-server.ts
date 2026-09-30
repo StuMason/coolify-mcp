@@ -737,6 +737,34 @@ export interface CoolifyMcpServerOptions {
  */
 const INSTANCE_ARG = z.string().optional().describe('Instance name');
 
+/**
+ * Cache hints for the 2026-07-28 cacheable results (#337); 2025-era responses
+ * never carry them. Without these the SDK emits `ttlMs: 0`, which tells a
+ * client to re-list on every use.
+ *
+ * - The tool, prompt and template lists are fixed for the life of the process
+ *   (registered once in the constructor, no `list_changed` ever sent). But
+ *   2026-07-28 is stateless: there is no session for a cache to end with, so
+ *   the TTL is the only bound on how long a client keeps a list after an
+ *   in-place upgrade, or across replicas on different versions. Five minutes
+ *   keeps most of the benefit with a short stale window.
+ * - `resources/list` names the live applications, and every listing fans out
+ *   to each instance (#393), so it gets a minute. The hint is static: the SDK
+ *   builds this result from the list callback's `resources` alone, so a
+ *   partial listing (an instance down) is cached for that minute like a full
+ *   one.
+ * - `resources/read` is live estate state and keeps the default of 0.
+ *
+ * All `private`: the resource list names the caller's applications, and the
+ * static lists gain nothing from a cache shared between users.
+ */
+const CACHE_HINTS = {
+  'tools/list': { ttlMs: 300_000, cacheScope: 'private' },
+  'prompts/list': { ttlMs: 300_000, cacheScope: 'private' },
+  'resources/templates/list': { ttlMs: 300_000, cacheScope: 'private' },
+  'resources/list': { ttlMs: 60_000, cacheScope: 'private' },
+} as const;
+
 export class CoolifyMcpServer extends McpServer {
   private readonly registry: InstanceRegistry;
   /**
@@ -1094,6 +1122,7 @@ export class CoolifyMcpServer extends McpServer {
           requireElicitation: options?.requireElicitation === true,
         }),
         requestState: { verify: (state, ctx) => requestState.verify(state, ctx) },
+        cacheHints: CACHE_HINTS,
       },
     );
     this.requestState = requestState;
@@ -1519,9 +1548,11 @@ export class CoolifyMcpServer extends McpServer {
      * is the whole summary payload built and discarded per listing, and a fleet
      * with one instance down makes every listing wait out that instance's
      * timeout before the others can return — slow as well as incomplete. A
-     * short TTL cache would fix the second call onwards but not the first, and
-     * it buys staleness on a surface whose entire job is to be current, so it
-     * wants measuring before it is built rather than guessing here.
+     * server-side TTL cache would fix the second call onwards but not the
+     * first, and it buys staleness on a surface whose entire job is to be
+     * current, so it wants measuring before it is built rather than guessing
+     * here. The one-minute `CACHE_HINTS` entry is different in kind: advisory,
+     * client-side, 2026-07-28 only, and it costs the server nothing (#337).
      */
     const listApplications = async (): Promise<ListResourcesResult> => {
       const perInstance = await Promise.allSettled(

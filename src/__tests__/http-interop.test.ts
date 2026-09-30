@@ -200,6 +200,10 @@ describe('HTTP mode interop with the reference MCP client', () => {
 
       const version = await client.callTool({ name: 'get_mcp_version', arguments: {} });
       expect(JSON.stringify(version.content)).toContain('coolify-mcp');
+
+      // 2025 era (the client default is `legacy`): no 2026 cache fields (#337).
+      expect(client.getNegotiatedProtocolVersion()).not.toBe('2026-07-28');
+      expect((tools as { ttlMs?: number }).ttlMs).toBeUndefined();
     } finally {
       await client.close();
     }
@@ -232,6 +236,17 @@ describe('HTTP mode interop with the reference MCP client', () => {
     });
     await modern.connect(modernTransport);
     try {
+      // A pinned connect only succeeds if `server/discover` offers the
+      // revision, so this is the discover check too (#337).
+      expect(modern.getNegotiatedProtocolVersion()).toBe('2026-07-28');
+      const listed = (await modern.listTools()) as { ttlMs?: number; cacheScope?: string };
+      expect(listed.ttlMs).toBe(300_000);
+      expect(listed.cacheScope).toBe('private');
+      expect(((await modern.listPrompts()) as { ttlMs?: number }).ttlMs).toBe(300_000);
+      expect(((await modern.listResourceTemplates()) as { ttlMs?: number }).ttlMs).toBe(300_000);
+      // The one that differs: live application names get a minute.
+      expect(((await modern.listResources()) as { ttlMs?: number }).ttlMs).toBe(60_000);
+
       const refused = (await modern.callTool({
         name: 'stop_all_apps',
         arguments: { confirm: true },
