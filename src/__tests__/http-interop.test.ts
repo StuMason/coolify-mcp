@@ -240,8 +240,12 @@ describe('HTTP mode interop with the reference MCP client', () => {
       // revision, so this is the discover check too (#337).
       expect(modern.getNegotiatedProtocolVersion()).toBe('2026-07-28');
       const listed = (await modern.listTools()) as { ttlMs?: number; cacheScope?: string };
-      expect(listed.ttlMs).toBe(3_600_000);
+      expect(listed.ttlMs).toBe(300_000);
       expect(listed.cacheScope).toBe('private');
+      expect(((await modern.listPrompts()) as { ttlMs?: number }).ttlMs).toBe(300_000);
+      expect(((await modern.listResourceTemplates()) as { ttlMs?: number }).ttlMs).toBe(300_000);
+      // The one that differs: live application names get a minute.
+      expect(((await modern.listResources()) as { ttlMs?: number }).ttlMs).toBe(60_000);
 
       const refused = (await modern.callTool({
         name: 'stop_all_apps',
