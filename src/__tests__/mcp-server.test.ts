@@ -2006,8 +2006,26 @@ describe('CoolifyMcpServer v2', () => {
       ]);
     });
 
+    it('forwards pr on the no-wait path (#425)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'preview-dep' }] });
+
+      await callDeploy(server, { tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc', pr: 42 });
+
+      expect(spy).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc', undefined, 42);
+    });
+
+    it('returns the pr-with-a-name refusal to the caller as an error (#425)', async () => {
+      const result = (await callDeploy(server, { tag_or_uuid: 'shop-frontend', pr: 42 })) as {
+        content: Array<{ text: string }>;
+      };
+
+      expect(result.content[0].text).toContain('"shop-frontend" reads as a tag or name');
+      expect(result.content[0].text).toContain('list_applications');
+    });
+
     it('forwards pr and follows the preview deployment when waiting (#425)', async () => {
-      jest.useFakeTimers();
       const spy = jest
         .spyOn(server['client'], 'deployByTagOrUuid')
         .mockResolvedValue({ deployments: [{ deployment_uuid: 'preview-dep' }] });

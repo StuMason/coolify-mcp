@@ -1152,7 +1152,7 @@ describe('CoolifyClient', () => {
 
     it('refuses pr with a tag before calling Coolify (#425)', async () => {
       await expect(client.deployByTagOrUuid('my-tag', false, 42)).rejects.toThrow(
-        'pr needs an application uuid, not a tag.',
+        'pr needs a single application uuid; "my-tag" reads as a tag or name.',
       );
       expect(mockFetch).not.toHaveBeenCalled();
     });

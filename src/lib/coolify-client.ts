@@ -1891,7 +1891,10 @@ export class CoolifyClient {
     const param = this.isLikelyUuid(tagOrUuid) ? 'uuid' : 'tag';
     // Coolify 400s on tag + pr; say why here rather than relay its message (#425).
     if (pr !== undefined && param === 'tag') {
-      throw new Error('pr needs an application uuid, not a tag.');
+      throw new Error(
+        `pr needs a single application uuid; "${tagOrUuid}" reads as a tag or name. ` +
+          'Look it up with `list_applications` and retry with the uuid.',
+      );
     }
     const prQuery = pr !== undefined ? `&pr=${pr}` : '';
     // POST required from v4.2 and accepted long before it (`match(['get','post'])`).

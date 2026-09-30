@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`deploy` accepts `pr`** (#425) to redeploy an existing pull-request preview, the other half of preview support after #434. It needs an application uuid; a tag with `pr` is refused before Coolify is called. `wait: true` follows the preview deployment. Coolify only redeploys a preview its GitHub webhook already created: with none for that PR it answers "Pull request N not found for this resource." and queues nothing, and the tool passes that answer through.
+- **`deploy` accepts `pr`** (#425) to redeploy an existing pull-request preview, the other half of preview support after #434. It needs an application uuid; a tag or name with `pr` is refused before Coolify is called, with a pointer to `list_applications`. `wait: true` follows the preview deployment. Coolify only redeploys a preview its GitHub webhook already created: with none for that PR it answers "Pull request N not found for this resource." and queues nothing, and the tool passes that answer through.
 
 ## [3.6.0] - 2026-09-30
 

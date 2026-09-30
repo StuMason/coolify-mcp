@@ -28,7 +28,7 @@ the table below misses a tool the roster has.
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services; `backup_set`/`backup_delete`/`backup_run` scheduled volume backups, Coolify v4.2+) |
 | **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                                                                   |
-| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                                                                              |
+| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status and `pr` preview redeploy), `deployment` (get, cancel, list_for_app)                                                    |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                                                                 |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                                                                        |
 | **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                                  |
