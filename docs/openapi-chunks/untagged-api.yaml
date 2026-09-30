@@ -611,6 +611,41 @@ paths:
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
+  /settings/email:
+    get:
+      tags:
+        - Settings
+      summary: 'Get instance email settings'
+      description: 'Get instance-wide SMTP and Resend settings. Requires a root-team token belonging to a root-team admin or owner. Sensitive fields require the `read:sensitive` or `root` token ability.'
+      operationId: get-instance-email-settings
+      responses:
+        '200':
+          description: 'Instance email settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - Settings
+      summary: 'Update instance email settings'
+      description: 'Update instance-wide SMTP and Resend settings. Requires `write:sensitive` and a root-team token belonging to a root-team admin or owner.'
+      operationId: update-instance-email-settings
+      responses:
+        '200':
+          description: 'Updated instance email settings.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: Forbidden.
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   /version:
     get:
       summary: Version

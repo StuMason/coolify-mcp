@@ -89,6 +89,7 @@
         "type": "string"
       },
       "host_path": {
+        "description": "Coolify 4.3.21 and earlier; 4.3.22 removed host paths and rejects it.",
         "type": "string"
       },
       "content": {

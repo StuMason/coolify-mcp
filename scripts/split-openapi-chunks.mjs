@@ -80,6 +80,7 @@ export const UNTAGGED_SEGMENTS = [
   'enable',
   'github-apps',
   'health',
+  'settings',
   'version',
 ];
 

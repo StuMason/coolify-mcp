@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Vendored Coolify OpenAPI spec re-synced with upstream `main`** (#416): 275 → 287 operations. 18 are new (preview update and logs, database imports, SQLite databases, per-server registries, application secret managers, email settings, integration tokens, `PATCH /team`) and 6 are gone (the server transfer routes). Every route the client calls is still present, and none of them gained a required field.
+- **`storages` `host_path` is documented as ending at Coolify 4.3.21.** Upstream removed host paths in 4.3.22, and the storage endpoints now reject the field with 422. It is kept for older instances; the field's description and `docs/tools.md` say where it stops.
+
 ## [3.7.0] - 2026-09-30
 
 ### Added

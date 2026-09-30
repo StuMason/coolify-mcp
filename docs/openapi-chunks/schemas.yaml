@@ -5,6 +5,130 @@ info:
 paths: {}
 components:
   schemas:
+    DatabaseImportRequest:
+      type: object
+      oneOf:
+        -
+          required:
+            - source
+            - upload_id
+          properties:
+            source:
+              type: string
+              enum:
+                - upload
+            upload_id:
+              type: string
+              format: uuid
+            dump_all:
+              type: boolean
+              default: false
+            replace_existing:
+              description: 'Drop matching PostgreSQL objects before restoring a single-database archive.'
+              type: boolean
+              default: false
+            keep_owners:
+              description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
+              type: boolean
+              default: false
+            sqlite_database:
+              description: 'SQLite: the database file to restore into. Must be one of the database files. Defaults to the file named in the backup file name, else the first file.'
+              type: string
+              example: app.db
+          type: object
+          additionalProperties: false
+        -
+          required:
+            - source
+            - s3_storage_uuid
+            - path
+          properties:
+            source:
+              type: string
+              enum:
+                - s3
+            s3_storage_uuid:
+              type: string
+            path:
+              type: string
+            dump_all:
+              type: boolean
+              default: false
+            replace_existing:
+              description: 'Drop matching PostgreSQL objects before restoring a single-database archive.'
+              type: boolean
+              default: false
+            keep_owners:
+              description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
+              type: boolean
+              default: false
+            sqlite_database:
+              description: 'SQLite: the database file to restore into. Must be one of the database files. Defaults to the file named in the backup file name, else the first file.'
+              type: string
+              example: app.db
+          type: object
+          additionalProperties: false
+        -
+          required:
+            - source
+            - path
+          properties:
+            source:
+              type: string
+              enum:
+                - server
+            path:
+              type: string
+              example: /var/backups/database.sql.gz
+            dump_all:
+              type: boolean
+              default: false
+            replace_existing:
+              description: 'Drop matching PostgreSQL objects before restoring a single-database archive.'
+              type: boolean
+              default: false
+            keep_owners:
+              description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
+              type: boolean
+              default: false
+            sqlite_database:
+              description: 'SQLite: the database file to restore into. Must be one of the database files. Defaults to the file named in the backup file name, else the first file.'
+              type: string
+              example: app.db
+          type: object
+          additionalProperties: false
+    DatabaseImportStatus:
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum:
+            - queued
+            - in_progress
+            - finished
+            - error
+            - killed
+            - cancelled
+            - closed
+        exit_code:
+          type:
+            - integer
+            - 'null'
+        output:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+      type: object
     VolumeBackupScheduleRequest:
       required:
         - frequency
@@ -63,7 +187,7 @@ components:
           minimum: 0
         timeout:
           type: integer
-          default: 3600
+          default: 36000
           maximum: 36000
           minimum: 60
       type: object
@@ -506,6 +630,9 @@ components:
           type: string
         only_this_server:
           type: boolean
+        parent_deployment_uuid:
+          type: string
+          nullable: true
         rollback:
           type: boolean
         commit_message:
@@ -561,6 +688,9 @@ components:
         connect_to_docker_network:
           type: boolean
         custom_internal_name:
+          type: string
+          nullable: true
+        custom_container_name_prefix:
           type: string
           nullable: true
         is_container_label_escape_enabled:
@@ -632,6 +762,7 @@ components:
           type: boolean
         is_shown_once:
           type: boolean
+          description: 'If true, the saved value is hidden in the UI and API responses. MCP never returns environment variable values.'
         key:
           type: string
         value:
@@ -717,6 +848,11 @@ components:
         timeout:
           type: integer
           description: 'The timeout of the scheduled task in seconds.'
+        next_run_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'The next time the scheduled task runs, in UTC. Null when it is disabled or not calculated yet.'
         created_at:
           type: string
           format: date-time
@@ -833,14 +969,25 @@ components:
           type: integer
         deployment_queue_limit:
           type: integer
+        backup_compression_cpu_percentage:
+          type: integer
         dynamic_timeout:
           type: integer
         force_disabled:
           type: boolean
         force_server_cleanup:
           type: boolean
+        server_role:
+          type: string
+          enum:
+            - deployment
+            - build
+            - both
         is_build_server:
           type: boolean
+          deprecated: true
+          readOnly: true
+          description: 'Deprecated: use server_role instead. true when server_role is build.'
         is_cloudflare_tunnel:
           type: boolean
         is_jump_server:
@@ -855,6 +1002,20 @@ components:
           type: boolean
         is_metrics_enabled:
           type: boolean
+        is_traffic_analytics_enabled:
+          type: boolean
+        traffic_topn:
+          type: integer
+        traffic_sample_threshold:
+          type: integer
+        traffic_retention_1h_days:
+          type: integer
+        traffic_retention_1d_days:
+          type: integer
+        is_geoip_enabled:
+          type: boolean
+        geoip_refresh_days:
+          type: integer
         is_reachable:
           type: boolean
         is_sentinel_enabled:
@@ -908,6 +1069,22 @@ components:
         connection_timeout:
           type: integer
           description: 'SSH connection timeout in seconds.'
+        docker_version:
+          type: string
+          nullable: true
+          description: 'Detected Docker Engine version on the server.'
+        docker_version_checked_at:
+          type: string
+          nullable: true
+          description: 'When Docker Engine version was last detected.'
+        compose_version:
+          type: string
+          nullable: true
+          description: 'Detected Docker Compose plugin version on the server.'
+        compose_version_checked_at:
+          type: string
+          nullable: true
+          description: 'When Docker Compose version was last detected.'
       type: object
     Service:
       description: 'Service model'
@@ -1029,6 +1206,9 @@ components:
         custom_server_limit:
           type: string
           description: 'The custom server limit.'
+        is_build_server_fallback_enabled:
+          type: boolean
+          description: 'Whether deployments can fall back to the deployment server when no usable dedicated build server is available.'
         members:
           description: 'The members of the team.'
           type: array

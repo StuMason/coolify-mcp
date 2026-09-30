@@ -3802,7 +3802,10 @@ export class CoolifyMcpServer extends McpServer {
         type: z.enum(['persistent', 'file']).optional(),
         mount_path: z.string().optional(),
         name: z.string().optional(),
-        host_path: z.string().optional(),
+        host_path: z
+          .string()
+          .optional()
+          .describe('Coolify 4.3.21 and earlier; 4.3.22 removed host paths and rejects it.'),
         content: z.string().optional(),
         is_directory: z.boolean().optional(),
         fs_path: z.string().optional(),

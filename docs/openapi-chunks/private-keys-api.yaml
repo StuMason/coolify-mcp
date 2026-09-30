@@ -3,6 +3,45 @@ info:
   title: Coolify
   version: '0.1'
 paths:
+  /security/integration-tokens:
+    post:
+      tags:
+        - 'Secret Managers'
+      summary: 'Create Secret Manager Token'
+      description: 'Create and validate a Doppler, Infisical, or Vault integration token.'
+      operationId: create-secret-manager-integration-token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - provider
+                - name
+                - token
+              properties:
+                provider:
+                  type: string
+                  enum: [doppler, infisical, vault]
+                name:
+                  type: string
+                token:
+                  type: string
+                metadata:
+                  type: object
+              type: object
+      responses:
+        '201':
+          description: 'Integration token created.'
+        '400':
+          $ref: '#/components/responses/400'
+        '401':
+          $ref: '#/components/responses/401'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   /security/keys:
     get:
       tags:

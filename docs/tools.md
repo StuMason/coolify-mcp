@@ -140,6 +140,10 @@ otherwise odd-looking behaviour.
   answers 200 with "Pull request N not found for this resource." and no
   `deployment_uuid`, so nothing is queued. `pr` needs an application uuid, not
   a tag.
+- **`storages` `host_path` stops working at Coolify 4.3.22.** Upstream removed
+  host paths from storage configuration (coollabsio/coolify `128939b0`), and
+  from 4.3.22 the storage create and update endpoints answer 422 "This field is
+  not allowed." when it is sent. It still works on 4.3.21 and earlier.
 - **Compose-based applications are services.** `POST /applications/dockercompose`
   was removed upstream in v4.1.0; use the `service` tool.
 
