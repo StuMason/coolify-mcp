@@ -1,7 +1,7 @@
 {
   "name": "deployment",
   "title": "Manage deployment",
-  "description": "Manage deployment: get/cancel/list_for_app. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs.",
+  "description": "Manage deployment: get/cancel/list_for_app/rollback_images. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs. rollback_images takes an application uuid (Coolify 4.3+); an empty list means Coolify could not inspect the server.",
   "annotations": {
     "destructiveHint": true
   },
@@ -13,7 +13,8 @@
         "enum": [
           "get",
           "cancel",
-          "list_for_app"
+          "list_for_app",
+          "rollback_images"
         ]
       },
       "uuid": {

@@ -70,6 +70,7 @@ import type {
   Deployment,
   DeploymentEssential,
   DeployTriggerResponse,
+  RollbackImages,
   // Team types
   Team,
   TeamMember,
@@ -350,6 +351,11 @@ export function errorHint(status: number, path: string): string | undefined {
     // Both causes look identical from the status, so name both rather than
     // pointing confidently at the wrong one.
     return 'Tag endpoints require Coolify v4.2+ (coollabsio/coolify#9275) — check with get_version. If your instance is already v4.2+, the uuid may belong to a different resource type than this route.';
+  }
+  if (status === 404 && /\/rollback(-images)?$/.test(path)) {
+    // Rollback is 4.3+ and absent before it; without this the generic
+    // uuid-mismatch hint below blames the uuid (#442).
+    return 'Rollback requires Coolify v4.3+ — check with `get_version`; on an older instance the route does not exist. If your instance is already v4.3+, the application uuid may be wrong. Before 4.3, roll back by deploying an older commit.';
   }
   if (status === 404 && /\/move$/.test(path)) {
     // `/move` is new in v4.2 and never existed before it, so there is no method
@@ -2075,6 +2081,58 @@ export class CoolifyClient {
       `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}${prQuery}`,
       { method: 'POST' },
     );
+  }
+
+  // ===========================================================================
+  // Rollback (#442, Coolify 4.3+)
+  // ===========================================================================
+
+  async listRollbackImages(appUuid: string): Promise<RollbackImages> {
+    return this.request<RollbackImages>(`/applications/${appUuid}/rollback-images`);
+  }
+
+  /**
+   * Queue a rollback deployment to a previous image tag.
+   *
+   * Upstream accepts any git-ref-shaped string, so a guessed tag queues a
+   * deployment that fails at build time. The tag is checked against
+   * `rollback-images` first, but only when that list has entries: Coolify
+   * returns an empty list whenever it cannot inspect the server, so empty
+   * means "unknown", never "none", and must not block a real rollback.
+   *
+   * The response is reshaped to `/deploy`'s `{ deployments: [...] }` so the
+   * deploy tool handles both, `wait` included, the same way.
+   */
+  async rollbackApplication(appUuid: string, tag: string): Promise<DeployTriggerResponse> {
+    if (!this.isLikelyUuid(appUuid)) {
+      throw new Error(
+        `rollback_to needs an application uuid; "${appUuid}" reads as a tag or name. ` +
+          'Look it up with `list_applications` and retry with the uuid.',
+      );
+    }
+    const { images } = await this.listRollbackImages(appUuid);
+    const tags = images.map((image) => image.tag).filter(Boolean);
+    if (tags.length > 0 && !tags.includes(tag)) {
+      const shown =
+        tags.slice(0, 10).join(', ') + (tags.length > 10 ? `, and ${tags.length - 10} more` : '');
+      throw new Error(
+        `"${tag}" is not a rollback image for this application. Available: ${shown}.`,
+      );
+    }
+    const result = await this.request<{ message?: string; deployment_uuid?: string }>(
+      `/applications/${appUuid}/rollback`,
+      { method: 'POST', body: JSON.stringify({ commit: tag }) },
+    );
+    return {
+      message: result.message,
+      deployments: [
+        {
+          message: result.message,
+          resource_uuid: appUuid,
+          ...(result.deployment_uuid && { deployment_uuid: result.deployment_uuid }),
+        },
+      ],
+    };
   }
 
   /**

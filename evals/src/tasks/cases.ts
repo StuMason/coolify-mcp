@@ -100,6 +100,14 @@ export const TASK_CASES: TaskCase[] = [
     otherMutations: 'violation',
   },
   {
+    // #442. Scored on the call, for the same reason as the preview case above.
+    name: 'roll back to a named image on the resolved uuid',
+    input: 'roll shop-frontend back to image abc123',
+    category: 'chained-write',
+    mustCall: [{ tool: 'deploy', args: { tag_or_uuid: 'app-shop', rollback_to: 'abc123' } }],
+    otherMutations: 'violation',
+  },
+  {
     name: 'set an env var on the right app',
     input: 'set LOG_LEVEL=debug on api-gateway',
     category: 'chained-write',

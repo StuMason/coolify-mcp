@@ -7438,3 +7438,71 @@ describe('dashboard links (#342)', () => {
     });
   });
 });
+
+describe('rollback (#442)', () => {
+  const APP = 'xs0sgs4gog044s4k4c88kgsc';
+  const make = (): CoolifyClient =>
+    new CoolifyClient({ baseUrl: 'http://localhost:3000', accessToken: 'test-token' });
+  const images = (...tags: string[]) => ({
+    current: tags[0] ?? null,
+    images: tags.map((tag) => ({ tag, created_at: '2026-09-30', is_current: tag === tags[0] })),
+  });
+
+  it('refuses a name before any request', async () => {
+    const client = make();
+    const list = jest.spyOn(client, 'listRollbackImages');
+    await expect(client.rollbackApplication('shop-frontend', 'abc123')).rejects.toThrow(
+      '"shop-frontend" reads as a tag or name',
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tag that is not a rollback image, naming the ones that are', async () => {
+    const client = make();
+    jest.spyOn(client, 'listRollbackImages').mockResolvedValue(images('aaa111', 'bbb222'));
+    const post = jest.spyOn(client as unknown as { request: () => Promise<unknown> }, 'request');
+
+    await expect(client.rollbackApplication(APP, 'zzz999')).rejects.toThrow(
+      '"zzz999" is not a rollback image for this application. Available: aaa111, bbb222.',
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('does not block on an empty list, which means Coolify could not look', async () => {
+    const client = make();
+    jest.spyOn(client, 'listRollbackImages').mockResolvedValue(images());
+    const post = jest
+      .spyOn(client as unknown as { request: (...a: unknown[]) => Promise<unknown> }, 'request')
+      .mockResolvedValue({ message: 'Rollback deployment queued.', deployment_uuid: 'dep-9' });
+
+    const result = await client.rollbackApplication(APP, 'abc123');
+
+    expect(post).toHaveBeenCalledWith(`/applications/${APP}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ commit: 'abc123' }),
+    });
+    expect(result).toEqual({
+      message: 'Rollback deployment queued.',
+      deployments: [
+        { message: 'Rollback deployment queued.', resource_uuid: APP, deployment_uuid: 'dep-9' },
+      ],
+    });
+  });
+
+  it('passes a skipped rollback through with no deployment to follow', async () => {
+    const client = make();
+    jest.spyOn(client, 'listRollbackImages').mockResolvedValue(images('abc123'));
+    jest
+      .spyOn(client as unknown as { request: (...a: unknown[]) => Promise<unknown> }, 'request')
+      .mockResolvedValue({ message: 'Deployment already queued.' });
+
+    expect((await client.rollbackApplication(APP, 'abc123')).deployments).toEqual([
+      { message: 'Deployment already queued.', resource_uuid: APP },
+    ]);
+  });
+
+  it('explains a 404 on the rollback routes as needing Coolify 4.3', () => {
+    expect(errorHint(404, `/applications/${APP}/rollback`)).toMatch(/v4\.3/);
+    expect(errorHint(404, `/applications/${APP}/rollback-images`)).toMatch(/v4\.3/);
+  });
+});
