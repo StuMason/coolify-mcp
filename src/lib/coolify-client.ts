@@ -369,6 +369,12 @@ export function errorHint(status: number, path: string): string | undefined {
     // and must not be told it needs 4.2.
     return 'Volume backup schedules require Coolify v4.2+ (coollabsio/coolify volume backups) — check with `get_version`; on an older instance the route does not exist at all. If your instance is already v4.2+, the resource uuid or storage_uuid may be wrong. Note this is different from `database_backups`, which schedules database dumps and works on older versions. Upgrade: `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash -s 4.2.0`';
   }
+  if (status === 422 && /\/storages$/.test(path)) {
+    // Storage create and update 422 any field outside a per-action allowlist,
+    // and 4.3.22 took `host_path` out of it (coollabsio/coolify 128939b0). The
+    // status cannot say which field it was, so name the likely ones (#416).
+    return 'Coolify rejects storage fields it does not allow for this action or type. Likely causes: `host_path`, which Coolify 4.3.22 removed (omit it and use a named volume); a field for the other type or action (`content` on persistent, `name` on file, `is_directory` on update); or a missing `name` (persistent) or `mount_path`. The error body names the field.';
+  }
   if (status === 404 && /\/[\w-]{8,}(\/|$)/.test(path)) {
     return 'The uuid may belong to a different resource type than requested (e.g. an application uuid used on a service/database route).';
   }

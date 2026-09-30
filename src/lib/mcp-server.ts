@@ -3805,7 +3805,9 @@ export class CoolifyMcpServer extends McpServer {
         host_path: z
           .string()
           .optional()
-          .describe('Coolify 4.3.21 and earlier; 4.3.22 removed host paths and rejects it.'),
+          .describe(
+            'Bind-mount host path (persistent only). Coolify 4.3.21 and earlier: 4.3.22 removed host paths and rejects it with 422; omit it and use a named volume.',
+          ),
         content: z.string().optional(),
         is_directory: z.boolean().optional(),
         fs_path: z.string().optional(),
