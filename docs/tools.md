@@ -29,7 +29,7 @@ the table below misses a tool the roster has.
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services; `backup_set`/`backup_delete`/`backup_run` scheduled volume backups, Coolify v4.2+) |
 | **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                                                                   |
-| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status and `pr` preview redeploy), `deployment` (get, cancel, list_for_app)                                                    |
+| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status, `pr` preview redeploy and `rollback_to`), `deployment` (get, cancel, list_for_app, rollback_images)                    |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                                                                 |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                                                                        |
 | **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                                  |
@@ -145,6 +145,11 @@ otherwise odd-looking behaviour.
   host paths from storage configuration (coollabsio/coolify `128939b0`), and
   from 4.3.22 the storage create and update endpoints answer 422 "This field is
   not allowed." when it is sent. It still works on 4.3.21 and earlier.
+- **Rollback needs Coolify 4.3 and an image that is still on the server.**
+  `deployment` `rollback_images` lists the tags; `deploy` with `rollback_to`
+  queues the rollback and checks the tag against that list first. An empty list
+  means Coolify could not inspect the server, not that there are no images, so
+  it does not block. Before 4.3, roll back by deploying an older commit.
 - **Compose-based applications are services.** `POST /applications/dockercompose`
   was removed upstream in v4.1.0; use the `service` tool.
 

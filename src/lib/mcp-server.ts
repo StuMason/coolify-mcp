@@ -1221,12 +1221,10 @@ export class CoolifyMcpServer extends McpServer {
    * separately via `deployment get`.
    */
   private async triggerAndWaitForDeploy(
-    tagOrUuid: string,
-    force: boolean | undefined,
+    trigger: () => Promise<DeployTriggerResponse>,
     timeoutSeconds: number,
-    pr?: number,
   ): Promise<DeployWaitResult | DeployTriggerResponse> {
-    const triggered = await this.client.deployByTagOrUuid(tagOrUuid, force, pr);
+    const triggered = await trigger();
     const [first, ...rest] = triggered.deployments ?? [];
 
     if (!first?.deployment_uuid) {
@@ -3270,21 +3268,42 @@ export class CoolifyMcpServer extends McpServer {
           .describe(
             'Redeploy the existing preview for this pull request (application uuid only). The GitHub webhook creates the first preview.',
           ),
+        rollback_to: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'Roll back to this image tag instead (application uuid only, Coolify 4.3+). Tags: `deployment` rollback_images.',
+          ),
       },
-      async ({ tag_or_uuid, force, wait, timeout_seconds, pr }) => {
+      async ({ tag_or_uuid, force, wait, timeout_seconds, pr, rollback_to }) => {
+        // `force: false` is what a rollback does anyway; only `true` conflicts.
+        if (rollback_to !== undefined && (pr !== undefined || force === true)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Error: rollback_to redeploys an existing image, so it takes neither pr nor force.',
+              },
+            ],
+          };
+        }
+        // A rollback is a deploy of an earlier image, reversible by deploying
+        // again, so like deploy it is not confirmation-guarded (#442).
+        const trigger = (): Promise<DeployTriggerResponse> =>
+          rollback_to !== undefined
+            ? this.client.rollbackApplication(tag_or_uuid, rollback_to)
+            : this.client.deployByTagOrUuid(tag_or_uuid, force, pr);
         if (!wait) {
-          return this.wrapWithActions(
-            () => this.client.deployByTagOrUuid(tag_or_uuid, force, pr),
-            () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
-          );
+          return this.wrapWithActions(trigger, () => [
+            { tool: 'list_deployments', args: {}, hint: 'Check deployment status' },
+          ]);
         }
         return this.wrapWithActions(
           () =>
             this.triggerAndWaitForDeploy(
-              tag_or_uuid,
-              force,
+              trigger,
               timeout_seconds ?? DEFAULT_DEPLOY_TIMEOUT_SECONDS,
-              pr,
             ),
           (result) =>
             'deployment_uuid' in result
@@ -3296,9 +3315,9 @@ export class CoolifyMcpServer extends McpServer {
 
     this.defineTool(
       'deployment',
-      'Manage deployment: get/cancel/list_for_app. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs.',
+      'Manage deployment: get/cancel/list_for_app/rollback_images. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs. rollback_images takes an application uuid (Coolify 4.3+); an empty list means Coolify could not inspect the server.',
       {
-        action: z.enum(['get', 'cancel', 'list_for_app']),
+        action: z.enum(['get', 'cancel', 'list_for_app', 'rollback_images']),
         uuid: z.string(),
         lines: z.number().optional(), // Include logs truncated to last N entries (omit for no logs)
         page: z.number().int().positive().optional(), // Log page for get; deployment page for list_for_app
@@ -3368,6 +3387,8 @@ export class CoolifyMcpServer extends McpServer {
             );
           case 'cancel':
             return wrap(() => this.client.cancelDeployment(uuid));
+          case 'rollback_images':
+            return wrap(() => this.client.listRollbackImages(uuid));
           case 'list_for_app':
             return wrap(async () => {
               const result = await this.client.listApplicationDeployments(uuid, {

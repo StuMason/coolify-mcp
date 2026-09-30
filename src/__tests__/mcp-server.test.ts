@@ -143,6 +143,8 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.listDeployments).toBe('function');
       expect(typeof client.getDeployment).toBe('function');
       expect(typeof client.deployByTagOrUuid).toBe('function');
+      expect(typeof client.listRollbackImages).toBe('function');
+      expect(typeof client.rollbackApplication).toBe('function');
       expect(typeof client.listApplicationDeployments).toBe('function');
       expect(typeof client.cancelDeployment).toBe('function');
 
@@ -1560,6 +1562,23 @@ describe('CoolifyMcpServer v2', () => {
       };
     }
 
+    it('lists rollback images for an application (#442)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'listRollbackImages')
+        .mockResolvedValue({ current: 'aaa', images: [{ tag: 'aaa' }] });
+
+      const result = (await callDeployment(server, {
+        action: 'rollback_images',
+        uuid: 'app-uuid',
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid');
+      expect(JSON.parse(result.content[0].text)).toEqual({
+        current: 'aaa',
+        images: [{ tag: 'aaa' }],
+      });
+    });
+
     it('returns essential fields + logs only, no leaked secrets or nested graphs', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse(rawDeploymentWithSecrets(5)));
 
@@ -2065,6 +2084,53 @@ describe('CoolifyMcpServer v2', () => {
 
       expect(pollSpy).not.toHaveBeenCalled();
       expect(JSON.parse(result.content[0].text).data).toEqual(notFound);
+    });
+
+    it('accepts force: false with rollback_to, since that is what a rollback does (#442)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'rollbackApplication')
+        .mockResolvedValue({ deployments: [] });
+      await callDeploy(server, {
+        tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+        rollback_to: 'abc123',
+        force: false,
+      });
+      expect(spy).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc', 'abc123');
+    });
+
+    it('refuses rollback_to together with pr or force (#442)', async () => {
+      const spy = jest.spyOn(server['client'], 'rollbackApplication');
+      for (const extra of [{ pr: 42 }, { force: true }]) {
+        const result = (await callDeploy(server, {
+          tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+          rollback_to: 'abc123',
+          ...extra,
+        })) as { content: Array<{ text: string }> };
+        expect(result.content[0].text).toContain('takes neither pr nor force');
+      }
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('rolls back and follows the rollback deployment when waiting (#442)', async () => {
+      const rollback = jest.spyOn(server['client'], 'rollbackApplication').mockResolvedValue({
+        deployments: [{ deployment_uuid: 'rollback-dep', resource_uuid: 'app' }],
+      });
+      const deploy = jest.spyOn(server['client'], 'deployByTagOrUuid');
+      const getDeploymentSpy = jest
+        .spyOn(server['client'], 'getDeployment')
+        .mockResolvedValueOnce(
+          essentialDeployment({ deployment_uuid: 'rollback-dep', status: 'finished' }) as never,
+        );
+
+      await callDeploy(server, {
+        tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+        rollback_to: 'abc123',
+        wait: true,
+      });
+
+      expect(rollback).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc', 'abc123');
+      expect(deploy).not.toHaveBeenCalled();
+      expect(getDeploymentSpy).toHaveBeenCalledWith('rollback-dep');
     });
 
     it('wait: true polls until finished', async () => {
