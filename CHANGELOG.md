@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`coolify_url`: dashboard links built, not guessed** (#342). Takes a resource type (application, database, service, deployment, server, project, environment, private key) and a uuid, and returns the page in the Coolify dashboard, using the web routes (stable since v4.0.0). Application, database, service and deployment pages need the project and environment uuids, which the API does not put on the resource, so they are looked up once per instance from the project list and cached; a miss rebuilds the index once. `get_application` offers it as an "Open in Coolify" action. New optional `COOLIFY_UI_URL` (or `ui_url` on a `COOLIFY_INSTANCES` entry) sets the dashboard address when `COOLIFY_BASE_URL` is internal, as on a server in the Coolify docker network. When the base URL is internal (a single-label host such as `coolify`) and `COOLIFY_UI_URL` is unset, the link says it will not open in a browser and the startup check (and so doctor) warns; a `COOLIFY_UI_URL` that is not a URL fails the startup check. One project the token cannot read no longer breaks every link: its resources miss, and the error names it. 46 tools; the tool list goes from about 8,700 to about 8,900 tokens.
+
 ### Changed
 
 - **Vendored Coolify OpenAPI spec re-synced with upstream `main`** (#416): 275 → 287 operations. 18 are new (preview update and logs, database imports, SQLite databases, per-server registries, application secret managers, email settings, integration tokens, `PATCH /team`) and 6 are gone (the server transfer routes). Every route the client calls is still present, and none of them gained a required field.

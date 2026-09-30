@@ -2427,6 +2427,7 @@ describe('tool annotations (#260)', () => {
     expect(readOnly).toEqual(
       [
         'application_logs',
+        'coolify_url',
         'diagnose_app',
         'diagnose_server',
         'find_issues',
@@ -3676,5 +3677,39 @@ describe('tools/list order is deterministic (#337)', () => {
     expect(a1.length).toBeGreaterThan(40);
     expect(a2).toEqual(a1);
     expect(b1).toEqual(a1);
+  });
+});
+
+describe('coolify_url tool (#342)', () => {
+  const call = async (uiUrl?: string): Promise<Record<string, unknown>> => {
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://coolify:8080',
+      uiUrl,
+      accessToken: 'test-token',
+    });
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = (await client.callTool({
+        name: 'coolify_url',
+        arguments: { resource: 'server', uuid: 'srv-1' },
+      })) as { content: Array<{ text: string }> };
+      return JSON.parse(result.content[0].text);
+    } finally {
+      await client.close();
+    }
+  };
+
+  it('returns the dashboard link on COOLIFY_UI_URL, with no note', async () => {
+    expect(await call('https://coolify.example.com')).toEqual({
+      url: 'https://coolify.example.com/server/srv-1',
+    });
+  });
+
+  it('says when the link is built on an internal base URL', async () => {
+    const result = await call();
+    expect(result.url).toBe('http://coolify:8080/server/srv-1');
+    expect(result.note).toContain('COOLIFY_UI_URL');
   });
 });

@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa)](https://github.com/sponsors/StuMason)
 
-Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 45 tools for deploying, debugging, and operating your self-hosted PaaS in plain English. Destructive operations ask a human first; secrets stay masked.
+Manage [Coolify](https://coolify.io/) from Claude, Cursor, or any MCP client: 46 tools for deploying, debugging, and operating your self-hosted PaaS in plain English. Destructive operations ask a human first; secrets stay masked.
 
 📖 **[coolify-mcp.stumason.dev](https://coolify-mcp.stumason.dev)** · [Tool reference](docs/tools.md) · [Prompts and resources](docs/prompts-and-resources.md) · [Remote / HTTP mode](docs/http-mode.md) · [Fleet](docs/fleet.md) · [Doctor](docs/doctor.md) · [Safety and security](docs/security.md) · [Changelog](CHANGELOG.md)
 
@@ -72,7 +72,7 @@ Every tool takes an `action`; run one with no arguments and it lists what it acc
 - **Move across the whole estate.** `bulk_env_update`, `redeploy_project`, `stop_all_apps`, each behind a human confirmation that states the blast radius.
 - **Search the Coolify docs** with `search_docs`.
 
-Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 8,700 tokens of context.
+Lists return `uuid`/`name`/`status` summaries, 90–99% smaller than the raw API; `get_*` tools fetch one resource in full. The whole tool list costs about 8,900 tokens of context.
 
 ## Workflows, not just tools
 

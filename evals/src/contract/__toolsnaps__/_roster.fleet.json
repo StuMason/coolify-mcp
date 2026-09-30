@@ -4,6 +4,7 @@
   "bulk_env_update",
   "cloud_tokens",
   "control",
+  "coolify_url",
   "database",
   "database_backups",
   "deploy",

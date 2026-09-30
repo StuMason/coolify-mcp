@@ -123,6 +123,7 @@ import type {
   Tag,
   AttachTagsRequest,
 } from '../types/coolify.js';
+import { looksInternalBaseUrl } from './startup-check.js';
 import { TokenSource } from './token-source.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
 
@@ -720,8 +721,42 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
 /**
  * HTTP client for the Coolify API
  */
+/** Resources that have a page of their own in the Coolify dashboard (#342). */
+export const UI_RESOURCES = [
+  'application',
+  'database',
+  'service',
+  'deployment',
+  'server',
+  'project',
+  'environment',
+  'private_key',
+] as const;
+export type UiResource = (typeof UI_RESOURCES)[number];
+
+interface EnvironmentLocation {
+  project_uuid: string;
+  environment_uuid: string;
+}
+
+interface EnvironmentIndex {
+  byId: Map<number, EnvironmentLocation>;
+  byUuid: Map<string, EnvironmentLocation>;
+  /** Projects whose detail failed or carried no environments list. */
+  unread: string[];
+}
+
 export class CoolifyClient {
   private readonly baseUrl: string;
+  private readonly uiUrl: string;
+  private readonly uiUrlConfigured: boolean;
+  /**
+   * `environment_id` → project and environment uuids, for dashboard links
+   * (#342). Resources carry only the numeric id, and every dashboard path
+   * needs both uuids. Ids are immutable, so the index is only rebuilt when a
+   * lookup misses (a new environment), never on a timer.
+   */
+  private environmentIndex: Promise<EnvironmentIndex> | null = null;
   private readonly tokens: TokenSource;
   private readonly customHeaders: Record<string, string>;
   private cachedVersion: string | null = null;
@@ -740,6 +775,8 @@ export class CoolifyClient {
     // Throws when neither a token nor a readable token file is configured.
     this.tokens = new TokenSource(config);
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
+    this.uiUrlConfigured = Boolean(config.uiUrl);
+    this.uiUrl = (config.uiUrl ?? config.baseUrl).replace(/\/$/, '');
 
     const reserved = new Set(['authorization', 'content-type']);
     const raw = config.customHeaders ?? {};
@@ -1069,6 +1106,136 @@ export class CoolifyClient {
 
   async getProject(uuid: string): Promise<Project> {
     return this.request<Project>(`/projects/${uuid}`);
+  }
+
+  // ===========================================================================
+  // Dashboard links (#342)
+  // ===========================================================================
+
+  /**
+   * The dashboard URL for one resource, from Coolify's web routes (stable
+   * since v4.0.0). Built, never guessed: an application, database or service
+   * page needs its project and environment uuids, which the API does not
+   * return on the resource, so they come from the environment index.
+   */
+  async resourceUrl(
+    resource: UiResource,
+    uuid: string,
+  ): Promise<{ url: string; internal: boolean }> {
+    const path = await this.resourcePath(resource, uuid);
+    return {
+      url: `${this.uiUrl}${path}`,
+      internal: !this.uiUrlConfigured && looksInternalBaseUrl(this.baseUrl),
+    };
+  }
+
+  private async resourcePath(resource: UiResource, uuid: string): Promise<string> {
+    const id = encodeURIComponent(uuid);
+    switch (resource) {
+      case 'server':
+        return `/server/${id}`;
+      case 'project':
+        return `/project/${id}`;
+      case 'private_key':
+        return `/security/private-key/${id}`;
+      case 'environment': {
+        const at = await this.locateEnvironment((index) => index.byUuid.get(uuid), uuid);
+        return `/project/${at.project_uuid}/environment/${at.environment_uuid}`;
+      }
+      case 'application':
+      case 'database':
+      case 'service': {
+        // Independent, so in parallel: the index build is 1 + P requests.
+        const [found] = await Promise.all([
+          resource === 'application'
+            ? this.getApplication(uuid)
+            : resource === 'database'
+              ? this.getDatabase(uuid)
+              : this.getService(uuid),
+          this.loadEnvironmentIndex(),
+        ]);
+        const environmentId = found.environment_id;
+        if (typeof environmentId !== 'number') {
+          throw new Error(`Coolify did not return an environment for ${resource} ${uuid}.`);
+        }
+        const at = await this.locateEnvironment(
+          (index) => index.byId.get(environmentId),
+          `${resource} ${uuid}`,
+        );
+        return `/project/${at.project_uuid}/environment/${at.environment_uuid}/${resource}/${id}`;
+      }
+      case 'deployment': {
+        const deployment = await this.getDeployment(uuid);
+        if (!deployment.application_uuid) {
+          throw new Error(`Deployment ${uuid} does not name its application.`);
+        }
+        const app = await this.resourcePath('application', deployment.application_uuid);
+        // The route segment is the deployment uuid, whichever id was passed.
+        return `${app}/deployment/${encodeURIComponent(deployment.deployment_uuid || uuid)}`;
+      }
+    }
+  }
+
+  /** Look a location up, rebuilding the index once if it misses. */
+  private async locateEnvironment(
+    pick: (index: EnvironmentIndex) => EnvironmentLocation | undefined,
+    what: string,
+  ): Promise<EnvironmentLocation> {
+    const cached = this.environmentIndex !== null;
+    const used = this.loadEnvironmentIndex();
+    let index = await used;
+    let hit = pick(index);
+    if (!hit && cached) {
+      // Invalidate only the build this lookup used: a concurrent lookup may
+      // already have replaced it with a fresh one.
+      if (this.environmentIndex === used) this.environmentIndex = null;
+      index = await this.loadEnvironmentIndex();
+      hit = pick(index);
+    }
+    if (!hit) {
+      const unread =
+        index.unread.length > 0
+          ? ` Could not read ${index.unread.length} project(s): ${index.unread.join(', ')}.`
+          : '';
+      throw new Error(`Could not find the project and environment for ${what}.${unread}`);
+    }
+    return hit;
+  }
+
+  private loadEnvironmentIndex(): Promise<EnvironmentIndex> {
+    if (!this.environmentIndex) {
+      this.environmentIndex = this.buildEnvironmentIndex().catch((error: unknown) => {
+        // A failed build is not an index: the next lookup must try again.
+        this.environmentIndex = null;
+        throw error;
+      });
+    }
+    return this.environmentIndex;
+  }
+
+  /**
+   * `GET /projects` omits environments; `GET /projects/{uuid}` includes them
+   * with both `id` and `uuid` (verified live, 2026-09-30, although the spec's
+   * Project schema lists neither).
+   */
+  private async buildEnvironmentIndex(): Promise<EnvironmentIndex> {
+    const uuids = (await this.listProjects()).map((project) => project.uuid);
+    // allSettled: one project this token cannot read must not take every
+    // other link down with it. Its resources miss, and the error names it.
+    const detailed = await Promise.allSettled(uuids.map((uuid) => this.getProject(uuid)));
+    const index: EnvironmentIndex = { byId: new Map(), byUuid: new Map(), unread: [] };
+    detailed.forEach((result, i) => {
+      if (result.status === 'rejected' || !Array.isArray(result.value.environments)) {
+        index.unread.push(uuids[i]);
+        return;
+      }
+      for (const environment of result.value.environments) {
+        const at = { project_uuid: uuids[i], environment_uuid: environment.uuid };
+        index.byId.set(environment.id, at);
+        index.byUuid.set(environment.uuid, at);
+      }
+    });
+    return index;
   }
 
   async createProject(data: CreateProjectRequest): Promise<UuidResponse> {

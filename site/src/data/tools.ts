@@ -9,7 +9,7 @@ export const REPO = 'https://github.com/StuMason/coolify-mcp';
 
 /**
  * What it can do, described by capability rather than by listing every tool
- * name. A hand-maintained index of 45 identifiers is a maintenance liability
+ * name. A hand-maintained index of every identifier is a maintenance liability
  * and tells a buyer nothing they can act on — docs/tools.md carries the full
  * list and stays current because it sits next to the code.
  */

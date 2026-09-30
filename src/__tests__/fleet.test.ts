@@ -85,6 +85,29 @@ async function connect(server: CoolifyMcpServer, withElicitation = false): Promi
 }
 
 describe('registryFromEnv', () => {
+  it("carries COOLIFY_UI_URL and a fleet entry's ui_url, trailing slash trimmed (#342)", () => {
+    expect(
+      registryFromEnv({
+        COOLIFY_BASE_URL: 'http://coolify:8080',
+        COOLIFY_ACCESS_TOKEN: PROD_TOKEN,
+        COOLIFY_UI_URL: 'https://coolify.example.com/',
+      }).default.uiUrl,
+    ).toBe('https://coolify.example.com');
+    const fleet = registryFromEnv({
+      COOLIFY_INSTANCES: JSON.stringify([
+        { name: 'prod', url: PROD, token: PROD_TOKEN, ui_url: 'https://ui.example.com/' },
+      ]),
+    });
+    expect(fleet.default.uiUrl).toBe('https://ui.example.com');
+    expect(() =>
+      registryFromEnv({
+        COOLIFY_INSTANCES: JSON.stringify([
+          { name: 'prod', url: PROD, token: PROD_TOKEN, ui_url: 'ui.example.com' },
+        ]),
+      }),
+    ).toThrow('COOLIFY_INSTANCES[0] ("prod") "ui_url" must start with http:// or https://');
+  });
+
   it('builds a single "default" instance from the classic vars, with no fleet surface', () => {
     const registry = registryFromEnv({
       COOLIFY_BASE_URL: 'https://coolify.example.com/',

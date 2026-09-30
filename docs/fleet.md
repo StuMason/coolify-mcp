@@ -18,7 +18,9 @@ Add `COOLIFY_INSTANCES`, a JSON array, next to your existing config:
 ```
 
 Each entry is `{ "name", "url", "token" }` plus an optional
-`"headers": { "Key": "Value" }` for an auth proxy in front of that instance.
+`"headers": { "Key": "Value" }` for an auth proxy in front of that instance,
+and an optional `"ui_url"` for dashboard links when `url` is an internal
+address (the fleet form of `COOLIFY_UI_URL`).
 
 - **The default instance** is your `COOLIFY_BASE_URL` one, named `default`.
   If you set only `COOLIFY_INSTANCES`, the first entry is the default.

@@ -7,6 +7,7 @@ import {
   cfAccessHeaders,
   mergeCfAccessHeaders,
   ensureStateFileWritable,
+  looksInternalBaseUrl,
 } from '../lib/startup-check.js';
 
 // A base env that passes every check, so each test breaks exactly one thing.
@@ -391,5 +392,41 @@ describe('ensureStateFileWritable (#417)', () => {
       chmodSync(locked, 0o700);
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('checkStartupConfig: dashboard links (#342)', () => {
+  it('rejects a COOLIFY_UI_URL that is not a URL', () => {
+    expect(checkStartupConfig({ COOLIFY_UI_URL: 'coolify.example.com' }, 'stdio').errors).toContain(
+      'COOLIFY_UI_URL must start with http:// or https://',
+    );
+  });
+
+  it('warns when the base URL is internal and no UI URL is set', () => {
+    const { warnings } = checkStartupConfig({ COOLIFY_BASE_URL: 'http://coolify:8080' }, 'http');
+    expect(warnings.join(' ')).toContain('COOLIFY_UI_URL');
+  });
+
+  it('says nothing for a public base URL, localhost, or an internal one with a UI URL set', () => {
+    for (const env of [
+      { COOLIFY_BASE_URL: 'https://coolify.example.com' },
+      { COOLIFY_BASE_URL: 'http://localhost:8000' },
+      { COOLIFY_BASE_URL: 'http://coolify:8080', COOLIFY_UI_URL: 'https://coolify.example.com' },
+    ]) {
+      expect(checkStartupConfig(env, 'http')).toEqual({ errors: [], warnings: [] });
+    }
+  });
+});
+
+describe('looksInternalBaseUrl (#342)', () => {
+  it.each([
+    ['http://coolify:8080', true],
+    ['http://localhost:8000', false],
+    ['http://10.0.0.5:8000', false],
+    ['https://coolify.example.com', false],
+    ['http://[::1]:8000', false],
+    ['not a url', false],
+  ])('%s → %s', (url, internal) => {
+    expect(looksInternalBaseUrl(url)).toBe(internal);
   });
 });

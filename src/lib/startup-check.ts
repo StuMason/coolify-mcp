@@ -34,12 +34,14 @@ export interface StartupCheckResult {
 const CHECKED_VARS = {
   stdio: [
     'COOLIFY_BASE_URL',
+    'COOLIFY_UI_URL',
     'COOLIFY_ACCESS_TOKEN',
     'CF_ACCESS_CLIENT_ID',
     'CF_ACCESS_CLIENT_SECRET',
   ],
   http: [
     'COOLIFY_BASE_URL',
+    'COOLIFY_UI_URL',
     'COOLIFY_ACCESS_TOKEN',
     'MCP_PUBLIC_URL',
     'MCP_HOST',
@@ -68,6 +70,21 @@ function looksUnexpanded(value: string): boolean {
  */
 
 const HEADER_BREAKING = /[\0\r\n]/;
+
+/**
+ * Whether a base URL is only reachable from inside a container network: a
+ * single-label hostname other than localhost (`http://coolify:8080`). A
+ * dashboard link built on it opens nowhere (#342). Localhost and private IPs
+ * are not counted: they open fine in the browser on the same machine or LAN.
+ */
+export function looksInternalBaseUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host !== 'localhost' && !host.includes('.') && !host.includes(':');
+  } catch {
+    return false;
+  }
+}
 
 export function checkStartupConfig(
   env: NodeJS.ProcessEnv,
@@ -121,6 +138,21 @@ export function checkStartupConfig(
         );
       }
     }
+  }
+
+  // Dashboard links (#342): a UI URL that is not a URL makes every link dead
+  // while still claiming to be configured, and an internal base URL without
+  // one makes them open nowhere.
+  const uiUrl = env.COOLIFY_UI_URL;
+  if (uiUrl !== undefined && uiUrl !== '' && !looksUnexpanded(uiUrl)) {
+    if (!/^https?:\/\//.test(uiUrl)) {
+      errors.push('COOLIFY_UI_URL must start with http:// or https://');
+    }
+  } else if (!uiUrl && env.COOLIFY_BASE_URL && looksInternalBaseUrl(env.COOLIFY_BASE_URL)) {
+    warnings.push(
+      'COOLIFY_BASE_URL is an internal address and COOLIFY_UI_URL is unset, so coolify_url links will not open in a browser. ' +
+        'Set COOLIFY_UI_URL to the dashboard address.',
+    );
   }
 
   // A key too short to sign with is a boot-time shape problem, not something to

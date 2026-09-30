@@ -69,6 +69,11 @@ COOLIFY_BASE_URL=http://coolify:8080
 
 A Coolify with no auth proxy in front can use its public URL.
 
+With an internal `COOLIFY_BASE_URL`, also set `COOLIFY_UI_URL` to the address
+you open the dashboard at (`https://coolify.example.com`). `coolify_url` builds
+dashboard links on it; without it they are built on the internal address and
+say so.
+
 ### Coolify behind Cloudflare Access
 
 If the internal-network route is not available (the MCP container runs on a
@@ -185,6 +190,7 @@ internet-facing service.
 | `MCP_TRANSPORT`           | stdio                    | `http` selects HTTP mode                                                            |
 | `COOLIFY_BASE_URL`        | required                 | The Coolify instance to manage                                                      |
 | `COOLIFY_ACCESS_TOKEN`    | required                 | The token the container acts with                                                   |
+| `COOLIFY_UI_URL`          | `COOLIFY_BASE_URL`       | Dashboard address for `coolify_url` links, when the API URL is internal             |
 | `MCP_PUBLIC_URL`          | required                 | Public https URL of this container                                                  |
 | `MCP_PORT` (or `PORT`)    | `8080`                   | Listen port                                                                         |
 | `MCP_HOST`                | all interfaces           | Listen address; `127.0.0.1` keeps it on loopback                                    |
