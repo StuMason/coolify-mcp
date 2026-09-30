@@ -368,6 +368,7 @@ export function truncateLogs(
 export function getApplicationActions(uuid: string, status?: string): ResponseAction[] {
   const actions: ResponseAction[] = [
     { tool: 'logs', args: { resource: 'application', uuid }, hint: 'View logs' },
+    { tool: 'coolify_url', args: { resource: 'application', uuid }, hint: 'Open in Coolify' },
   ];
   const s = (status || '').toLowerCase();
   if (s.includes('running')) {
@@ -577,6 +578,7 @@ export const TOOL_ANNOTATIONS = {
   server_domains: READ_ONLY,
   list_destinations: READ_ONLY,
   diagnose_app: READ_ONLY,
+  coolify_url: READ_ONLY,
   diagnose_server: READ_ONLY,
   find_issues: READ_ONLY,
   search_docs: READ_ONLY,
@@ -655,6 +657,7 @@ const TOOL_TITLES: Record<ToolName, string> = {
   deploy: 'Deploy',
   deployment: 'Manage deployment',
   diagnose_app: 'Diagnose application',
+  coolify_url: 'Coolify dashboard link',
   diagnose_server: 'Diagnose server',
   env_vars: 'Environment variables',
   environments: 'Manage environments',
@@ -1726,6 +1729,36 @@ export class CoolifyMcpServer extends McpServer {
       'Server details. Sentinel and log-drain credentials are always masked.',
       { uuid: z.string() },
       async ({ uuid }) => wrap(() => this.client.getServer(uuid)),
+    );
+
+    this.defineTool(
+      'coolify_url',
+      'Dashboard URL for a resource. Never write a Coolify URL by hand.',
+      {
+        resource: z.enum([
+          'application',
+          'database',
+          'service',
+          'deployment',
+          'server',
+          'project',
+          'environment',
+          'private_key',
+        ]),
+        uuid: z.string(),
+      },
+      async ({ resource, uuid }) =>
+        wrap(async () => {
+          const link = await this.client.resourceUrl(resource, uuid);
+          // Without COOLIFY_UI_URL the link is built on the API base URL,
+          // which is wrong when that is an internal address (#342).
+          return link.ui_url_configured
+            ? { url: link.url }
+            : {
+                url: link.url,
+                note: 'Built on COOLIFY_BASE_URL. If that is an internal address, set COOLIFY_UI_URL to the dashboard URL.',
+              };
+        }),
     );
 
     this.defineTool(

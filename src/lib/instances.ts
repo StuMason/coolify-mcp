@@ -89,6 +89,7 @@ export class InstanceRegistry {
 interface RawInstance {
   name?: unknown;
   url?: unknown;
+  ui_url?: unknown;
   token?: unknown;
   headers?: unknown;
 }
@@ -112,7 +113,7 @@ function parseInstancesJson(raw: string): InstanceDefinition[] {
     if (typeof entry !== 'object' || entry === null) {
       throw new Error(`${where} is not an object`);
     }
-    const { name, url, token, headers } = entry;
+    const { name, url, ui_url: uiUrl, token, headers } = entry;
     if (typeof name !== 'string' || !NAME_PATTERN.test(name)) {
       throw new Error(
         `${where} needs a "name": letters, digits, "_", "-" or "." (max 64 chars), starting with a letter or digit`,
@@ -123,6 +124,9 @@ function parseInstancesJson(raw: string): InstanceDefinition[] {
     }
     if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
       throw new Error(`${where} ("${name}") needs a "url" starting with http:// or https://`);
+    }
+    if (uiUrl !== undefined && (typeof uiUrl !== 'string' || !/^https?:\/\//.test(uiUrl))) {
+      throw new Error(`${where} ("${name}") "ui_url" must start with http:// or https://`);
     }
     if (typeof token !== 'string' || token === '') {
       throw new Error(`${where} ("${name}") needs a "token"`);
@@ -145,7 +149,13 @@ function parseInstancesJson(raw: string): InstanceDefinition[] {
         customHeaders[key] = value;
       }
     }
-    return { name, baseUrl: url.replace(/\/$/, ''), accessToken: token, customHeaders };
+    return {
+      name,
+      baseUrl: url.replace(/\/$/, ''),
+      uiUrl: uiUrl?.replace(/\/$/, ''),
+      accessToken: token,
+      customHeaders,
+    };
   });
 }
 
@@ -170,6 +180,7 @@ export function registryFromEnv(
     instances.push({
       name: DEFAULT_INSTANCE_NAME,
       baseUrl: env.COOLIFY_BASE_URL.replace(/\/$/, ''),
+      uiUrl: env.COOLIFY_UI_URL?.replace(/\/$/, '') || undefined,
       accessToken: env.COOLIFY_ACCESS_TOKEN ?? '',
       accessTokenFile: env.COOLIFY_ACCESS_TOKEN_FILE,
       customHeaders: Object.keys(merged).length > 0 ? merged : undefined,

@@ -19,6 +19,12 @@
  */
 export type CoolifyConfig = {
   baseUrl: string;
+  /**
+   * Where a human opens the dashboard, when that differs from `baseUrl`
+   * (#342). A server in the Coolify docker network reaches the API at
+   * `http://coolify:8080`, which no browser can open.
+   */
+  uiUrl?: string;
   customHeaders?: Record<string, string>;
 } & (
   | { accessToken: string; accessTokenFile?: string }

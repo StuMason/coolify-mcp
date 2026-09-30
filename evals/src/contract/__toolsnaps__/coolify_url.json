@@ -1,0 +1,35 @@
+{
+  "name": "coolify_url",
+  "title": "Coolify dashboard link",
+  "description": "Dashboard URL for a resource. Never write a Coolify URL by hand.",
+  "annotations": {
+    "readOnlyHint": true
+  },
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "resource": {
+        "type": "string",
+        "enum": [
+          "application",
+          "database",
+          "service",
+          "deployment",
+          "server",
+          "project",
+          "environment",
+          "private_key"
+        ]
+      },
+      "uuid": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "resource",
+      "uuid"
+    ],
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": {}
+  }
+}

@@ -15,6 +15,7 @@ the table below misses a tool the roster has.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Infrastructure**   | `get_infrastructure_overview`, `get_mcp_version`, `get_version`, `system` (health, list_resources, enable/disable API)                                                              |
 | **Diagnostics**      | `diagnose_app`, `diagnose_server`, `find_issues`                                                                                                                                    |
+| **Links**            | `coolify_url` (dashboard URL for an application, database, service, deployment, server, project, environment or private key)                                                        |
 | **Batch Operations** | `restart_project_apps`, `bulk_env_update`, `stop_all_apps`, `redeploy_project`                                                                                                      |
 | **Servers**          | `list_servers`, `get_server`, `validate_server`, `server_resources`, `server_domains`, `list_destinations`                                                                          |
 | **Projects**         | `projects` (list, get, create, update, delete via action param)                                                                                                                     |
@@ -43,7 +44,7 @@ appears. Single-instance installs never see either.
 ## How the surface is shaped
 
 - **Consolidated by action.** Related operations share one tool with an
-  `action` parameter, so the whole tool list costs roughly 8,700 tokens
+  `action` parameter, so the whole tool list costs roughly 8,900 tokens
   instead of the 43,000 a tool-per-endpoint design cost in v1. The server
   should not eat your context window before you have asked anything.
 - **Summaries by default.** `list_*` tools return `uuid`/`name`/`status`

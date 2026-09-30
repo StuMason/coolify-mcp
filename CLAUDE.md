@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Coolify that provides 45 token-optimized tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, teams, cloud tokens, documentation search, smart diagnostics, and batch operations. v2.0.0 reduced token usage by ~81% (from ~43,000 to ~8,300 tokens) by consolidating related operations into single tools with action parameters.
+MCP (Model Context Protocol) server for Coolify that provides 46 token-optimized tools for AI assistants to manage infrastructure through natural language. Tools cover servers, projects, environments, applications, databases, services, deployments, private keys, teams, cloud tokens, documentation search, smart diagnostics, and batch operations. v2.0.0 reduced token usage by ~81% (from ~43,000 to ~8,300 tokens) by consolidating related operations into single tools with action parameters.
 
 ## Commands
 
@@ -189,7 +189,7 @@ When making changes to the codebase, ensure documentation is updated:
    - New tools or actions added (add to the category table in `docs/tools.md`)
    - New example prompts needed (README)
 
-3. **This file (CLAUDE.md)** - Update tool count if changed (currently 45 tools); `package.json`, `manifest.json`, `server.json` and README carry the same count. `npm run check:tool-count` (CI-gated) compares every claim against the evals roster snapshot and checks the `docs/tools.md` table names every tool; `npm run check:tool-count:fix` rewrites the counts.
+3. **This file (CLAUDE.md)** - Update tool count if changed (currently 46 tools); `package.json`, `manifest.json`, `server.json` and README carry the same count. `npm run check:tool-count` (CI-gated) compares every claim against the evals roster snapshot and checks the `docs/tools.md` table names every tool; `npm run check:tool-count:fix` rewrites the counts.
 
 4. **docs/** is the reference; README is the front door. Detail belongs in `docs/tools.md` (surface, compatibility, gotchas), `docs/http-mode.md` (remote), `docs/fleet.md`, `docs/doctor.md`, `docs/security.md`. Keep README to one paragraph per topic plus a link. The site (`site/`) links out to these files and generates `llms.txt` from them at build.
 

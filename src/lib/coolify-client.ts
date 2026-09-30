@@ -720,8 +720,38 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
 /**
  * HTTP client for the Coolify API
  */
+/** Resources that have a page of their own in the Coolify dashboard (#342). */
+export type UiResource =
+  | 'application'
+  | 'database'
+  | 'service'
+  | 'deployment'
+  | 'server'
+  | 'project'
+  | 'environment'
+  | 'private_key';
+
+interface EnvironmentLocation {
+  project_uuid: string;
+  environment_uuid: string;
+}
+
+interface EnvironmentIndex {
+  byId: Map<number, EnvironmentLocation>;
+  byUuid: Map<string, EnvironmentLocation>;
+}
+
 export class CoolifyClient {
   private readonly baseUrl: string;
+  private readonly uiUrl: string;
+  private readonly uiUrlConfigured: boolean;
+  /**
+   * `environment_id` → project and environment uuids, for dashboard links
+   * (#342). Resources carry only the numeric id, and every dashboard path
+   * needs both uuids. Ids are immutable, so the index is only rebuilt when a
+   * lookup misses (a new environment), never on a timer.
+   */
+  private environmentIndex: Promise<EnvironmentIndex> | null = null;
   private readonly tokens: TokenSource;
   private readonly customHeaders: Record<string, string>;
   private cachedVersion: string | null = null;
@@ -740,6 +770,8 @@ export class CoolifyClient {
     // Throws when neither a token nor a readable token file is configured.
     this.tokens = new TokenSource(config);
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
+    this.uiUrlConfigured = Boolean(config.uiUrl);
+    this.uiUrl = (config.uiUrl ?? config.baseUrl).replace(/\/$/, '');
 
     const reserved = new Set(['authorization', 'content-type']);
     const raw = config.customHeaders ?? {};
@@ -1069,6 +1101,112 @@ export class CoolifyClient {
 
   async getProject(uuid: string): Promise<Project> {
     return this.request<Project>(`/projects/${uuid}`);
+  }
+
+  // ===========================================================================
+  // Dashboard links (#342)
+  // ===========================================================================
+
+  /**
+   * The dashboard URL for one resource, from Coolify's web routes (stable
+   * since v4.0.0). Built, never guessed: an application, database or service
+   * page needs its project and environment uuids, which the API does not
+   * return on the resource, so they come from the environment index.
+   */
+  async resourceUrl(
+    resource: UiResource,
+    uuid: string,
+  ): Promise<{ url: string; ui_url_configured: boolean }> {
+    const path = await this.resourcePath(resource, uuid);
+    return { url: `${this.uiUrl}${path}`, ui_url_configured: this.uiUrlConfigured };
+  }
+
+  private async resourcePath(resource: UiResource, uuid: string): Promise<string> {
+    const id = encodeURIComponent(uuid);
+    switch (resource) {
+      case 'server':
+        return `/server/${id}`;
+      case 'project':
+        return `/project/${id}`;
+      case 'private_key':
+        return `/security/private-key/${id}`;
+      case 'environment': {
+        const at = await this.locateEnvironment((index) => index.byUuid.get(uuid), uuid);
+        return `/project/${at.project_uuid}/environment/${at.environment_uuid}`;
+      }
+      case 'application':
+      case 'database':
+      case 'service': {
+        const found =
+          resource === 'application'
+            ? await this.getApplication(uuid)
+            : resource === 'database'
+              ? await this.getDatabase(uuid)
+              : await this.getService(uuid);
+        const environmentId = found.environment_id;
+        if (typeof environmentId !== 'number') {
+          throw new Error(`Coolify did not return an environment for ${resource} ${uuid}.`);
+        }
+        const at = await this.locateEnvironment(
+          (index) => index.byId.get(environmentId),
+          `${resource} ${uuid}`,
+        );
+        return `/project/${at.project_uuid}/environment/${at.environment_uuid}/${resource}/${id}`;
+      }
+      case 'deployment': {
+        const deployment = await this.getDeployment(uuid);
+        if (!deployment.application_uuid) {
+          throw new Error(`Deployment ${uuid} does not name its application.`);
+        }
+        const app = await this.resourcePath('application', deployment.application_uuid);
+        return `${app}/deployment/${id}`;
+      }
+    }
+  }
+
+  /** Look a location up, rebuilding the index once if it misses. */
+  private async locateEnvironment(
+    pick: (index: EnvironmentIndex) => EnvironmentLocation | undefined,
+    what: string,
+  ): Promise<EnvironmentLocation> {
+    const cached = this.environmentIndex !== null;
+    let hit = pick(await this.loadEnvironmentIndex());
+    if (!hit && cached) {
+      this.environmentIndex = null;
+      hit = pick(await this.loadEnvironmentIndex());
+    }
+    if (!hit) throw new Error(`Could not find the project and environment for ${what}.`);
+    return hit;
+  }
+
+  private loadEnvironmentIndex(): Promise<EnvironmentIndex> {
+    if (!this.environmentIndex) {
+      this.environmentIndex = this.buildEnvironmentIndex().catch((error: unknown) => {
+        // A failed build is not an index: the next lookup must try again.
+        this.environmentIndex = null;
+        throw error;
+      });
+    }
+    return this.environmentIndex;
+  }
+
+  /**
+   * `GET /projects` omits environments; `GET /projects/{uuid}` includes them
+   * with both `id` and `uuid` (verified live, 2026-09-30, although the spec's
+   * Project schema lists neither).
+   */
+  private async buildEnvironmentIndex(): Promise<EnvironmentIndex> {
+    const projects = (await this.listProjects()) as Project[];
+    const detailed = await Promise.all(projects.map((project) => this.getProject(project.uuid)));
+    const index: EnvironmentIndex = { byId: new Map(), byUuid: new Map() };
+    for (const project of detailed) {
+      for (const environment of project.environments ?? []) {
+        const at = { project_uuid: project.uuid, environment_uuid: environment.uuid };
+        index.byId.set(environment.id, at);
+        index.byUuid.set(environment.uuid, at);
+      }
+    }
+    return index;
   }
 
   async createProject(data: CreateProjectRequest): Promise<UuidResponse> {
