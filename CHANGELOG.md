@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`deploy` accepts `pr`** (#425) to redeploy an existing pull-request preview, the other half of preview support after #434. It needs an application uuid; a tag or name with `pr` is refused before Coolify is called, with a pointer to `list_applications`. `wait: true` follows the preview deployment. Coolify only redeploys a preview its GitHub webhook already created: with none for that PR it answers "Pull request N not found for this resource." and queues nothing, and the tool passes that answer through.
 
+### Changed
+
+- **Unknown argument keys are dropped out loud** (#438). Every tool used to strip a key its schema did not declare, silently. That is how #434 happened: an `application` update carrying only an unsupported flag became an empty body ("Invalid request"), and one carrying it next to a known field returned 200 with nothing changed. The schemas are now loose, so the key survives parsing; it is dropped before any handler can forward it to Coolify, and the result gains a note naming it ("Note: ignored `foo`, which application does not accept, so it was not sent."). Item keys in arrays of objects are checked too, so a typo such as `is_build_time` in an `env_vars` `data` entry is named rather than lost (upstream's bulk endpoint ignores it and answers 201). An `application` update with nothing left to send now answers "Error: nothing to update" instead of making the empty PATCH, matching `database` and `service`. The audit log records the call as sent. Wire-visible: every tool's `inputSchema` now carries `"additionalProperties": {}`, which costs about 290 tokens on `tools/list`, so the published figure moves from ~8,300 to ~8,700.
+
 ## [3.6.0] - 2026-09-30
 
 ### Added

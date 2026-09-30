@@ -6,7 +6,7 @@
 import { createRequire } from 'module';
 import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import { McpServer, ResourceTemplate, isInputRequiredResult } from '@modelcontextprotocol/server';
 import type {
   Transport,
   ToolAnnotations,
@@ -835,7 +835,7 @@ export class CoolifyMcpServer extends McpServer {
     // tool whose job is to correct wrong names.
     const takesInstance = this.registry.isFleet && !FLEET_ONLY_TOOLS.has(name);
     const shape = takesInstance ? { ...inputSchema, instance: INSTANCE_ARG } : inputSchema;
-    const scoped: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
+    const routed: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
       if (!takesInstance) return cb(args, extra);
       // `instance` is routing, not payload. Several handlers rest-spread their
       // args straight into a Coolify request body (application update,
@@ -858,6 +858,63 @@ export class CoolifyMcpServer extends McpServer {
         };
       }
       return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
+    };
+    // Unknown keys (#438). Schemas are registered loose, so a key a tool does
+    // not declare survives parsing instead of vanishing. It is dropped here,
+    // before any handler can rest-spread it into a Coolify body, and the result
+    // says so. Silent stripping is how an update carrying only an unsupported
+    // flag became an empty PATCH, and one carrying it next to a known field
+    // returned 200 with nothing changed (#434). Arrays of objects are checked
+    // one level down; their item schema must be `z.looseObject` too, or zod
+    // strips the key before this can see it (env_vars `data`).
+    const known = new Set(Object.keys(shape));
+    const itemKeys = new Map<string, Set<string>>();
+    for (const [key, schema] of Object.entries(shape)) {
+      const inner = schema instanceof z.ZodOptional ? schema.unwrap() : schema;
+      if (inner instanceof z.ZodArray && inner.element instanceof z.ZodObject) {
+        itemKeys.set(key, new Set(Object.keys(inner.element.shape)));
+      }
+    }
+    const scoped: ToolCallback<z.ZodObject<Args>> = async (args, extra) => {
+      const ignored = new Set<string>();
+      const declared: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(args)) {
+        if (!known.has(key)) {
+          ignored.add(key);
+          continue;
+        }
+        const itemKnown = itemKeys.get(key);
+        declared[key] =
+          itemKnown && Array.isArray(value)
+            ? value.map((item: Record<string, unknown>) =>
+                Object.fromEntries(
+                  Object.entries(item).filter(([itemKey]) => {
+                    if (itemKnown.has(itemKey)) return true;
+                    ignored.add(`${key}[].${itemKey}`);
+                    return false;
+                  }),
+                ),
+              )
+            : value;
+      }
+      if (ignored.size === 0) return routed(args, extra);
+      const result = await routed(declared as typeof args, extra);
+      if (isInputRequiredResult(result) || !Array.isArray(result?.content)) return result;
+      // Key names come from the caller and land in text the model reads:
+      // bounded, so a huge or hostile name cannot take over the note.
+      const names = [...ignored];
+      const shown = names.slice(0, 10).map((key) => `\`${key.slice(0, 64)}\``);
+      if (names.length > 10) shown.push(`and ${names.length - 10} more`);
+      return {
+        ...result,
+        content: [
+          ...result.content,
+          {
+            type: 'text' as const,
+            text: `Note: ignored ${shown.join(', ')}, which ${name} does not accept, so ${names.length === 1 ? 'it was' : 'they were'} not sent.`,
+          },
+        ],
+      };
     };
     // Audit wraps the OUTERMOST callback so the line covers instance routing
     // too: an unknown instance name is a refusal like any other, and a record
@@ -892,7 +949,7 @@ export class CoolifyMcpServer extends McpServer {
     this.registeredTools.add(name);
     this.registerTool(
       name,
-      { title: TOOL_TITLES[name], description, inputSchema: z.object(shape), annotations },
+      { title: TOOL_TITLES[name], description, inputSchema: z.looseObject(shape), annotations },
       contextual as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
   }
@@ -2224,6 +2281,9 @@ export class CoolifyMcpServer extends McpServer {
               return { content: [{ type: 'text' as const, text: 'Error: uuid required' }] };
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { action: _, uuid: __, delete_volumes: ___, ...updateData } = args;
+            // An empty PATCH is Coolify's opaque "Invalid request" (#434); say so instead.
+            if (Object.values(updateData).every((v) => v === undefined))
+              return { content: [{ type: 'text' as const, text: 'Error: nothing to update' }] };
             return wrap(() => this.client.updateApplication(uuid, updateData));
           }
           case 'move':
@@ -2923,7 +2983,8 @@ export class CoolifyMcpServer extends McpServer {
         reveal: z.boolean().optional(),
         data: z
           .array(
-            z.object({
+            // Loose so an undeclared item key reaches the #438 note (defineTool).
+            z.looseObject({
               key: z.string(),
               value: z.string(),
               is_preview: z.boolean().optional(),

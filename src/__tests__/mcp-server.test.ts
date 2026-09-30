@@ -3527,3 +3527,123 @@ describe('_actions never advertises a tool this server does not have (#390)', ()
     }
   });
 });
+
+describe('unknown argument keys are dropped out loud (#438)', () => {
+  const connect = async (): Promise<{ server: CoolifyMcpServer; client: Client }> => {
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return { server, client };
+  };
+
+  it('sends only declared fields and names the flag it dropped (the #434 shape)', async () => {
+    const { server, client } = await connect();
+    const spy = jest
+      .spyOn(server['client'], 'updateApplication')
+      .mockResolvedValue({ uuid: 'app-uuid' } as never);
+
+    try {
+      const result = (await client.callTool({
+        name: 'application',
+        arguments: { action: 'update', uuid: 'app-uuid', name: 'shop', not_a_real_flag: true },
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', { name: 'shop' });
+      expect(JSON.parse(result.content[0].text)).toBeDefined();
+      expect(result.content[1].text).toBe(
+        'Note: ignored `not_a_real_flag`, which application does not accept, so it was not sent.',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('refuses an update left empty, and names what it dropped (the rest of #434)', async () => {
+    const { server, client } = await connect();
+    const spy = jest.spyOn(server['client'], 'updateApplication');
+
+    try {
+      const result = (await client.callTool({
+        name: 'application',
+        arguments: { action: 'update', uuid: 'app-uuid', flag_a: true, flag_b: 'x' },
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.content[0].text).toBe('Error: nothing to update');
+      expect(result.content[1].text).toBe(
+        'Note: ignored `flag_a`, `flag_b`, which application does not accept, so they were not sent.',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('names an unknown key inside an array item, and does not forward it', async () => {
+    const { server, client } = await connect();
+    const spy = jest
+      .spyOn(server['client'], 'bulkUpdateApplicationEnvVars')
+      .mockResolvedValue({ message: 'ok' } as never);
+
+    try {
+      const result = (await client.callTool({
+        name: 'env_vars',
+        arguments: {
+          resource: 'application',
+          action: 'bulk_update',
+          uuid: 'app-uuid',
+          data: [{ key: 'FOO', value: 'bar', is_build_time: true }],
+        },
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', {
+        data: [{ key: 'FOO', value: 'bar' }],
+      });
+      expect(result.content.at(-1)?.text).toBe(
+        'Note: ignored `data[].is_build_time`, which env_vars does not accept, so it was not sent.',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('bounds the note: ten names at most, each cut to 64 characters', async () => {
+    const { server, client } = await connect();
+    jest.spyOn(server['client'], 'getVersion').mockResolvedValue('4.3.23' as never);
+    const extras = Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [`${String(i).padStart(2, '0')}${'x'.repeat(100)}`, 1]),
+    );
+
+    try {
+      const result = (await client.callTool({ name: 'get_version', arguments: extras })) as {
+        content: Array<{ text: string }>;
+      };
+      const note = result.content.at(-1)?.text ?? '';
+
+      expect(note).toContain(`\`00${'x'.repeat(62)}\``);
+      expect(note).not.toContain('x'.repeat(63));
+      expect(note).toContain('and 2 more');
+      expect(note).not.toContain('`10');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('adds nothing when every key is declared', async () => {
+    const { server, client } = await connect();
+    jest.spyOn(server['client'], 'getVersion').mockResolvedValue('4.3.23' as never);
+
+    try {
+      const result = (await client.callTool({ name: 'get_version', arguments: {} })) as {
+        content: Array<{ text: string }>;
+      };
+
+      expect(result.content).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  });
+});

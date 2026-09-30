@@ -230,6 +230,14 @@ describe('fleet mode (#367)', () => {
     await h.close();
   });
 
+  it('never reports `instance` as an ignored key (#438)', async () => {
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    const text = await h.call('get_version', { instance: 'staging' });
+    expect(text).toContain('staging.example.com');
+    expect(text).not.toContain('Note: ignored');
+    await h.close();
+  });
+
   it('keeps concurrent calls against different instances apart', async () => {
     const h = await connect(new CoolifyMcpServer(fleetRegistry()));
     const [staging, prod] = await Promise.all([
