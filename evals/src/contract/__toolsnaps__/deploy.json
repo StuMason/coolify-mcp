@@ -21,6 +21,12 @@
       "timeout_seconds": {
         "description": "Max seconds to poll when wait is true before giving up and returning the current status plus a next-action hint (default 300). Ignored when wait is false.",
         "type": "number"
+      },
+      "pr": {
+        "description": "Redeploy the existing preview for this pull request (application uuid only). The GitHub webhook creates the first preview.",
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
       }
     },
     "required": [

@@ -1885,12 +1885,18 @@ export class CoolifyClient {
   async deployByTagOrUuid(
     tagOrUuid: string,
     force: boolean = false,
+    pr?: number,
   ): Promise<DeployTriggerResponse> {
     // Detect if the value looks like a UUID or a tag name
     const param = this.isLikelyUuid(tagOrUuid) ? 'uuid' : 'tag';
+    // Coolify 400s on tag + pr; say why here rather than relay its message (#425).
+    if (pr !== undefined && param === 'tag') {
+      throw new Error('pr needs an application uuid, not a tag.');
+    }
+    const prQuery = pr !== undefined ? `&pr=${pr}` : '';
     // POST required from v4.2 and accepted long before it (`match(['get','post'])`).
     return this.request<DeployTriggerResponse>(
-      `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}`,
+      `/deploy?${param}=${encodeURIComponent(tagOrUuid)}&force=${force}${prQuery}`,
       { method: 'POST' },
     );
   }

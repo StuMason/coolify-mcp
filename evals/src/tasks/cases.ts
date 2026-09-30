@@ -91,6 +91,15 @@ export const TASK_CASES: TaskCase[] = [
     otherMutations: 'violation',
   },
   {
+    // #425. Scored on the call only: fixture ids are not uuid-shaped, so the
+    // client reads `app-shop` as a tag and refuses `pr` before any request.
+    name: 'redeploy a PR preview on the resolved uuid',
+    input: 'redeploy the preview for pull request 42 on shop-frontend',
+    category: 'chained-write',
+    mustCall: [{ tool: 'deploy', args: { tag_or_uuid: 'app-shop', pr: 42 } }],
+    otherMutations: 'violation',
+  },
+  {
     name: 'set an env var on the right app',
     input: 'set LOG_LEVEL=debug on api-gateway',
     category: 'chained-write',

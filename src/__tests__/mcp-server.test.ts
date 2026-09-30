@@ -1997,13 +1997,56 @@ describe('CoolifyMcpServer v2', () => {
         content: Array<{ text: string }>;
       };
 
-      expect(spy).toHaveBeenCalledWith('my-tag', true);
+      expect(spy).toHaveBeenCalledWith('my-tag', true, undefined);
       expect(pollSpy).not.toHaveBeenCalled();
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.data).toEqual({ deployments: [{ deployment_uuid: 'dep-uuid' }] });
       expect(parsed._actions).toEqual([
         { tool: 'list_deployments', args: {}, hint: 'Check deployment status' },
       ]);
+    });
+
+    it('forwards pr and follows the preview deployment when waiting (#425)', async () => {
+      jest.useFakeTimers();
+      const spy = jest
+        .spyOn(server['client'], 'deployByTagOrUuid')
+        .mockResolvedValue({ deployments: [{ deployment_uuid: 'preview-dep' }] });
+      const getDeploymentSpy = jest
+        .spyOn(server['client'], 'getDeployment')
+        .mockResolvedValueOnce(
+          essentialDeployment({ deployment_uuid: 'preview-dep', status: 'finished' }) as never,
+        );
+
+      await callDeploy(server, {
+        tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+        pr: 42,
+        wait: true,
+      });
+
+      expect(spy).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc', undefined, 42);
+      expect(getDeploymentSpy).toHaveBeenCalledWith('preview-dep');
+    });
+
+    it('passes the "Pull request not found" answer through when no preview exists (#425)', async () => {
+      const notFound = {
+        deployments: [
+          {
+            message: 'Pull request 42 not found for this resource.',
+            resource_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+          },
+        ],
+      };
+      jest.spyOn(server['client'], 'deployByTagOrUuid').mockResolvedValue(notFound);
+      const pollSpy = jest.spyOn(server['client'], 'getDeployment');
+
+      const result = (await callDeploy(server, {
+        tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+        pr: 42,
+        wait: true,
+      })) as { content: Array<{ text: string }> };
+
+      expect(pollSpy).not.toHaveBeenCalled();
+      expect(JSON.parse(result.content[0].text).data).toEqual(notFound);
     });
 
     it('wait: true polls until finished', async () => {

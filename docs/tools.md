@@ -134,6 +134,12 @@ otherwise odd-looking behaviour.
   webhook then answers "Preview deployments disabled." and builds nothing.
   Set `is_preview_deployments_enabled: true` on `application` create or
   update (Coolify 4.2+); `preview_url_template` needs 4.3+.
+- **`deploy` with `pr` redeploys a preview Coolify already has.** GitHub's
+  webhook creates each pull request's first preview (turn previews on with
+  `is_preview_deployments_enabled`). With no preview for that PR, Coolify
+  answers 200 with "Pull request N not found for this resource." and no
+  `deployment_uuid`, so nothing is queued. `pr` needs an application uuid, not
+  a tag.
 - **Compose-based applications are services.** `POST /applications/dockercompose`
   was removed upstream in v4.1.0; use the `service` tool.
 

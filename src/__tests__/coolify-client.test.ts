@@ -1138,6 +1138,24 @@ describe('CoolifyClient', () => {
         expect.any(Object),
       );
     });
+
+    it('appends pr to redeploy a preview (#425)', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ deployments: [] }));
+
+      await client.deployByTagOrUuid('xs0sgs4gog044s4k4c88kgsc', false, 42);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/deploy?uuid=xs0sgs4gog044s4k4c88kgsc&force=false&pr=42',
+        expect.any(Object),
+      );
+    });
+
+    it('refuses pr with a tag before calling Coolify (#425)', async () => {
+      await expect(client.deployByTagOrUuid('my-tag', false, 42)).rejects.toThrow(
+        'pr needs an application uuid, not a tag.',
+      );
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe('private keys', () => {
