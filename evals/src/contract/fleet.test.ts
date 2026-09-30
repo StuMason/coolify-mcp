@@ -84,10 +84,10 @@ describe('fleet tool contract', () => {
     // Unlike that one, this ceiling is a plain growth alarm, not a figure
     // coupled to anything published — the fleet number is not advertised in
     // the docs, so there is nothing for it to drift away from. Measured at
-    // ~9,226 when this was last moved (#425). Raise it deliberately, and only after
+    // ~9,472 when this was last moved (#438). Raise it deliberately, and only after
     // checking the single-instance gate is still the binding one.
     const chars = JSON.stringify(ctx.toolInfo).length;
-    expect(chars / 4).toBeLessThan(9300);
+    expect(chars / 4).toBeLessThan(9600);
   });
 });
 

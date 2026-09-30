@@ -3527,3 +3527,74 @@ describe('_actions never advertises a tool this server does not have (#390)', ()
     }
   });
 });
+
+describe('unknown argument keys are dropped out loud (#438)', () => {
+  const connect = async (): Promise<{ server: CoolifyMcpServer; client: Client }> => {
+    const server = new CoolifyMcpServer({
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    });
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return { server, client };
+  };
+
+  it('sends only declared fields and names the flag it dropped (the #434 shape)', async () => {
+    const { server, client } = await connect();
+    const spy = jest
+      .spyOn(server['client'], 'updateApplication')
+      .mockResolvedValue({ uuid: 'app-uuid' } as never);
+
+    try {
+      const result = (await client.callTool({
+        name: 'application',
+        arguments: { action: 'update', uuid: 'app-uuid', name: 'shop', not_a_real_flag: true },
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', { name: 'shop' });
+      expect(JSON.parse(result.content[0].text)).toBeDefined();
+      expect(result.content[1].text).toBe(
+        'Note: ignored `not_a_real_flag`, which application does not accept, so it was not sent.',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('names every dropped key when nothing declared was sent', async () => {
+    const { server, client } = await connect();
+    const spy = jest
+      .spyOn(server['client'], 'updateApplication')
+      .mockResolvedValue({ uuid: 'app-uuid' } as never);
+
+    try {
+      const result = (await client.callTool({
+        name: 'application',
+        arguments: { action: 'update', uuid: 'app-uuid', flag_a: true, flag_b: 'x' },
+      })) as { content: Array<{ text: string }> };
+
+      expect(spy).toHaveBeenCalledWith('app-uuid', {});
+      expect(result.content.at(-1)?.text).toBe(
+        'Note: ignored `flag_a`, `flag_b`, which application does not accept, so they were not sent.',
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('adds nothing when every key is declared', async () => {
+    const { server, client } = await connect();
+    jest.spyOn(server['client'], 'getVersion').mockResolvedValue('4.3.23' as never);
+
+    try {
+      const result = (await client.callTool({ name: 'get_version', arguments: {} })) as {
+        content: Array<{ text: string }>;
+      };
+
+      expect(result.content).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  });
+});

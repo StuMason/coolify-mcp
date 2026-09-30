@@ -6,7 +6,7 @@
 import { createRequire } from 'module';
 import { randomBytes } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import { McpServer, ResourceTemplate, isInputRequiredResult } from '@modelcontextprotocol/server';
 import type {
   Transport,
   ToolAnnotations,
@@ -835,7 +835,7 @@ export class CoolifyMcpServer extends McpServer {
     // tool whose job is to correct wrong names.
     const takesInstance = this.registry.isFleet && !FLEET_ONLY_TOOLS.has(name);
     const shape = takesInstance ? { ...inputSchema, instance: INSTANCE_ARG } : inputSchema;
-    const scoped: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
+    const routed: ToolCallback<z.ZodObject<Args>> = (args, extra) => {
       if (!takesInstance) return cb(args, extra);
       // `instance` is routing, not payload. Several handlers rest-spread their
       // args straight into a Coolify request body (application update,
@@ -858,6 +858,32 @@ export class CoolifyMcpServer extends McpServer {
         };
       }
       return this.instanceContext.run(instance, () => cb(forwarded as typeof args, extra));
+    };
+    // Unknown keys (#438). The schema is registered loose, so a key this tool
+    // does not declare survives parsing instead of vanishing. It is dropped
+    // here, before any handler can rest-spread it into a Coolify body, and the
+    // result says so. Silent stripping is how an update carrying only an
+    // unsupported flag became an empty PATCH, and one carrying it next to a
+    // known field returned 200 with nothing changed (#434).
+    const known = new Set(Object.keys(shape));
+    const scoped: ToolCallback<z.ZodObject<Args>> = async (args, extra) => {
+      const ignored = Object.keys(args).filter((key) => !known.has(key));
+      if (ignored.length === 0) return routed(args, extra);
+      const declared = Object.fromEntries(
+        Object.entries(args).filter(([key]) => known.has(key)),
+      ) as typeof args;
+      const result = await routed(declared, extra);
+      if (isInputRequiredResult(result) || !Array.isArray(result.content)) return result;
+      return {
+        ...result,
+        content: [
+          ...result.content,
+          {
+            type: 'text' as const,
+            text: `Note: ignored ${ignored.map((key) => `\`${key}\``).join(', ')}, which ${name} does not accept, so ${ignored.length === 1 ? 'it was' : 'they were'} not sent.`,
+          },
+        ],
+      };
     };
     // Audit wraps the OUTERMOST callback so the line covers instance routing
     // too: an unknown instance name is a refusal like any other, and a record
@@ -892,7 +918,7 @@ export class CoolifyMcpServer extends McpServer {
     this.registeredTools.add(name);
     this.registerTool(
       name,
-      { title: TOOL_TITLES[name], description, inputSchema: z.object(shape), annotations },
+      { title: TOOL_TITLES[name], description, inputSchema: z.looseObject(shape), annotations },
       contextual as unknown as ToolCallback<z.ZodObject<typeof shape>>,
     );
   }
