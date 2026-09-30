@@ -3270,13 +3270,15 @@ export class CoolifyMcpServer extends McpServer {
           ),
         rollback_to: z
           .string()
+          .min(1)
           .optional()
           .describe(
             'Roll back to this image tag instead (application uuid only, Coolify 4.3+). Tags: `deployment` rollback_images.',
           ),
       },
       async ({ tag_or_uuid, force, wait, timeout_seconds, pr, rollback_to }) => {
-        if (rollback_to !== undefined && (pr !== undefined || force !== undefined)) {
+        // `force: false` is what a rollback does anyway; only `true` conflicts.
+        if (rollback_to !== undefined && (pr !== undefined || force === true)) {
           return {
             content: [
               {

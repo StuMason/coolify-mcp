@@ -30,7 +30,8 @@
       },
       "rollback_to": {
         "description": "Roll back to this image tag instead (application uuid only, Coolify 4.3+). Tags: `deployment` rollback_images.",
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "required": [

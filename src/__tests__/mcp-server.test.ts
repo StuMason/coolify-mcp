@@ -143,6 +143,8 @@ describe('CoolifyMcpServer v2', () => {
       expect(typeof client.listDeployments).toBe('function');
       expect(typeof client.getDeployment).toBe('function');
       expect(typeof client.deployByTagOrUuid).toBe('function');
+      expect(typeof client.listRollbackImages).toBe('function');
+      expect(typeof client.rollbackApplication).toBe('function');
       expect(typeof client.listApplicationDeployments).toBe('function');
       expect(typeof client.cancelDeployment).toBe('function');
 
@@ -2082,6 +2084,18 @@ describe('CoolifyMcpServer v2', () => {
 
       expect(pollSpy).not.toHaveBeenCalled();
       expect(JSON.parse(result.content[0].text).data).toEqual(notFound);
+    });
+
+    it('accepts force: false with rollback_to, since that is what a rollback does (#442)', async () => {
+      const spy = jest
+        .spyOn(server['client'], 'rollbackApplication')
+        .mockResolvedValue({ deployments: [] });
+      await callDeploy(server, {
+        tag_or_uuid: 'xs0sgs4gog044s4k4c88kgsc',
+        rollback_to: 'abc123',
+        force: false,
+      });
+      expect(spy).toHaveBeenCalledWith('xs0sgs4gog044s4k4c88kgsc', 'abc123');
     });
 
     it('refuses rollback_to together with pr or force (#442)', async () => {

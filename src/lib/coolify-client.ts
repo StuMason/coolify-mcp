@@ -2087,8 +2087,16 @@ export class CoolifyClient {
   // Rollback (#442, Coolify 4.3+)
   // ===========================================================================
 
-  async listRollbackImages(appUuid: string): Promise<RollbackImages> {
-    return this.request<RollbackImages>(`/applications/${appUuid}/rollback-images`);
+  /**
+   * At most 20 images, newest first as Coolify lists them, with the rest
+   * counted: a long image history is an unbounded response otherwise.
+   */
+  async listRollbackImages(appUuid: string): Promise<RollbackImages & { omitted?: number }> {
+    const result = await this.request<RollbackImages>(`/applications/${appUuid}/rollback-images`);
+    const images = result.images ?? [];
+    return images.length > 20
+      ? { ...result, images: images.slice(0, 20), omitted: images.length - 20 }
+      : { ...result, images };
   }
 
   /**
@@ -2100,6 +2108,14 @@ export class CoolifyClient {
    * returns an empty list whenever it cannot inspect the server, so empty
    * means "unknown", never "none", and must not block a real rollback.
    *
+   * The same goes for the check itself failing (a 500, a timeout): that is
+   * unknown too, so the rollback goes ahead. Only a 404 stops it, because
+   * that means the route does not exist (Coolify before 4.3) and the rollback
+   * route will not either.
+   *
+   * Tags reach the model in the refusal below. They are sha-shaped image tags
+   * from the server, not free text, so they are not framed as untrusted.
+   *
    * The response is reshaped to `/deploy`'s `{ deployments: [...] }` so the
    * deploy tool handles both, `wait` included, the same way.
    */
@@ -2110,8 +2126,13 @@ export class CoolifyClient {
           'Look it up with `list_applications` and retry with the uuid.',
       );
     }
-    const { images } = await this.listRollbackImages(appUuid);
-    const tags = images.map((image) => image.tag).filter(Boolean);
+    let tags: string[] = [];
+    try {
+      const { images } = await this.listRollbackImages(appUuid);
+      tags = (images ?? []).map((image) => image.tag).filter(Boolean);
+    } catch (error) {
+      if (error instanceof CoolifyApiError && error.status === 404) throw error;
+    }
     if (tags.length > 0 && !tags.includes(tag)) {
       const shown =
         tags.slice(0, 10).join(', ') + (tags.length > 10 ? `, and ${tags.length - 10} more` : '');
