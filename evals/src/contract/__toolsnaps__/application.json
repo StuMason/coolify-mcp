@@ -93,6 +93,18 @@
       "instant_deploy": {
         "type": "boolean"
       },
+      "is_preview_deployments_enabled": {
+        "description": "Build a preview deployment for each pull request (Coolify 4.2+). Off by default on new apps.",
+        "type": "boolean"
+      },
+      "is_pr_deployments_public_enabled": {
+        "description": "Build previews for pull requests from forks too (Coolify 4.2+).",
+        "type": "boolean"
+      },
+      "preview_url_template": {
+        "description": "Preview domain template, e.g. `{{pr_id}}.{{domain}}` (Coolify 4.3+).",
+        "type": "string"
+      },
       "health_check_enabled": {
         "type": "boolean"
       },

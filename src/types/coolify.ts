@@ -426,6 +426,9 @@ export interface CreateApplicationPublicRequest {
   custom_docker_run_options?: string;
   custom_labels?: string;
   instant_deploy?: boolean;
+  is_preview_deployments_enabled?: boolean;
+  is_pr_deployments_public_enabled?: boolean;
+  preview_url_template?: string;
 }
 
 export interface CreateApplicationPrivateGHRequest extends Omit<
@@ -464,6 +467,9 @@ export interface CreateApplicationDockerfileRequest {
   custom_docker_run_options?: string;
   custom_labels?: string;
   instant_deploy?: boolean;
+  is_preview_deployments_enabled?: boolean;
+  is_pr_deployments_public_enabled?: boolean;
+  preview_url_template?: string;
 }
 
 export interface CreateApplicationDockerImageRequest {
@@ -496,6 +502,9 @@ export interface CreateApplicationDockerImageRequest {
   custom_docker_run_options?: string;
   custom_labels?: string;
   instant_deploy?: boolean;
+  is_preview_deployments_enabled?: boolean;
+  is_pr_deployments_public_enabled?: boolean;
+  preview_url_template?: string;
 }
 
 export interface CreateApplicationDockerComposeRequest {
@@ -566,6 +575,9 @@ export interface UpdateApplicationRequest {
   is_http_basic_auth_enabled?: boolean;
   http_basic_auth_username?: string;
   http_basic_auth_password?: string;
+  is_preview_deployments_enabled?: boolean;
+  is_pr_deployments_public_enabled?: boolean;
+  preview_url_template?: string;
 }
 
 export interface ApplicationActionResponse {
