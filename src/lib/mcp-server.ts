@@ -1134,8 +1134,9 @@ export class CoolifyMcpServer extends McpServer {
     tagOrUuid: string,
     force: boolean | undefined,
     timeoutSeconds: number,
+    pr?: number,
   ): Promise<DeployWaitResult | DeployTriggerResponse> {
-    const triggered = await this.client.deployByTagOrUuid(tagOrUuid, force);
+    const triggered = await this.client.deployByTagOrUuid(tagOrUuid, force, pr);
     const [first, ...rest] = triggered.deployments ?? [];
 
     if (!first?.deployment_uuid) {
@@ -3144,11 +3145,19 @@ export class CoolifyMcpServer extends McpServer {
           .describe(
             'Max seconds to poll when wait is true before giving up and returning the current status plus a next-action hint (default 300). Ignored when wait is false.',
           ),
+        pr: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            'Redeploy the existing preview for this pull request (application uuid only). The GitHub webhook creates the first preview.',
+          ),
       },
-      async ({ tag_or_uuid, force, wait, timeout_seconds }) => {
+      async ({ tag_or_uuid, force, wait, timeout_seconds, pr }) => {
         if (!wait) {
           return this.wrapWithActions(
-            () => this.client.deployByTagOrUuid(tag_or_uuid, force),
+            () => this.client.deployByTagOrUuid(tag_or_uuid, force, pr),
             () => [{ tool: 'list_deployments', args: {}, hint: 'Check deployment status' }],
           );
         }
@@ -3158,6 +3167,7 @@ export class CoolifyMcpServer extends McpServer {
               tag_or_uuid,
               force,
               timeout_seconds ?? DEFAULT_DEPLOY_TIMEOUT_SECONDS,
+              pr,
             ),
           (result) =>
             'deployment_uuid' in result

@@ -28,7 +28,7 @@ the table below misses a tool the roster has.
 | **Env Vars**         | `env_vars` (CRUD + bulk_update for application, service, and database env vars)                                                                                                     |
 | **Storages**         | `storages` (list, create, update, delete persistent/file storages for apps, databases, services; `backup_set`/`backup_delete`/`backup_run` scheduled volume backups, Coolify v4.2+) |
 | **Scheduled Tasks**  | `scheduled_tasks` (list, create, update, delete, list_executions, run_once for apps and services)                                                                                   |
-| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status), `deployment` (get, cancel, list_for_app)                                                                              |
+| **Deployments**      | `list_deployments`, `deploy` (incl. wait-to-terminal-status and `pr` preview redeploy), `deployment` (get, cancel, list_for_app)                                                    |
 | **Private Keys**     | `private_keys` (list, get, create, update, delete via action param)                                                                                                                 |
 | **GitHub Apps**      | `github_apps` (list, get, create, update, delete, list_repos, list_branches)                                                                                                        |
 | **Teams**            | `teams` (list, get, get_members, get_current, get_current_members)                                                                                                                  |
@@ -134,6 +134,12 @@ otherwise odd-looking behaviour.
   webhook then answers "Preview deployments disabled." and builds nothing.
   Set `is_preview_deployments_enabled: true` on `application` create or
   update (Coolify 4.2+); `preview_url_template` needs 4.3+.
+- **`deploy` with `pr` redeploys a preview Coolify already has.** GitHub's
+  webhook creates each pull request's first preview (turn previews on with
+  `is_preview_deployments_enabled`). With no preview for that PR, Coolify
+  answers 200 with "Pull request N not found for this resource." and no
+  `deployment_uuid`, so nothing is queued. `pr` needs an application uuid, not
+  a tag.
 - **Compose-based applications are services.** `POST /applications/dockercompose`
   was removed upstream in v4.1.0; use the `service` tool.
 
