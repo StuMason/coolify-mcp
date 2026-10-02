@@ -325,6 +325,15 @@ type LegacyGetEndpointKey = (typeof LEGACY_GET_ENDPOINTS)[keyof typeof LEGACY_GE
  * that leave the caller guessing at the cause — this appends a short, testable hint for
  * the cases we've hit in practice. Returns undefined when no known case matches.
  */
+/**
+ * Ends a tool error whose cause `doctor` diagnoses (#384): a connection that
+ * failed and a token Coolify refused. "This server's environment" because in
+ * HTTP mode the reader of the error is not who configured the server, and
+ * doctor checks the variables it runs with, not the reader's.
+ */
+export const DOCTOR_POINTER =
+  "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment.";
+
 export function errorHint(status: number, path: string): string | undefined {
   if (status === 500 && /\/scheduled-tasks(\/|$)/.test(path)) {
     return 'Known cause: Coolify stores scheduled-task `command` in a varchar(255) column and rejects longer commands with a bodyless 500 — check the command length (limit 255 chars).';
@@ -333,7 +342,7 @@ export function errorHint(status: number, path: string): string | undefined {
     return 'Coolify v4.2 moved state-changing endpoints from GET to POST; older versions accept GET only. This client retries automatically, so a 405 reaching you means both methods were rejected — check the endpoint path against your Coolify version.';
   }
   if (status === 401 || status === 403) {
-    return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
+    return `Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources. ${DOCTOR_POINTER}`;
   }
   // Covers /applications AND /databases: `list_containers` calls both in
   // parallel, and whichever 404 loses the race is the one the user sees — on
@@ -886,7 +895,7 @@ export class CoolifyClient {
     } catch (error) {
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error(
-          `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible.`,
+          `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible. ${DOCTOR_POINTER}`,
           { cause: error },
         );
       }

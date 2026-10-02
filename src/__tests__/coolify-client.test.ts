@@ -3,6 +3,7 @@ import {
   CoolifyApiError,
   CoolifyClient,
   errorHint,
+  DOCTOR_POINTER,
   isRunningStatus,
 } from '../lib/coolify-client.js';
 import type { ServiceType, CreateServiceRequest, EnvironmentVariable } from '../types/coolify.js';
@@ -1295,6 +1296,15 @@ describe('CoolifyClient', () => {
       mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
 
       await expect(client.listServers()).rejects.toThrow('Failed to connect to Coolify server');
+    });
+
+    it('ends the errors doctor diagnoses with a pointer to it, and no others (#384)', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(client.listServers()).rejects.toThrow(DOCTOR_POINTER);
+      expect(errorHint(401, '/servers')).toContain(DOCTOR_POINTER);
+      expect(errorHint(403, '/servers')).toContain(DOCTOR_POINTER);
+      expect(errorHint(404, '/rollback')).not.toContain(DOCTOR_POINTER);
+      expect(errorHint(405, '/servers')).not.toContain(DOCTOR_POINTER);
     });
 
     it('should handle empty responses', async () => {

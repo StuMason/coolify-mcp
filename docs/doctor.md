@@ -16,6 +16,11 @@ does (`COOLIFY_BASE_URL`, `COOLIFY_ACCESS_TOKEN`, the `CF_ACCESS_*` pair) and
 honours the same `--header "Key: Value"` flags, so what it verifies is what
 the server will actually do.
 
+A tool error caused by something doctor checks (Coolify unreachable, or the
+token refused with 401 or 403) ends by pointing here. In HTTP mode that is a
+job for whoever runs the server: doctor checks the environment the server runs
+with.
+
 ## What it checks
 
 | Check          | What passes                                                                  | What it catches                                                                                                  |
