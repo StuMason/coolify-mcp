@@ -24,7 +24,11 @@ import {
   mergeCfAccessHeaders,
   type Transport,
 } from './startup-check.js';
-import { isRoutingCatchAllBody } from './api-shape.js';
+import {
+  isCloudflareAccessRedirect,
+  isRoutingCatchAllBody,
+  REDIRECT_STATUSES,
+} from './api-shape.js';
 import { TESTED_RANGE } from './tested-range.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skipped' | 'inconclusive';
@@ -262,8 +266,14 @@ async function checkInstance(
       });
       const ms = Date.now() - started;
       const location = response.headers.get('location') ?? '';
-      if (response.status >= 300 && response.status < 400) {
-        if (location.includes('cloudflareaccess.com')) {
+      if (REDIRECT_STATUSES.has(response.status)) {
+        let target: URL | undefined;
+        try {
+          target = new URL(location, instance.baseUrl);
+        } catch {
+          target = undefined;
+        }
+        if (target && isCloudflareAccessRedirect(target)) {
           checks.push({
             check: 'reachability',
             status: 'fail',
@@ -271,13 +281,13 @@ async function checkInstance(
             fix: 'Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET (an Access service token), or point COOLIFY_BASE_URL at the internal address — see docs/http-mode.md',
           });
         } else {
+          // Tool calls refuse redirects (#453), so this is a failure, not a hop.
           checks.push({
             check: 'reachability',
-            status: 'warn',
-            detail: `COOLIFY_BASE_URL answers with a redirect (HTTP ${response.status})`,
-            fix: 'Set COOLIFY_BASE_URL to the final URL so every API call skips the hop',
+            status: 'fail',
+            detail: `COOLIFY_BASE_URL answers with a redirect (HTTP ${response.status}), and tool calls refuse redirects`,
+            fix: 'Set COOLIFY_BASE_URL to the address that answers directly (https:// if it redirects from http://)',
           });
-          reachable = true;
         }
       } else {
         reachable = true;

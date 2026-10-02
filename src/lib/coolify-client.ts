@@ -126,7 +126,11 @@ import type {
 } from '../types/coolify.js';
 import { looksInternalBaseUrl } from './startup-check.js';
 import { TokenSource } from './token-source.js';
-import { isRoutingCatchAllBody } from './api-shape.js';
+import {
+  isCloudflareAccessRedirect,
+  isRoutingCatchAllBody,
+  REDIRECT_STATUSES,
+} from './api-shape.js';
 
 // =============================================================================
 // List Options & Summary Types
@@ -333,6 +337,56 @@ type LegacyGetEndpointKey = (typeof LEGACY_GET_ENDPOINTS)[keyof typeof LEGACY_GE
  */
 export const DOCTOR_POINTER =
   "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment.";
+
+/**
+ * A Coolify API call that was redirected instead of answered (#453).
+ *
+ * Coolify's API never redirects, so a 3xx came from something in front of it.
+ * Requests are sent with `redirect: 'manual'` for two reasons: following a
+ * Cloudflare Access redirect lands on its login page, a 200 `text/html` that
+ * used to come back as the endpoint's result; and following any redirect to
+ * another host sends our custom headers (the Access service token among them)
+ * to that host, since fetch strips only `Authorization`. Names the target's
+ * host, never the whole `Location`, which can carry query parameters.
+ */
+export function redirectError(
+  status: number,
+  location: string | null,
+  baseUrl: string,
+): CoolifyApiError {
+  let target: URL | undefined;
+  try {
+    target = location ? new URL(location, baseUrl) : undefined;
+  } catch {
+    target = undefined;
+  }
+  const base = new URL(baseUrl);
+  let message: string;
+  if (target && isCloudflareAccessRedirect(target)) {
+    message =
+      `Cloudflare Access intercepted the request before it reached Coolify (HTTP ${status} to its login page at ${target.host}). ` +
+      'Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET to an Access service token (for a COOLIFY_INSTANCES entry, put them in its headers), or use an address Access does not guard.';
+  } else if (
+    target &&
+    target.hostname === base.hostname &&
+    base.protocol === 'http:' &&
+    target.protocol === 'https:'
+  ) {
+    message = `Coolify redirects http:// to https:// (HTTP ${status}). Use https://${target.host} as the base URL.`;
+  } else {
+    // On our own host the path is the clue (a proxy canonicalising it); on
+    // another host only the host is shown. Never the query.
+    const where = !target
+      ? 'an unstated address'
+      : target.hostname === base.hostname
+        ? `${target.host}${target.pathname}`
+        : target.host;
+    message =
+      `Coolify did not answer: HTTP ${status} redirect to ${where}. ` +
+      "Coolify's API never redirects, so something in front of it did. Set the base URL to the address that answers directly.";
+  }
+  return new CoolifyApiError(`${message} ${DOCTOR_POINTER}`, status);
+}
 
 /**
  * Map a failed response's status/path to an actionable hint for known Coolify quirks.
@@ -849,6 +903,7 @@ export class CoolifyClient {
     try {
       const response = await fetch(url, {
         ...options,
+        redirect: 'manual',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.tokens.current()}`,
@@ -856,6 +911,15 @@ export class CoolifyClient {
           ...options.headers,
         },
       });
+      if (REDIRECT_STATUSES.has(response.status)) {
+        // Unread, so release it rather than parking the socket until GC.
+        void response.body?.cancel();
+        throw redirectError(
+          response.status,
+          response.headers?.get('location') ?? null,
+          this.baseUrl,
+        );
+      }
 
       // Handle empty responses (204 No Content, etc.)
       const text = await response.text();
@@ -1001,7 +1065,7 @@ export class CoolifyClient {
   // Health & Version
   // ===========================================================================
 
-  async getVersion(): Promise<Version> {
+  async getVersion(options?: { signal?: AbortSignal }): Promise<Version> {
     if (this.cachedVersion) {
       return { version: this.cachedVersion };
     }
@@ -1010,6 +1074,8 @@ export class CoolifyClient {
     let response: Response;
     try {
       response = await fetch(url, {
+        redirect: 'manual',
+        signal: options?.signal,
         headers: {
           // Current token, but no 401 retry: this path calls fetch() directly
           // rather than through request(), because /version answers in plain
@@ -1022,6 +1088,10 @@ export class CoolifyClient {
       throw this.connectionError(error);
     }
 
+    if (REDIRECT_STATUSES.has(response.status)) {
+      void response.body?.cancel();
+      throw redirectError(response.status, response.headers?.get('location') ?? null, this.baseUrl);
+    }
     if (!response.ok) {
       // The same hint request() gives, so `get_version` (often a model's first
       // call on a misconfigured server) points at doctor too (#384).

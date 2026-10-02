@@ -367,7 +367,9 @@ describe('resource registration', () => {
       expect(resources.map((r) => r.uri).filter((uri) => uri.includes('/application/'))).toEqual([
         'coolify://prod/application/app-1',
       ]);
-      expect(stderr).toHaveBeenCalledWith('resources/list: left out instance "staging": deadline');
+      expect(stderr).toHaveBeenCalledWith(
+        'resources/list: left out instance "staging": no answer within 10 s',
+      );
     } finally {
       timeout.mockRestore();
       stderr.mockRestore();

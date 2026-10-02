@@ -250,7 +250,30 @@ describe('runDoctor', () => {
     expect(check(report, 'token').status).toBe('skipped');
   });
 
-  it('treats a non-Cloudflare redirect as a warning and keeps probing', async () => {
+  it('classifies Access the way tool calls do: custom domain yes, a query naming it no (#453)', async () => {
+    const reachWith = async (location: string): Promise<string> => {
+      const fetchMock = healthyFetch();
+      const base = fetchMock.getMockImplementation()!;
+      let first = true;
+      fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+        if (first) {
+          first = false;
+          return new Response(null, { status: 302, headers: { location } });
+        }
+        return base(url, init) as Promise<Response>;
+      });
+      const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
+      return check(report, 'reachability').detail ?? '';
+    };
+    expect(await reachWith('https://auth.example.com/cdn-cgi/access/login')).toContain(
+      'Cloudflare Access',
+    );
+    expect(await reachWith('https://evil.example/?next=cloudflareaccess.com')).not.toContain(
+      'Cloudflare Access',
+    );
+  });
+
+  it('fails a non-Cloudflare redirect, which tool calls refuse (#453)', async () => {
     const fetchMock = healthyFetch();
     const base = fetchMock.getMockImplementation()!;
     let first = true;
@@ -267,9 +290,10 @@ describe('runDoctor', () => {
     });
     const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
     const reach = check(report, 'reachability');
-    expect(reach.status).toBe('warn');
-    expect(reach.fix).toContain('final URL');
-    expect(check(report, 'token').status).toBe('pass');
+    expect(reach.status).toBe('fail');
+    expect(reach.fix).toContain('answers directly');
+    expect(check(report, 'token').status).toBe('skipped');
+    expect(report.ok).toBe(false);
   });
 
   it('skips reachability when the base URL is set but unusable', async () => {

@@ -23,16 +23,16 @@ with.
 
 ## What it checks
 
-| Check          | What passes                                                                  | What it catches                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `config`       | Both variables set, well-formed                                              | Unexpanded `${VAR}`, leading whitespace or control characters in the token, `/api/v1` on the base URL            |
-| `reachability` | Coolify answers, with response time                                          | DNS/TLS/connection failures; **Cloudflare Access interception**, named specifically when the wall is a 302 to it |
-| `token`        | Accepted by Coolify                                                          | 401 (bad token), 403 with the Member-role body (read-only role)                                                  |
-| `version`      | Coolify version inside the tested range                                      | An untested Coolify; reported as a warning, not a failure                                                        |
-| `abilities`    | Token grants `read` and `deploy`                                             | A token missing `deploy` (deploy tools will 403); abilities that exceed the team role                            |
-| `api-shape`    | The routing catch-all still has the shape the v4.2 method fallback relies on | An upstream change that would silently break pre-4.2 compatibility                                               |
-| `runtime`      | Node 20 or later                                                             | An older Node                                                                                                    |
-| `fleet-config` | Every `COOLIFY_INSTANCES` entry well-formed (only shown when it is set)      | The `config` checks per entry, plus header names that are not valid; reported apart from the default's `config`  |
+| Check          | What passes                                                                  | What it catches                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`       | Both variables set, well-formed                                              | Unexpanded `${VAR}`, leading whitespace or control characters in the token, `/api/v1` on the base URL                                                         |
+| `reachability` | Coolify answers, with response time                                          | DNS/TLS/connection failures; **Cloudflare Access interception**, named specifically when the wall is a 302 to it; any other redirect, which tool calls refuse |
+| `token`        | Accepted by Coolify                                                          | 401 (bad token), 403 with the Member-role body (read-only role)                                                                                               |
+| `version`      | Coolify version inside the tested range                                      | An untested Coolify; reported as a warning, not a failure                                                                                                     |
+| `abilities`    | Token grants `read` and `deploy`                                             | A token missing `deploy` (deploy tools will 403); abilities that exceed the team role                                                                         |
+| `api-shape`    | The routing catch-all still has the shape the v4.2 method fallback relies on | An upstream change that would silently break pre-4.2 compatibility                                                                                            |
+| `runtime`      | Node 20 or later                                                             | An older Node                                                                                                                                                 |
+| `fleet-config` | Every `COOLIFY_INSTANCES` entry well-formed (only shown when it is set)      | The `config` checks per entry, plus header names that are not valid; reported apart from the default's `config`                                               |
 
 Every probe is side-effect free. `read` is proven by the token check; `deploy`
 is probed through the ability-gated `GET /deploy` with no parameters, so no

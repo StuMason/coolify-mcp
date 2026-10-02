@@ -752,6 +752,18 @@ const INSTANCE_ARG = z.string().optional().describe('Instance name');
 const LISTING_DEADLINE_MS = 10_000;
 
 /**
+ * Why one instance dropped out of a fan-out (#393, #454), for a person to read.
+ * A missed deadline says so plainly instead of "The operation was aborted due
+ * to timeout". Duck-typed: an abort rejects with a DOMException, which is not
+ * an `instanceof Error` across realms.
+ */
+function fanOutFailure(error: unknown): string {
+  const { name, message } = (error ?? {}) as { name?: unknown; message?: unknown };
+  if (name === 'TimeoutError') return `no answer within ${LISTING_DEADLINE_MS / 1000} s`;
+  return typeof message === 'string' ? message : String(error);
+}
+
+/**
  * Cache hints for the 2026-07-28 cacheable results (#337); 2025-era responses
  * never carry them. Without these the SDK emits `ttlMs: 0`, which tells a
  * client to re-list on every use.
@@ -1600,12 +1612,8 @@ export class CoolifyMcpServer extends McpServer {
       );
       perInstance.forEach((result, index) => {
         if (result.status === 'rejected') {
-          // Duck-typed: an abort rejects with a DOMException, which is not an
-          // `instanceof Error` across realms.
-          const message = (result.reason as { message?: unknown } | undefined)?.message;
-          const reason = typeof message === 'string' ? message : String(result.reason);
           console.error(
-            `resources/list: left out instance "${this.registry.all[index].name}": ${reason}`,
+            `resources/list: left out instance "${this.registry.all[index].name}": ${fanOutFailure(result.reason)}`,
           );
         }
       });
@@ -1662,9 +1670,14 @@ export class CoolifyMcpServer extends McpServer {
         'list_instances',
         "The configured Coolify instances. Every tool takes an optional `instance` (one of these names); omitted means the default. Reports each instance's live Coolify version, or the error reaching it. Tokens are never shown.",
         {},
+        // One deadline for the whole fan-out (#454), as resources/list has: an
+        // instance that accepts the connection and never answers would
+        // otherwise hold this tool, whose job is saying which instances are
+        // reachable, for fetch's 300 s headers timeout.
         async () =>
-          wrap(async () =>
-            Promise.all(
+          wrap(async () => {
+            const signal = AbortSignal.timeout(LISTING_DEADLINE_MS);
+            return Promise.all(
               this.registry.all.map(async (instance) => {
                 const base = {
                   name: instance.name,
@@ -1672,14 +1685,14 @@ export class CoolifyMcpServer extends McpServer {
                   default: instance.name === this.registry.default.name,
                 };
                 try {
-                  const { version } = await this.clientFor(instance).getVersion();
+                  const { version } = await this.clientFor(instance).getVersion({ signal });
                   return { ...base, version };
                 } catch (error) {
-                  return { ...base, error: error instanceof Error ? error.message : String(error) };
+                  return { ...base, error: fanOutFailure(error) };
                 }
               }),
-            ),
-          ),
+            );
+          }),
       );
     }
 

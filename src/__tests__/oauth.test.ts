@@ -453,6 +453,25 @@ describe('validateCoolifyToken (tier-2 proof of access)', () => {
     );
   });
 
+  it('refuses an Access redirect without following it, so the service token stays home (#453)', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' },
+        }),
+    ) as typeof fetch;
+    expect(
+      await validateCoolifyToken('https://coolify.example.com', 'good-token', {
+        'CF-Access-Client-Secret': 'cf-secret',
+      }),
+    ).toEqual({ ok: false });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
   it('refuses on 401 and on network failure', async () => {
     global.fetch = jest.fn(async () => new Response('{}', { status: 401 })) as typeof fetch;
     expect(await validateCoolifyToken('https://coolify.example.com', 'bad')).toEqual({ ok: false });
