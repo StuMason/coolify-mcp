@@ -118,6 +118,10 @@ export async function validateCoolifyToken(
         Accept: 'application/json',
       },
       signal: AbortSignal.timeout(10_000),
+      // Never follow (#453): fetch strips only Authorization on a cross-origin
+      // redirect, so following one would send extraHeaders (the Access
+      // service token) on to whatever host it names. A 3xx is not ok anyway.
+      redirect: 'manual',
     });
     if (!response.ok) return { ok: false };
     const team = (await response.json()) as { name?: string };

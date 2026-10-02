@@ -24,7 +24,11 @@ import {
   mergeCfAccessHeaders,
   type Transport,
 } from './startup-check.js';
-import { isRoutingCatchAllBody } from './api-shape.js';
+import {
+  isCloudflareAccessRedirect,
+  isRoutingCatchAllBody,
+  REDIRECT_STATUSES,
+} from './api-shape.js';
 import { TESTED_RANGE } from './tested-range.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'skipped' | 'inconclusive';
@@ -262,8 +266,14 @@ async function checkInstance(
       });
       const ms = Date.now() - started;
       const location = response.headers.get('location') ?? '';
-      if (response.status >= 300 && response.status < 400) {
-        if (location.includes('cloudflareaccess.com')) {
+      if (REDIRECT_STATUSES.has(response.status)) {
+        let target: URL | undefined;
+        try {
+          target = new URL(location, instance.baseUrl);
+        } catch {
+          target = undefined;
+        }
+        if (target && isCloudflareAccessRedirect(target)) {
           checks.push({
             check: 'reachability',
             status: 'fail',

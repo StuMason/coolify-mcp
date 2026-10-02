@@ -21,3 +21,25 @@ export function isRoutingCatchAllBody(body: unknown): boolean {
   if ('docs' in body) return true;
   return (body as { message?: unknown }).message === 'Not found.';
 }
+
+/**
+ * The statuses that are redirects (#453). 304 Not Modified is a 3xx but not a
+ * redirect, so a plain `status >= 300 && < 400` range would misreport it.
+ */
+export const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Does this redirect target belong to Cloudflare Access? The team domain is
+ * `<team>.cloudflareaccess.com`, but a team can put Access on a custom domain;
+ * the `/cdn-cgi/access/` path is the same on both. Matched on the parsed host
+ * and path, never on the raw `Location`, whose query can name anything.
+ *
+ * Shared by the client and doctor so the two cannot classify one redirect
+ * differently.
+ */
+export function isCloudflareAccessRedirect(target: URL): boolean {
+  return (
+    /(^|\.)cloudflareaccess\.com$/i.test(target.hostname) ||
+    target.pathname.startsWith('/cdn-cgi/access/')
+  );
+}

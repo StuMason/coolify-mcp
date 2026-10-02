@@ -1359,8 +1359,36 @@ describe('CoolifyClient', () => {
       expect(redirectError(302, null, base).message).toContain('redirect to an unstated address');
       expect(redirectError(302, 'http://[bad', base).message).toContain('an unstated address');
       expect(
-        redirectError(307, '/api/v1/elsewhere', 'https://coolify.example.com').message,
-      ).toContain('redirect to coolify.example.com');
+        redirectError(307, '/api/v1/elsewhere?x=1', 'https://coolify.example.com').message,
+      ).toContain('redirect to coolify.example.com/api/v1/elsewhere.');
+      // Access on a custom domain is still Access.
+      expect(
+        redirectError(
+          302,
+          'https://auth.example.com/cdn-cgi/access/login?k=v',
+          'https://coolify.example.com',
+        ).message,
+      ).toContain('Cloudflare Access intercepted the request');
+      // A hostile query naming Access is just another host.
+      expect(
+        redirectError(
+          302,
+          'https://evil.example/?next=cloudflareaccess.com',
+          'https://coolify.example.com',
+        ).message,
+      ).toContain('redirect to evil.example.');
+    });
+
+    it('does not read a 304, or a 3xx with no headers, as anything but what it is (#453)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 304,
+        statusText: 'Not Modified',
+        text: async () => '',
+      } as Response);
+      await expect(client.listServers()).rejects.toThrow('HTTP 304');
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 302, text: async () => '' } as Response);
+      await expect(client.listServers()).rejects.toThrow('redirect to an unstated address');
     });
 
     it('get_version, which bypasses request(), points at doctor on the same two failures (#384)', async () => {

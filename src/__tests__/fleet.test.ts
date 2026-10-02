@@ -315,11 +315,23 @@ describe('fleet mode (#367)', () => {
       expect(rows[0]).toMatchObject({ name: 'prod' });
       expect(rows[0].version).toBeDefined();
       expect(rows[1]).toMatchObject({ name: 'staging' });
-      expect(String(rows[1].error)).toContain('deadline');
+      expect(rows[1].error).toBe('no answer within 10 s');
     } finally {
       timeout.mockRestore();
       await h.close();
     }
+  });
+
+  it('list_instances reports a non-Error failure as text', async () => {
+    const healthy = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      if (String(url).startsWith(STAGING)) throw 'socket hang up';
+      return healthy(url, init);
+    });
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    const rows = JSON.parse(await h.call('list_instances', {})) as Array<Record<string, unknown>>;
+    expect(rows[1].error).toBe('socket hang up');
+    await h.close();
   });
 
   it('list_instances names Cloudflare Access when it intercepts one instance (#453)', async () => {

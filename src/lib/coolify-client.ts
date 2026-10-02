@@ -126,7 +126,11 @@ import type {
 } from '../types/coolify.js';
 import { looksInternalBaseUrl } from './startup-check.js';
 import { TokenSource } from './token-source.js';
-import { isRoutingCatchAllBody } from './api-shape.js';
+import {
+  isCloudflareAccessRedirect,
+  isRoutingCatchAllBody,
+  REDIRECT_STATUSES,
+} from './api-shape.js';
 
 // =============================================================================
 // List Options & Summary Types
@@ -358,7 +362,7 @@ export function redirectError(
   }
   const base = new URL(baseUrl);
   let message: string;
-  if (target && /(^|\.)cloudflareaccess\.com$/i.test(target.hostname)) {
+  if (target && isCloudflareAccessRedirect(target)) {
     message =
       `Cloudflare Access intercepted the request before it reached Coolify (HTTP ${status} to its login page at ${target.host}). ` +
       'Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET to an Access service token (for a COOLIFY_INSTANCES entry, put them in its headers), or use an address Access does not guard.';
@@ -370,8 +374,15 @@ export function redirectError(
   ) {
     message = `Coolify redirects http:// to https:// (HTTP ${status}). Use https://${target.host} as the base URL.`;
   } else {
+    // On our own host the path is the clue (a proxy canonicalising it); on
+    // another host only the host is shown. Never the query.
+    const where = !target
+      ? 'an unstated address'
+      : target.hostname === base.hostname
+        ? `${target.host}${target.pathname}`
+        : target.host;
     message =
-      `Coolify did not answer: HTTP ${status} redirect to ${target ? target.host : 'an unstated address'}. ` +
+      `Coolify did not answer: HTTP ${status} redirect to ${where}. ` +
       "Coolify's API never redirects, so something in front of it did. Set the base URL to the address that answers directly.";
   }
   return new CoolifyApiError(`${message} ${DOCTOR_POINTER}`, status);
@@ -900,8 +911,14 @@ export class CoolifyClient {
           ...options.headers,
         },
       });
-      if (response.status >= 300 && response.status < 400) {
-        throw redirectError(response.status, response.headers.get('location'), this.baseUrl);
+      if (REDIRECT_STATUSES.has(response.status)) {
+        // Unread, so release it rather than parking the socket until GC.
+        void response.body?.cancel();
+        throw redirectError(
+          response.status,
+          response.headers?.get('location') ?? null,
+          this.baseUrl,
+        );
       }
 
       // Handle empty responses (204 No Content, etc.)
@@ -1071,8 +1088,9 @@ export class CoolifyClient {
       throw this.connectionError(error);
     }
 
-    if (response.status >= 300 && response.status < 400) {
-      throw redirectError(response.status, response.headers.get('location'), this.baseUrl);
+    if (REDIRECT_STATUSES.has(response.status)) {
+      void response.body?.cancel();
+      throw redirectError(response.status, response.headers?.get('location') ?? null, this.baseUrl);
     }
     if (!response.ok) {
       // The same hint request() gives, so `get_version` (often a model's first

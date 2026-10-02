@@ -47,7 +47,9 @@ address (the fleet form of `COOLIFY_UI_URL`).
   means the default. A wrong name is rejected with the list of valid names
   before anything is sent anywhere.
 - **`list_instances`** reports each instance's name, URL, default flag and
-  live Coolify version. Tokens are never shown.
+  live Coolify version, or why it could not get one (including "no answer
+  within 10 s"; it waits no longer than that for any instance). Tokens are
+  never shown.
 - **Every destructive confirmation names the instance**: "Stop all
   applications on instance staging?" Fat-fingering the wrong estate is the
   failure mode a second instance invents, so the prompt refuses to be
