@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`COOLIFY_INSTANCES` entries get the startup checks** (#383). The single-instance variables were checked at startup for a doubled `/api/v1`, an unusable URL, leading whitespace or a line break in the token, line breaks in header values, an unexpanded `${VAR}`, and an internal URL with no dashboard URL. A fleet entry was only checked for a scheme and a non-empty token, so the rest failed at that instance's first call. Each entry now gets the same checks, labelled by index and name (`COOLIFY_INSTANCES[1] ("staging") url ends with /api/v1`), all reported at once, and `doctor` runs them too.
+- **`COOLIFY_INSTANCES` entries get the startup checks** (#383). The single-instance variables were checked at startup for a doubled `/api/v1`, an unusable URL, leading whitespace or a line break in the token, line breaks in header values, an unexpanded `${VAR}`, and an internal URL with no dashboard URL. A fleet entry was only checked for a scheme and a non-empty token, so the rest failed at that instance's first call. Each entry now gets the same checks, labelled by index and name (`COOLIFY_INSTANCES[1] ("staging") url ends with /api/v1`), all reported at once. `doctor` reports them on a `fleet-config` line of their own, so a bad entry no longer fails the default instance's `config` check and skips its token probe. Header names that are not valid HTTP header names are caught too; custom header values may contain `${`, as a `--header` flag may.
 
 ## [3.8.0] - 2026-10-02
 

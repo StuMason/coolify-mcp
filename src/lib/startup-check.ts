@@ -86,7 +86,34 @@ export function looksInternalBaseUrl(url: string): boolean {
   }
 }
 
+/**
+ * A valid instance name. Lives here rather than in `instances.ts` because the
+ * startup check runs first and must not echo a name the parser would refuse.
+ */
+export const INSTANCE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/** RFC 9110 token characters: what fetch accepts as a header name. */
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/** Every startup check: the single-instance variables, then each fleet entry. */
 export function checkStartupConfig(
+  env: NodeJS.ProcessEnv,
+  transport: Transport,
+): StartupCheckResult {
+  const single = checkSingleInstanceConfig(env, transport);
+  const fleet = checkInstanceEntries(env.COOLIFY_INSTANCES);
+  return {
+    errors: [...single.errors, ...fleet.errors],
+    warnings: [...single.warnings, ...fleet.warnings],
+  };
+}
+
+/**
+ * The single-instance variables only. Doctor reports these against the default
+ * instance and the fleet entries on a line of their own, so one bad entry does
+ * not fail the default's config and skip its token probe.
+ */
+export function checkSingleInstanceConfig(
   env: NodeJS.ProcessEnv,
   transport: Transport,
 ): StartupCheckResult {
@@ -117,7 +144,7 @@ export function checkStartupConfig(
   }
 
   checkUiUrlShape(
-    { ui: 'COOLIFY_UI_URL', base: 'COOLIFY_BASE_URL' },
+    { ui: 'COOLIFY_UI_URL', base: 'COOLIFY_BASE_URL', unset: 'COOLIFY_UI_URL' },
     env.COOLIFY_UI_URL,
     env.COOLIFY_BASE_URL,
     errors,
@@ -156,8 +183,6 @@ export function checkStartupConfig(
     );
   }
 
-  checkInstanceEntries(env.COOLIFY_INSTANCES, errors, warnings);
-
   return { errors, warnings };
 }
 
@@ -168,22 +193,37 @@ export function checkStartupConfig(
  *
  * JSON that does not parse, or an entry missing a field, is left to
  * `registryFromEnv`, which refuses it with its own message; this only looks at
- * the fields that are present and are strings. Labels carry the index and the
- * name, never a value.
+ * the fields that are present and are strings. Labels carry the index, and the
+ * name only once it is a valid one, never a value.
+ *
+ * The placeholder check covers `url`, `ui_url` and `token`, which never
+ * legitimately contain `${`. Custom header values are only checked for what
+ * breaks fetch, the same as a `--header` flag: an operator's own header may
+ * mean a literal `${`.
  */
-function checkInstanceEntries(raw: string | undefined, errors: string[], warnings: string[]): void {
-  if (!raw) return;
+export function checkInstanceEntries(raw: string | undefined): StartupCheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!raw) return { errors, warnings };
   let entries: unknown;
   try {
     entries = JSON.parse(raw);
   } catch {
-    return;
+    // Unparseable JSON is the parser's to report, except the Keychain story
+    // from this file's header, which would otherwise read as a syntax error.
+    if (looksUnexpanded(raw)) {
+      errors.push(
+        'COOLIFY_INSTANCES contains an unexpanded ${VAR} placeholder — the literal text reached this process instead of the value. Set the real value directly.',
+      );
+    }
+    return { errors, warnings };
   }
-  if (!Array.isArray(entries)) return;
+  if (!Array.isArray(entries)) return { errors, warnings };
   entries.forEach((entry: unknown, index) => {
     if (typeof entry !== 'object' || entry === null) return;
     const { name, url, ui_url: uiUrl, token, headers } = entry as Record<string, unknown>;
-    const where = `COOLIFY_INSTANCES[${index}]${typeof name === 'string' ? ` ("${name}")` : ''}`;
+    const named = typeof name === 'string' && INSTANCE_NAME_PATTERN.test(name);
+    const where = `COOLIFY_INSTANCES[${index}]${named ? ` ("${name}")` : ''}`;
     const usable = (value: unknown, label: string): value is string => {
       if (typeof value !== 'string' || value === '') return false;
       if (looksUnexpanded(value)) {
@@ -195,8 +235,10 @@ function checkInstanceEntries(raw: string | undefined, errors: string[], warning
     if (usable(url, `${where} url`)) {
       checkBaseUrlShape(`${where} url`, url, errors, warnings);
     }
+    // Called for its placeholder error; checkUiUrlShape skips a placeholder.
+    usable(uiUrl, `${where} ui_url`);
     checkUiUrlShape(
-      { ui: `${where} ui_url`, base: `${where} url` },
+      { ui: `${where} ui_url`, base: `${where} url`, unset: 'its ui_url' },
       typeof uiUrl === 'string' ? uiUrl : undefined,
       typeof url === 'string' ? url : undefined,
       errors,
@@ -207,12 +249,17 @@ function checkInstanceEntries(raw: string | undefined, errors: string[], warning
     }
     if (typeof headers === 'object' && headers !== null && !Array.isArray(headers)) {
       for (const [key, value] of Object.entries(headers)) {
-        if (usable(value, `${where} header "${key}"`)) {
+        if (!HEADER_NAME.test(key)) {
+          errors.push(
+            `${where} has a header name that is not a valid HTTP header name (letters, digits and !#$%&'*+-.^_\`|~ only, no spaces), so every request to it would fail.`,
+          );
+        } else if (typeof value === 'string' && value !== '') {
           checkHeaderValueShape(`${where} header "${key}"`, value, errors);
         }
       }
     }
   });
+  return { errors, warnings };
 }
 
 /**
@@ -257,7 +304,7 @@ function checkHeaderValueShape(label: string, value: string, errors: string[]): 
  * makes them open nowhere.
  */
 function checkUiUrlShape(
-  labels: { ui: string; base: string },
+  labels: { ui: string; base: string; unset: string },
   uiUrl: string | undefined,
   baseUrl: string | undefined,
   errors: string[],
@@ -269,8 +316,8 @@ function checkUiUrlShape(
     }
   } else if (!uiUrl && baseUrl && looksInternalBaseUrl(baseUrl)) {
     warnings.push(
-      `${labels.base} is an internal address and ${labels.ui} is unset, so coolify_url links will not open in a browser. ` +
-        `Set ${labels.ui} to the dashboard address.`,
+      `${labels.base} is an internal address and ${labels.unset} is unset, so coolify_url links will not open in a browser. ` +
+        `Set ${labels.unset} to the dashboard address.`,
     );
   }
 }

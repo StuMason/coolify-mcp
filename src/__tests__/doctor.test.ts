@@ -53,6 +53,40 @@ function check(
 }
 
 describe('runDoctor', () => {
+  it('reports COOLIFY_INSTANCES entries on their own line, leaving the default instance alone (#383)', async () => {
+    const env = cleanEnv();
+    env.COOLIFY_INSTANCES = JSON.stringify([
+      { name: 'staging', url: 'https://staging.example.com/api/v1', token: 'x' },
+    ]);
+    const report = await runDoctor(env, healthyFetch() as unknown as FetchLike);
+    expect(check(report, 'config').status).toBe('pass');
+    // The default's token probe still runs: a bad fleet entry used to fail its config and skip it.
+    expect(check(report, 'token').status).toBe('pass');
+    expect(check(report, 'fleet-config').status).toBe('fail');
+    expect(check(report, 'fleet-config').detail).toContain(
+      'COOLIFY_INSTANCES[0] ("staging") url ends with /api/v1',
+    );
+    expect(report.ok).toBe(false);
+  });
+
+  it('passes a well-formed fleet, and has no fleet line without one', async () => {
+    const env = cleanEnv();
+    env.COOLIFY_INSTANCES = JSON.stringify([
+      { name: 'staging', url: 'https://staging.example.com', token: 'x' },
+    ]);
+    expect(
+      check(await runDoctor(env, healthyFetch() as unknown as FetchLike), 'fleet-config').status,
+    ).toBe('pass');
+    env.COOLIFY_INSTANCES = JSON.stringify([
+      { name: 'staging', url: 'http://coolify:8080', token: 'x' },
+    ]);
+    expect(
+      check(await runDoctor(env, healthyFetch() as unknown as FetchLike), 'fleet-config').status,
+    ).toBe('warn');
+    const single = await runDoctor(cleanEnv(), healthyFetch() as unknown as FetchLike);
+    expect(single.checks.map((c) => c.check)).not.toContain('fleet-config');
+  });
+
   it('passes everything against a healthy instance', async () => {
     const report = await runDoctor(cleanEnv(), healthyFetch() as unknown as FetchLike);
     expect(report.ok).toBe(true);

@@ -468,7 +468,17 @@ describe('checkStartupConfig: COOLIFY_INSTANCES entries (#383)', () => {
         'header "CF-Access-Client-Id" contains a line break',
       ],
       [{ ui_url: 'coolify.example.com' }, 'errors', 'ui_url must start with http'],
-      [{ url: 'http://coolify:8080' }, 'warnings', 'url is an internal address'],
+      [
+        { url: 'http://coolify:8080' },
+        'warnings',
+        'url is an internal address and its ui_url is unset',
+      ],
+      [{ ui_url: 'https://${UI_HOST}' }, 'errors', 'ui_url contains an unexpanded'],
+      [
+        { headers: { 'X Custom': 'v' } },
+        'errors',
+        'has a header name that is not a valid HTTP header name',
+      ],
     ];
     for (const [overrides, kind, message] of cases) {
       const result = checkStartupConfig(
@@ -491,7 +501,35 @@ describe('checkStartupConfig: COOLIFY_INSTANCES entries (#383)', () => {
       ]),
       'stdio',
     );
-    expect(errors).toHaveLength(2);
+    expect(errors).toEqual([
+      expect.stringContaining('COOLIFY_INSTANCES[0] ("a") url ends with /api/v1'),
+      expect.stringContaining('COOLIFY_INSTANCES[1] ("b") token has leading whitespace'),
+    ]);
+  });
+
+  it('a name the parser would refuse is not echoed', () => {
+    const { errors } = checkStartupConfig(
+      fleet([entry({ name: 'not a\nvalid name', url: 'https://a.example.com/api/v1' })]),
+      'stdio',
+    );
+    expect(errors).toEqual([expect.stringMatching(/^COOLIFY_INSTANCES\[0\] url ends with/)]);
+  });
+
+  it('a custom header value may contain ${, as a --header flag may', () => {
+    const env = fleet([entry({ headers: { 'X-Template': 'literal ${not-a-var}' } })]);
+    expect(checkStartupConfig(env, 'stdio')).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('names an unexpanded COOLIFY_INSTANCES instead of leaving it to read as bad JSON', () => {
+    const { errors } = checkStartupConfig({ COOLIFY_INSTANCES: '${COOLIFY_INSTANCES}' }, 'stdio');
+    expect(errors).toEqual([expect.stringContaining('COOLIFY_INSTANCES contains an unexpanded')]);
+  });
+
+  it('skips fields of the wrong type, which the parser reports', () => {
+    for (const overrides of [{ name: 7 }, { headers: 'X-A: b' }, { headers: { 'X-A': 7 } }]) {
+      const result = checkStartupConfig(fleet([entry(overrides)]), 'stdio');
+      expect(result).toEqual({ errors: [], warnings: [] });
+    }
   });
 
   it('an internal url with ui_url set does not warn', () => {

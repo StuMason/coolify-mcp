@@ -14,7 +14,7 @@
  * Errors thrown here name the entry and the problem, never a value.
  */
 
-import { mergeCfAccessHeaders } from './startup-check.js';
+import { INSTANCE_NAME_PATTERN, mergeCfAccessHeaders } from './startup-check.js';
 import type { CoolifyConfig } from '../types/coolify.js';
 
 /**
@@ -94,8 +94,6 @@ interface RawInstance {
   headers?: unknown;
 }
 
-const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
-
 function parseInstancesJson(raw: string): InstanceDefinition[] {
   let parsed: unknown;
   try {
@@ -114,7 +112,7 @@ function parseInstancesJson(raw: string): InstanceDefinition[] {
       throw new Error(`${where} is not an object`);
     }
     const { name, url, ui_url: uiUrl, token, headers } = entry;
-    if (typeof name !== 'string' || !NAME_PATTERN.test(name)) {
+    if (typeof name !== 'string' || !INSTANCE_NAME_PATTERN.test(name)) {
       throw new Error(
         `${where} needs a "name": letters, digits, "_", "-" or "." (max 64 chars), starting with a letter or digit`,
       );
