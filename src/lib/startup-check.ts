@@ -86,7 +86,34 @@ export function looksInternalBaseUrl(url: string): boolean {
   }
 }
 
+/**
+ * A valid instance name. Lives here rather than in `instances.ts` because the
+ * startup check runs first and must not echo a name the parser would refuse.
+ */
+export const INSTANCE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+/** RFC 9110 token characters: what fetch accepts as a header name. */
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/** Every startup check: the single-instance variables, then each fleet entry. */
 export function checkStartupConfig(
+  env: NodeJS.ProcessEnv,
+  transport: Transport,
+): StartupCheckResult {
+  const single = checkSingleInstanceConfig(env, transport);
+  const fleet = checkInstanceEntries(env.COOLIFY_INSTANCES);
+  return {
+    errors: [...single.errors, ...fleet.errors],
+    warnings: [...single.warnings, ...fleet.warnings],
+  };
+}
+
+/**
+ * The single-instance variables only. Doctor reports these against the default
+ * instance and the fleet entries on a line of their own, so one bad entry does
+ * not fail the default's config and skip its token probe.
+ */
+export function checkSingleInstanceConfig(
   env: NodeJS.ProcessEnv,
   transport: Transport,
 ): StartupCheckResult {
@@ -104,56 +131,25 @@ export function checkStartupConfig(
     }
   }
 
-  // COOLIFY_ACCESS_TOKEN is sent as `Bearer <value>`, so header normalization
-  // applies to the *composed* value (verified against undici): trailing
-  // whitespace is stripped and works — say nothing about it; leading
-  // whitespace survives as `Bearer  <token>` and 401s every call; NUL/CR/LF
-  // anywhere before the trailing run makes fetch throw before sending.
   const token = env.COOLIFY_ACCESS_TOKEN;
   if (token !== undefined && token !== '' && !looksUnexpanded(token)) {
-    const core = token.replace(/\s+$/, '');
-    if (HEADER_BREAKING.test(core)) {
-      errors.push(
-        'COOLIFY_ACCESS_TOKEN contains a line break or NUL — every request would fail before it is even sent. ' +
-          'Re-paste the token without it.',
-      );
-    } else if (/^[ \t]/.test(core)) {
-      errors.push(
-        'COOLIFY_ACCESS_TOKEN has leading whitespace, which becomes part of the credential — ' +
-          'Coolify rejects every request with 401. Re-paste the token without it.',
-      );
-    }
+    checkTokenShape('COOLIFY_ACCESS_TOKEN', token, errors);
   }
 
-  // The CF Access pair are sent as whole header values, where outer
-  // whitespace is normalized away harmlessly — only an interior line break
-  // or NUL breaks fetch, and it breaks every Coolify request at once.
   for (const name of ['CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET'] as const) {
     const value = env[name];
     if (value !== undefined && value !== '' && !looksUnexpanded(value)) {
-      if (HEADER_BREAKING.test(value.trim())) {
-        errors.push(
-          `${name} contains a line break or NUL — every request to Coolify would fail before it is even sent. ` +
-            'Re-paste it without it.',
-        );
-      }
+      checkHeaderValueShape(name, value, errors);
     }
   }
 
-  // Dashboard links (#342): a UI URL that is not a URL makes every link dead
-  // while still claiming to be configured, and an internal base URL without
-  // one makes them open nowhere.
-  const uiUrl = env.COOLIFY_UI_URL;
-  if (uiUrl !== undefined && uiUrl !== '' && !looksUnexpanded(uiUrl)) {
-    if (!/^https?:\/\//.test(uiUrl)) {
-      errors.push('COOLIFY_UI_URL must start with http:// or https://');
-    }
-  } else if (!uiUrl && env.COOLIFY_BASE_URL && looksInternalBaseUrl(env.COOLIFY_BASE_URL)) {
-    warnings.push(
-      'COOLIFY_BASE_URL is an internal address and COOLIFY_UI_URL is unset, so coolify_url links will not open in a browser. ' +
-        'Set COOLIFY_UI_URL to the dashboard address.',
-    );
-  }
+  checkUiUrlShape(
+    { ui: 'COOLIFY_UI_URL', base: 'COOLIFY_BASE_URL', unset: 'COOLIFY_UI_URL' },
+    env.COOLIFY_UI_URL,
+    env.COOLIFY_BASE_URL,
+    errors,
+    warnings,
+  );
 
   // A key too short to sign with is a boot-time shape problem, not something to
   // discover once per request when a confirmation fails deep inside a tool call
@@ -171,32 +167,7 @@ export function checkStartupConfig(
 
   const baseUrl = env.COOLIFY_BASE_URL;
   if (baseUrl !== undefined && baseUrl !== '' && !looksUnexpanded(baseUrl)) {
-    let parsed: URL | undefined;
-    try {
-      parsed = new URL(baseUrl);
-    } catch {
-      errors.push(
-        'COOLIFY_BASE_URL is not a usable URL (a missing http:// or https:// scheme is the usual cause). ' +
-          'Set it to your Coolify URL, e.g. https://coolify.example.com',
-      );
-    }
-    if (parsed) {
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        errors.push(`COOLIFY_BASE_URL has scheme "${parsed.protocol}" — it must be http or https.`);
-      } else if (/\/api\/v1\/?$/.test(parsed.pathname)) {
-        // Guaranteed 404 on every call — the server appends /api/v1 itself.
-        errors.push(
-          'COOLIFY_BASE_URL ends with /api/v1. The server appends /api/v1 itself, so every request ' +
-            'would hit /api/v1/api/v1 and 404. Set it to the bare Coolify URL.',
-        );
-      } else if (/\/api\/?$/.test(parsed.pathname)) {
-        // Could conceivably be a deliberate proxy prefix, so only a warning.
-        warnings.push(
-          'COOLIFY_BASE_URL ends with /api. The server appends /api/v1 itself — unless this is a ' +
-            'deliberate proxy prefix, set it to the bare Coolify URL.',
-        );
-      }
-    }
+    checkBaseUrlShape('COOLIFY_BASE_URL', baseUrl, errors, warnings);
   }
 
   // Cloudflare Access service tokens (#373) come as a pair or not at all:
@@ -213,6 +184,175 @@ export function checkStartupConfig(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * The same shape checks, per `COOLIFY_INSTANCES` entry (#383). Without them a
+ * pasted line break or a doubled `/api/v1` in one entry passed the parser and
+ * failed at that instance's first call, long after startup.
+ *
+ * JSON that does not parse, or an entry missing a field, is left to
+ * `registryFromEnv`, which refuses it with its own message; this only looks at
+ * the fields that are present and are strings. Labels carry the index, and the
+ * name only once it is a valid one, never a value.
+ *
+ * The placeholder check covers `url`, `ui_url` and `token`, which never
+ * legitimately contain `${`. Custom header values are only checked for what
+ * breaks fetch, the same as a `--header` flag: an operator's own header may
+ * mean a literal `${`.
+ */
+export function checkInstanceEntries(raw: string | undefined): StartupCheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!raw) return { errors, warnings };
+  let entries: unknown;
+  try {
+    entries = JSON.parse(raw);
+  } catch {
+    // Unparseable JSON is the parser's to report, except the Keychain story
+    // from this file's header, which would otherwise read as a syntax error.
+    if (looksUnexpanded(raw)) {
+      errors.push(
+        'COOLIFY_INSTANCES contains an unexpanded ${VAR} placeholder — the literal text reached this process instead of the value. Set the real value directly.',
+      );
+    }
+    return { errors, warnings };
+  }
+  if (!Array.isArray(entries)) return { errors, warnings };
+  entries.forEach((entry: unknown, index) => {
+    if (typeof entry !== 'object' || entry === null) return;
+    const { name, url, ui_url: uiUrl, token, headers } = entry as Record<string, unknown>;
+    const named = typeof name === 'string' && INSTANCE_NAME_PATTERN.test(name);
+    const where = `COOLIFY_INSTANCES[${index}]${named ? ` ("${name}")` : ''}`;
+    const usable = (value: unknown, label: string): value is string => {
+      if (typeof value !== 'string' || value === '') return false;
+      if (looksUnexpanded(value)) {
+        errors.push(`${label} contains an unexpanded \${VAR} placeholder. Set the real value.`);
+        return false;
+      }
+      return true;
+    };
+    if (usable(url, `${where} url`)) {
+      checkBaseUrlShape(`${where} url`, url, errors, warnings);
+    }
+    // Called for its placeholder error; checkUiUrlShape skips a placeholder.
+    usable(uiUrl, `${where} ui_url`);
+    checkUiUrlShape(
+      { ui: `${where} ui_url`, base: `${where} url`, unset: 'its ui_url' },
+      typeof uiUrl === 'string' ? uiUrl : undefined,
+      typeof url === 'string' ? url : undefined,
+      errors,
+      warnings,
+    );
+    if (usable(token, `${where} token`)) {
+      checkTokenShape(`${where} token`, token, errors);
+    }
+    if (typeof headers === 'object' && headers !== null && !Array.isArray(headers)) {
+      for (const [key, value] of Object.entries(headers)) {
+        if (!HEADER_NAME.test(key)) {
+          errors.push(
+            `${where} has a header name that is not a valid HTTP header name (letters, digits and !#$%&'*+-.^_\`|~ only, no spaces), so every request to it would fail.`,
+          );
+        } else if (typeof value === 'string' && value !== '') {
+          checkHeaderValueShape(`${where} header "${key}"`, value, errors);
+        }
+      }
+    }
+  });
+  return { errors, warnings };
+}
+
+/**
+ * A token is sent as `Bearer <value>`, so header normalization applies to the
+ * *composed* value (verified against undici): trailing whitespace is stripped
+ * and works, so say nothing about it; leading whitespace survives as
+ * `Bearer  <token>` and 401s every call; NUL/CR/LF anywhere before the
+ * trailing run makes fetch throw before sending.
+ */
+function checkTokenShape(label: string, token: string, errors: string[]): void {
+  const core = token.replace(/\s+$/, '');
+  if (HEADER_BREAKING.test(core)) {
+    errors.push(
+      `${label} contains a line break or NUL — every request would fail before it is even sent. ` +
+        'Re-paste the token without it.',
+    );
+  } else if (/^[ \t]/.test(core)) {
+    errors.push(
+      `${label} has leading whitespace, which becomes part of the credential — ` +
+        'Coolify rejects every request with 401. Re-paste the token without it.',
+    );
+  }
+}
+
+/**
+ * A whole header value (the CF Access pair, a fleet entry's headers), where
+ * outer whitespace is normalized away harmlessly — only an interior line break
+ * or NUL breaks fetch, and it breaks every Coolify request at once.
+ */
+function checkHeaderValueShape(label: string, value: string, errors: string[]): void {
+  if (HEADER_BREAKING.test(value.trim())) {
+    errors.push(
+      `${label} contains a line break or NUL — every request to Coolify would fail before it is even sent. ` +
+        'Re-paste it without it.',
+    );
+  }
+}
+
+/**
+ * Dashboard links (#342): a UI URL that is not a URL makes every link dead
+ * while still claiming to be configured, and an internal base URL without one
+ * makes them open nowhere.
+ */
+function checkUiUrlShape(
+  labels: { ui: string; base: string; unset: string },
+  uiUrl: string | undefined,
+  baseUrl: string | undefined,
+  errors: string[],
+  warnings: string[],
+): void {
+  if (uiUrl !== undefined && uiUrl !== '' && !looksUnexpanded(uiUrl)) {
+    if (!/^https?:\/\//.test(uiUrl)) {
+      errors.push(`${labels.ui} must start with http:// or https://`);
+    }
+  } else if (!uiUrl && baseUrl && looksInternalBaseUrl(baseUrl)) {
+    warnings.push(
+      `${labels.base} is an internal address and ${labels.unset} is unset, so coolify_url links will not open in a browser. ` +
+        `Set ${labels.unset} to the dashboard address.`,
+    );
+  }
+}
+
+function checkBaseUrlShape(
+  label: string,
+  baseUrl: string,
+  errors: string[],
+  warnings: string[],
+): void {
+  let parsed: URL | undefined;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    errors.push(
+      `${label} is not a usable URL (a missing http:// or https:// scheme is the usual cause). ` +
+        'Set it to your Coolify URL, e.g. https://coolify.example.com',
+    );
+  }
+  if (!parsed) return;
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    errors.push(`${label} has scheme "${parsed.protocol}" — it must be http or https.`);
+  } else if (/\/api\/v1\/?$/.test(parsed.pathname)) {
+    // Guaranteed 404 on every call — the server appends /api/v1 itself.
+    errors.push(
+      `${label} ends with /api/v1. The server appends /api/v1 itself, so every request ` +
+        'would hit /api/v1/api/v1 and 404. Set it to the bare Coolify URL.',
+    );
+  } else if (/\/api\/?$/.test(parsed.pathname)) {
+    // Could conceivably be a deliberate proxy prefix, so only a warning.
+    warnings.push(
+      `${label} ends with /api. The server appends /api/v1 itself — unless this is a ` +
+        'deliberate proxy prefix, set it to the bare Coolify URL.',
+    );
+  }
 }
 
 /** Where HTTP mode keeps OAuth state unless `MCP_OAUTH_STATE_FILE` says otherwise. */

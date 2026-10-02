@@ -430,3 +430,121 @@ describe('looksInternalBaseUrl (#342)', () => {
     expect(looksInternalBaseUrl(url)).toBe(internal);
   });
 });
+
+describe('checkStartupConfig: COOLIFY_INSTANCES entries (#383)', () => {
+  const TOKEN = '7|abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef';
+  const fleet = (entries: unknown[]): NodeJS.ProcessEnv => ({
+    COOLIFY_INSTANCES: JSON.stringify(entries),
+  });
+  const entry = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    name: 'staging',
+    url: 'https://staging.example.com',
+    token: TOKEN,
+    ...overrides,
+  });
+
+  it('passes clean entries with no errors or warnings', () => {
+    expect(checkStartupConfig(fleet([entry(), entry({ name: 'prod' })]), 'stdio')).toEqual({
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('names the entry and the field for each single-instance check, never the value', () => {
+    const cases: Array<[Record<string, unknown>, 'errors' | 'warnings', string]> = [
+      [{ url: 'https://staging.example.com/api/v1' }, 'errors', 'url ends with /api/v1'],
+      [{ url: 'https://staging.example.com/api' }, 'warnings', 'url ends with /api'],
+      [{ url: 'https://exa mple.com' }, 'errors', 'url is not a usable URL'],
+      [{ url: '${STAGING_URL}' }, 'errors', 'url contains an unexpanded'],
+      [{ token: ` ${TOKEN}` }, 'errors', 'token has leading whitespace'],
+      [
+        { token: `${TOKEN.slice(0, 10)}\n${TOKEN.slice(10)}` },
+        'errors',
+        'token contains a line break',
+      ],
+      [
+        { headers: { 'CF-Access-Client-Id': 'abc\ndef' } },
+        'errors',
+        'header "CF-Access-Client-Id" contains a line break',
+      ],
+      [{ ui_url: 'coolify.example.com' }, 'errors', 'ui_url must start with http'],
+      [
+        { url: 'http://coolify:8080' },
+        'warnings',
+        'url is an internal address and its ui_url is unset',
+      ],
+      [{ ui_url: 'https://${UI_HOST}' }, 'errors', 'ui_url contains an unexpanded'],
+      [
+        { headers: { 'X Custom': 'v' } },
+        'errors',
+        'has a header name that is not a valid HTTP header name',
+      ],
+    ];
+    for (const [overrides, kind, message] of cases) {
+      const result = checkStartupConfig(
+        fleet([entry({ name: 'prod' }), entry(overrides)]),
+        'stdio',
+      );
+      expect(result[kind]).toEqual([
+        expect.stringContaining(`COOLIFY_INSTANCES[1] ("staging") ${message}`),
+      ]);
+      expect(result[kind === 'errors' ? 'warnings' : 'errors']).toEqual([]);
+      expect(JSON.stringify(result)).not.toContain(TOKEN.slice(3));
+    }
+  });
+
+  it('reports every bad entry at once, not the first', () => {
+    const { errors } = checkStartupConfig(
+      fleet([
+        entry({ name: 'a', url: 'https://a.example.com/api/v1' }),
+        entry({ name: 'b', token: ` ${TOKEN}` }),
+      ]),
+      'stdio',
+    );
+    expect(errors).toEqual([
+      expect.stringContaining('COOLIFY_INSTANCES[0] ("a") url ends with /api/v1'),
+      expect.stringContaining('COOLIFY_INSTANCES[1] ("b") token has leading whitespace'),
+    ]);
+  });
+
+  it('a name the parser would refuse is not echoed', () => {
+    const { errors } = checkStartupConfig(
+      fleet([entry({ name: 'not a\nvalid name', url: 'https://a.example.com/api/v1' })]),
+      'stdio',
+    );
+    expect(errors).toEqual([expect.stringMatching(/^COOLIFY_INSTANCES\[0\] url ends with/)]);
+  });
+
+  it('a custom header value may contain ${, as a --header flag may', () => {
+    const env = fleet([entry({ headers: { 'X-Template': 'literal ${not-a-var}' } })]);
+    expect(checkStartupConfig(env, 'stdio')).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('names an unexpanded COOLIFY_INSTANCES instead of leaving it to read as bad JSON', () => {
+    const { errors } = checkStartupConfig({ COOLIFY_INSTANCES: '${COOLIFY_INSTANCES}' }, 'stdio');
+    expect(errors).toEqual([expect.stringContaining('COOLIFY_INSTANCES contains an unexpanded')]);
+  });
+
+  it('skips fields of the wrong type, which the parser reports', () => {
+    for (const overrides of [{ name: 7 }, { headers: 'X-A: b' }, { headers: { 'X-A': 7 } }]) {
+      const result = checkStartupConfig(fleet([entry(overrides)]), 'stdio');
+      expect(result).toEqual({ errors: [], warnings: [] });
+    }
+  });
+
+  it('an internal url with ui_url set does not warn', () => {
+    const env = fleet([
+      entry({ url: 'http://coolify:8080', ui_url: 'https://coolify.example.com' }),
+    ]);
+    expect(checkStartupConfig(env, 'stdio').warnings).toEqual([]);
+  });
+
+  it('leaves JSON the parser rejects to the parser', () => {
+    for (const raw of ['not json', '{"name":"x"}', '[null, 3]', '[{"name":"x"}]']) {
+      expect(checkStartupConfig({ COOLIFY_INSTANCES: raw }, 'stdio')).toEqual({
+        errors: [],
+        warnings: [],
+      });
+    }
+  });
+});
