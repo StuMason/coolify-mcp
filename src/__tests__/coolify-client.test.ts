@@ -1814,6 +1814,30 @@ describe('CoolifyClient', () => {
       );
     });
 
+    it('passes a list signal through to fetch, so a caller can abort a hung instance (#393)', async () => {
+      const signal = new AbortController().signal;
+      for (const call of [
+        (): Promise<unknown> => client.listServers({ signal }),
+        (): Promise<unknown> => client.listProjects({ signal }),
+        (): Promise<unknown> => client.listApplications({ signal }),
+        (): Promise<unknown> => client.listServices({ signal }),
+        (): Promise<unknown> => client.listDeployments({ signal }),
+        (): Promise<unknown> => client.listGitHubApps({ signal }),
+      ]) {
+        mockFetch.mockResolvedValueOnce(mockResponse([]));
+        await call();
+        expect(mockFetch).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({ signal }),
+        );
+      }
+      // listDatabases makes two requests; both get it.
+      mockFetch.mockResolvedValueOnce(mockResponse([])).mockResolvedValueOnce(mockResponse([]));
+      await client.listDatabases({ signal });
+      const calls = mockFetch.mock.calls.slice(-2) as Array<[string, RequestInit]>;
+      expect(calls.map(([, init]) => init.signal)).toEqual([signal, signal]);
+    });
+
     it('should list applications with summary', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([mockApplication]));
 

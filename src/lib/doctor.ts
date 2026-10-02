@@ -18,7 +18,12 @@
  */
 
 import { readFileSync, statSync } from 'node:fs';
-import { checkStartupConfig, mergeCfAccessHeaders, type Transport } from './startup-check.js';
+import {
+  checkInstanceEntries,
+  checkSingleInstanceConfig,
+  mergeCfAccessHeaders,
+  type Transport,
+} from './startup-check.js';
 import { isRoutingCatchAllBody } from './api-shape.js';
 import { TESTED_RANGE } from './tested-range.js';
 
@@ -220,7 +225,7 @@ async function checkInstance(
   // states and the whole point of doctor is not to conflate them.
   const tokenSource = describeTokenSource(instance);
   if (tokenSource.problem) configProblems.push(tokenSource.problem);
-  const shape = checkStartupConfig(env, transport);
+  const shape = checkSingleInstanceConfig(env, transport);
   configProblems.push(...shape.errors);
   if (configProblems.length > 0) {
     checks.push({
@@ -503,6 +508,27 @@ export async function runDoctor(
       ...(major >= 20 ? {} : { fix: 'coolify-mcp is tested on Node 20+' }),
     },
   ];
+  // COOLIFY_INSTANCES entries (#383), on a line of their own so a bad entry
+  // does not fail the default instance's config check.
+  if (env.COOLIFY_INSTANCES) {
+    const fleet = checkInstanceEntries(env.COOLIFY_INSTANCES);
+    checks.push(
+      fleet.errors.length > 0
+        ? {
+            check: 'fleet-config',
+            status: 'fail',
+            detail: fleet.errors.join('; '),
+            fix: 'Fix the COOLIFY_INSTANCES entries above, then run doctor again',
+          }
+        : fleet.warnings.length > 0
+          ? { check: 'fleet-config', status: 'warn', detail: fleet.warnings.join('; ') }
+          : {
+              check: 'fleet-config',
+              status: 'pass',
+              detail: 'COOLIFY_INSTANCES entries well-formed',
+            },
+    );
+  }
 
   // A diagnostic exists to *confirm* things: an inconclusive check means it
   // could not, so it is not a green run. Warnings don't gate — "outside the
