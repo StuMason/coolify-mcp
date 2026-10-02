@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "coolify-mcp",
   "display_name": "Coolify MCP",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "46 optimized tools for managing Coolify infrastructure, diagnostics, and docs search",
   "icon": "icon.png",
   "author": {
