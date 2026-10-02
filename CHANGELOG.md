@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`resources/list` no longer waits out a hung instance** (#393). Nothing bounded a Coolify call, so in a fleet with one instance that accepts connections but never answers, every listing waited for fetch's own timeout (300 s for a missing response, 10 s for an unroutable host) before returning the others. The listing now gives each instance ten seconds (the same as HTTP mode's token probe), aborts the request at that point, and leaves the instance out as it already did for one that refused the connection; stderr names each instance left out and why. The `list*` client methods take an optional `signal` for this. The listing stays uncached on purpose: it is meant to be current.
+- **Log `lines` is a whole number from 1 to 10000** on `logs` and `application_logs` (#386). It took any number, and Coolify reads `-1` as "every line" from the release that added `all`, so one call could pull an entire container log into context. Coolify caps the count at 10000 itself, silently, since 4.3.0; the limit is now in the schema where the model can see it, and on 4.0–4.2, which had no cap, it is a deliberate limit of our own. `deployment`'s `lines` (our own truncation of stored build logs) becomes a positive whole number too: `0` showed an empty window and offered a next page forever. `all` is deliberately not offered: before the release that added it, Coolify answers it with the default 100 lines and no error. About 30 tokens on the tool list.
 
 ## [3.8.0] - 2026-10-02
 

@@ -2907,6 +2907,36 @@ describe('logs tool (#300)', () => {
     return tool.handler(args, {});
   };
 
+  it('refuses out-of-range or fractional lines before calling Coolify, and says the limit (#386)', async () => {
+    const spy = jest.spyOn(server['client'], 'getApplicationLogs').mockResolvedValue('app logs');
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    const argsFor = (name: string, lines: number): Record<string, unknown> =>
+      name === 'logs' ? { resource: 'application', uuid: 'a', lines } : { uuid: 'a', lines };
+    // -1 is Coolify's alias for `all`, 10001 is past its silent cap, 0 is what
+    // "no logs, please" turns into.
+    for (const name of ['logs', 'application_logs']) {
+      for (const lines of [-1, 0, 10_001, 2.5]) {
+        const result = (await client.callTool({ name, arguments: argsFor(name, lines) })) as {
+          isError?: boolean;
+          content: Array<{ text: string }>;
+        };
+        expect(result.isError).toBe(true);
+        // The model recovers from the error text, so it has to name the bound
+        // that was broken rather than a generic "invalid arguments".
+        const bound = lines === 2.5 ? 'expected int' : lines > 1 ? '<=10000' : '>=1';
+        expect(result.content[0].text).toContain(`lines: `);
+        expect(result.content[0].text).toContain(bound);
+      }
+      for (const lines of [1, 10_000]) {
+        await client.callTool({ name, arguments: argsFor(name, lines) });
+      }
+    }
+    expect(spy.mock.calls.map((call) => call[1])).toEqual([1, 10_000, 1, 10_000]);
+    await client.close();
+  });
+
   it('routes to the application endpoint', async () => {
     const spy = jest.spyOn(server['client'], 'getApplicationLogs').mockResolvedValue('app logs');
     await callLogs({ resource: 'application', uuid: 'app-uuid', lines: 20 });
