@@ -322,8 +322,14 @@ describe('resource registration', () => {
     jest
       .spyOn(clients.get('staging') as CoolifyClient, 'listApplications')
       .mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
     const client = await connect(server);
     const { resources } = await client.listResources();
+    // ...and says which instance is missing and why, so a short list is explainable.
+    expect(stderr).toHaveBeenCalledWith(
+      'resources/list: left out instance "staging": connect ECONNREFUSED',
+    );
+    stderr.mockRestore();
     // resources/list is a discovery surface, not a health check: prod's
     // applications still show up while staging is down.
     expect(resources.map((r) => r.uri)).toContain('coolify://prod/application/app-1');
@@ -351,15 +357,22 @@ describe('resource registration', () => {
           deadline.abort(new DOMException('deadline', 'TimeoutError'));
         }),
     );
+    const stderr = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // The spy patches a global, so it is restored however the test ends.
     const client = await connect(server);
-    const { resources } = await client.listResources();
-    expect(timeout).toHaveBeenCalledWith(5_000);
-    expect(prod).toHaveBeenCalledWith({ summary: true, signal: deadline.signal });
-    expect(resources.map((r) => r.uri).filter((uri) => uri.includes('/application/'))).toEqual([
-      'coolify://prod/application/app-1',
-    ]);
-    timeout.mockRestore();
-    await client.close();
+    try {
+      const { resources } = await client.listResources();
+      expect(timeout).toHaveBeenCalledWith(10_000);
+      expect(prod).toHaveBeenCalledWith({ summary: true, signal: deadline.signal });
+      expect(resources.map((r) => r.uri).filter((uri) => uri.includes('/application/'))).toEqual([
+        'coolify://prod/application/app-1',
+      ]);
+      expect(stderr).toHaveBeenCalledWith('resources/list: left out instance "staging": deadline');
+    } finally {
+      timeout.mockRestore();
+      stderr.mockRestore();
+      await client.close();
+    }
   });
 
   it('the overview resource and the overview tool return the same snapshot', async () => {

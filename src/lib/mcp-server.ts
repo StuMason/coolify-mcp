@@ -742,6 +742,16 @@ export interface CoolifyMcpServerOptions {
 const INSTANCE_ARG = z.string().optional().describe('Instance name');
 
 /**
+ * How long `resources/list` waits for each instance's applications (#393).
+ * `GET /applications` returns full objects for the whole estate (the summary is
+ * projected here, after the response), so this is generous on purpose: too low
+ * and an instance that works goes missing from the list while
+ * `list_applications` still shows it. 10 s matches the only other outbound
+ * deadline, HTTP mode's token probe (`validateCoolifyToken`).
+ */
+const LISTING_DEADLINE_MS = 10_000;
+
+/**
  * Cache hints for the 2026-07-28 cacheable results (#337); 2025-era responses
  * never carry them. Without these the SDK emits `ttlMs: 0`, which tells a
  * client to re-list on every use.
@@ -762,13 +772,6 @@ const INSTANCE_ARG = z.string().optional().describe('Instance name');
  * All `private`: the resource list names the caller's applications, and the
  * static lists gain nothing from a cache shared between users.
  */
-/**
- * How long `resources/list` waits for each instance's applications (#393).
- * A healthy instance answers its summary call well inside it; past it, the
- * instance is treated as unreachable for that listing.
- */
-const LISTING_DEADLINE_MS = 5_000;
-
 const CACHE_HINTS = {
   'tools/list': { ttlMs: 300_000, cacheScope: 'private' },
   'prompts/list': { ttlMs: 300_000, cacheScope: 'private' },
@@ -1559,7 +1562,9 @@ export class CoolifyMcpServer extends McpServer {
      * timeout. Every instance shares one `LISTING_DEADLINE_MS` signal, so one
      * hung instance costs the listing that long and no more, and its request is
      * aborted rather than left running. An instance that misses the deadline is
-     * left out like an unreachable one.
+     * left out like an unreachable one, and either way stderr says which and
+     * why: a client may keep the listing for the minute `CACHE_HINTS` allows,
+     * and a short list should be explainable.
      *
      * Still uncached, one call per instance per listing. A server-side TTL
      * cache would help the second call onwards but not the first, and it buys
@@ -1593,6 +1598,17 @@ export class CoolifyMcpServer extends McpServer {
           }));
         }),
       );
+      perInstance.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          // Duck-typed: an abort rejects with a DOMException, which is not an
+          // `instanceof Error` across realms.
+          const message = (result.reason as { message?: unknown } | undefined)?.message;
+          const reason = typeof message === 'string' ? message : String(result.reason);
+          console.error(
+            `resources/list: left out instance "${this.registry.all[index].name}": ${reason}`,
+          );
+        }
+      });
       return {
         resources: perInstance.flatMap((result) =>
           result.status === 'fulfilled' ? result.value : [],

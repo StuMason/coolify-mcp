@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`resources/list` no longer waits out a hung instance** (#393). Nothing bounded a Coolify call, so in a fleet with one instance that accepts connections but never answers, every listing waited for fetch's own timeout (300 s for a missing response, 10 s for an unroutable host) before returning the others. The listing now gives each instance five seconds, aborts the request at that point, and leaves the instance out as it already did for one that refused the connection. The `list*` client methods take an optional `signal` for this. The listing stays uncached on purpose: it is meant to be current.
+- **`resources/list` no longer waits out a hung instance** (#393). Nothing bounded a Coolify call, so in a fleet with one instance that accepts connections but never answers, every listing waited for fetch's own timeout (300 s for a missing response, 10 s for an unroutable host) before returning the others. The listing now gives each instance ten seconds (the same as HTTP mode's token probe), aborts the request at that point, and leaves the instance out as it already did for one that refused the connection; stderr names each instance left out and why. The `list*` client methods take an optional `signal` for this. The listing stays uncached on purpose: it is meant to be current.
 
 ## [3.8.0] - 2026-10-02
 
