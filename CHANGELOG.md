@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-10-02
+
 ### Added
 
 - **Rollback** (#442, Coolify 4.3+). `deployment` gains `rollback_images` (the image tags Coolify can roll an application back to) and `deploy` gains `rollback_to` (queue a rollback to one of them; `wait: true` follows it like any deploy). A tag that is not in a non-empty images list is refused locally with the tags that are; an empty list, or the check itself failing, means Coolify could not inspect the server, so it does not block (only a 404, meaning no rollback on this Coolify, stops it). `rollback_images` returns at most 20 images and counts the rest. Like `deploy`, it asks for no confirmation: a rollback is a deploy of an earlier image and is undone by deploying again. On an older Coolify, the 404 now says rollback needs 4.3.
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vendored Coolify OpenAPI spec re-synced with upstream `main`** (#416): 275 → 287 operations. 18 are new (preview update and logs, database imports, SQLite databases, per-server registries, application secret managers, email settings, integration tokens, `PATCH /team`) and 6 are gone (the server transfer routes). Every route the client calls is still present, and none of them gained a required field.
 - **`storages` `host_path` is documented as ending at Coolify 4.3.21.** Upstream removed host paths in 4.3.22, and the storage endpoints now reject the field with 422. It is kept for older instances; the field's description and `docs/tools.md` say where it stops.
 - **Cache hints on 2026-07-28 list results** (#337). Without them the SDK sent `ttlMs: 0`, telling a client to re-list on every use. The tool, prompt and template lists are fixed for the life of the process and now say five minutes (the revision is stateless, so the TTL is the only bound on a stale list after an upgrade); `resources/list` names live applications and says a minute; `resources/read` stays 0. All `private`. 2025-era responses are unchanged. The interop test now asserts both eras against one HTTP server, including that a pinned 2026-07-28 client gets through `server/discover`, and a new test pins the tool order as stable.
+- **MCP SDK 2.2.0** (#448). Bug fixes only for this server: no stray unhandled rejection when a notification is sent on a closed connection, and a `subscriptions/listen` stream that honours none of the requested types now ends after its acknowledgement instead of staying open.
 
 ## [3.7.0] - 2026-09-30
 
