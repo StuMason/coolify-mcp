@@ -32,6 +32,12 @@ address (the fleet form of `COOLIFY_UI_URL`).
   their own `headers`.
 - A malformed entry is a startup error that names the entry (`COOLIFY_INSTANCES[1]`)
   and the problem. Token values are never echoed.
+- Each entry gets the same startup checks as `COOLIFY_BASE_URL` and
+  `COOLIFY_ACCESS_TOKEN`, and `doctor` runs them too: a `url` ending in
+  `/api/v1`, a token with leading whitespace or a line break, a header value
+  with a line break, or an unexpanded `${VAR}` stops startup; a `url` ending in
+  `/api`, or an internal `url` with no `ui_url`, is a warning. Every bad entry
+  is reported at once.
 
 ## What changes with two or more instances
 
