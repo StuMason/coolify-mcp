@@ -3325,7 +3325,7 @@ export class CoolifyMcpServer extends McpServer {
       {
         action: z.enum(['get', 'cancel', 'list_for_app', 'rollback_images']),
         uuid: z.string(),
-        lines: z.number().optional(), // Include logs truncated to last N entries (omit for no logs)
+        lines: z.number().int().positive().optional(), // Include logs truncated to last N entries (omit for no logs)
         page: z.number().int().positive().optional(), // Log page for get; deployment page for list_for_app
         per_page: z.number().int().positive().optional(), // list_for_app page size (default 10)
         max_chars: z.number().optional(), // Limit log output to last N chars (default: 50000)

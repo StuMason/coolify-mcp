@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Log `lines` is a whole number from 1 to 10000** on `logs` and `application_logs` (#386). It took any number, and Coolify reads `-1` as "every line" from the release that added `all`, so one call could pull an entire container log into context. Coolify caps the count at 10000 itself, silently, since 4.3.0; the limit is now in the schema where the model can see it. `all` is deliberately not offered: before the release that added it, Coolify answers it with the default 100 lines and no error. About 18 tokens on the tool list.
+- **Log `lines` is a whole number from 1 to 10000** on `logs` and `application_logs` (#386). It took any number, and Coolify reads `-1` as "every line" from the release that added `all`, so one call could pull an entire container log into context. Coolify caps the count at 10000 itself, silently, since 4.3.0; the limit is now in the schema where the model can see it, and on 4.0–4.2, which had no cap, it is a deliberate limit of our own. `deployment`'s `lines` (our own truncation of stored build logs) becomes a positive whole number too: `0` showed an empty window and offered a next page forever. `all` is deliberately not offered: before the release that added it, Coolify answers it with the default 100 lines and no error. About 30 tokens on the tool list.
 
 ## [3.8.0] - 2026-10-02
 

@@ -84,7 +84,7 @@ describe('fleet tool contract', () => {
     // Unlike that one, this ceiling is a plain growth alarm, not a figure
     // coupled to anything published — the fleet number is not advertised in
     // the docs, so there is nothing for it to drift away from. Measured at
-    // ~9,810 when this was last moved (#386: 9,792 before bounding log `lines`).
+    // ~9,822 when this was last moved (#386: 9,792 before bounding log `lines`).
     // Raise it deliberately, and only after checking the single-instance gate is
     // still the binding one.
     const chars = JSON.stringify(ctx.toolInfo).length;
