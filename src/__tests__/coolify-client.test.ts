@@ -1303,8 +1303,39 @@ describe('CoolifyClient', () => {
       await expect(client.listServers()).rejects.toThrow(DOCTOR_POINTER);
       expect(errorHint(401, '/servers')).toContain(DOCTOR_POINTER);
       expect(errorHint(403, '/servers')).toContain(DOCTOR_POINTER);
-      expect(errorHint(404, '/rollback')).not.toContain(DOCTOR_POINTER);
-      expect(errorHint(405, '/servers')).not.toContain(DOCTOR_POINTER);
+      expect(errorHint(404, '/rollback') ?? '').not.toContain(DOCTOR_POINTER);
+      expect(errorHint(405, '/servers') ?? '').not.toContain(DOCTOR_POINTER);
+      expect(errorHint(500, '/servers') ?? '').not.toContain(DOCTOR_POINTER);
+      // Composition, not just containment: one space, one full stop each.
+      expect(errorHint(401, '/servers')).toBe(
+        'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources. ' +
+          DOCTOR_POINTER,
+      );
+    });
+
+    it('get_version, which bypasses request(), points at doctor on the same two failures (#384)', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(client.getVersion()).rejects.toThrow(DOCTOR_POINTER);
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => '',
+      } as Response);
+      await expect(client.getVersion()).rejects.toThrow(
+        `HTTP 401: Unauthorized (Check that COOLIFY_ACCESS_TOKEN is valid`,
+      );
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => '',
+      } as Response);
+      await expect(client.getVersion()).rejects.toThrow(DOCTOR_POINTER);
+      // Anything that is not a failed fetch passes through untouched.
+      const abort = new DOMException('aborted', 'AbortError');
+      mockFetch.mockRejectedValueOnce(abort);
+      await expect(client.getVersion()).rejects.toBe(abort);
     });
 
     it('should handle empty responses', async () => {
@@ -4004,32 +4035,6 @@ describe('CoolifyClient', () => {
       } as Response);
 
       await expect(client.getVersion()).rejects.toThrow('HTTP 401: Unauthorized');
-    });
-
-    it('should validate connection successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => 'v4.0.0',
-      } as Response);
-
-      await expect(client.validateConnection()).resolves.not.toThrow();
-    });
-
-    it('should throw on failed connection validation', async () => {
-      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
-
-      await expect(client.validateConnection()).rejects.toThrow(
-        'Failed to connect to Coolify server',
-      );
-    });
-
-    it('should handle non-Error exceptions in validateConnection', async () => {
-      mockFetch.mockRejectedValueOnce('string error');
-
-      await expect(client.validateConnection()).rejects.toThrow(
-        'Failed to connect to Coolify server: Unknown error',
-      );
     });
 
     it('should use default lines for getApplicationLogs', async () => {
