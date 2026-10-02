@@ -330,6 +330,38 @@ describe('resource registration', () => {
     await client.close();
   });
 
+  it('an instance that never answers is cut off at the listing deadline, not waited out (#393)', async () => {
+    const registry = new InstanceRegistry([
+      { name: 'prod', ...CONFIG },
+      { name: 'staging', ...CONFIG },
+    ]);
+    const server = new CoolifyMcpServer(registry);
+    const clients = server['clients'] as Map<string, CoolifyClient>;
+    // Stands in for the deadline firing: the real one is AbortSignal.timeout,
+    // which fetch's 300 s headers timeout would otherwise outlast.
+    const deadline = new AbortController();
+    const timeout = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const prod = jest
+      .spyOn(clients.get('prod') as CoolifyClient, 'listApplications')
+      .mockResolvedValue([{ uuid: 'app-1', name: 'api', status: 'running:healthy' }] as never);
+    jest.spyOn(clients.get('staging') as CoolifyClient, 'listApplications').mockImplementation(
+      (options) =>
+        new Promise((_, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal?.reason));
+          deadline.abort(new DOMException('deadline', 'TimeoutError'));
+        }),
+    );
+    const client = await connect(server);
+    const { resources } = await client.listResources();
+    expect(timeout).toHaveBeenCalledWith(5_000);
+    expect(prod).toHaveBeenCalledWith({ summary: true, signal: deadline.signal });
+    expect(resources.map((r) => r.uri).filter((uri) => uri.includes('/application/'))).toEqual([
+      'coolify://prod/application/app-1',
+    ]);
+    timeout.mockRestore();
+    await client.close();
+  });
+
   it('the overview resource and the overview tool return the same snapshot', async () => {
     const server = new CoolifyMcpServer(CONFIG);
     const c = server['client'];

@@ -762,6 +762,13 @@ const INSTANCE_ARG = z.string().optional().describe('Instance name');
  * All `private`: the resource list names the caller's applications, and the
  * static lists gain nothing from a cache shared between users.
  */
+/**
+ * How long `resources/list` waits for each instance's applications (#393).
+ * A healthy instance answers its summary call well inside it; past it, the
+ * instance is treated as unreachable for that listing.
+ */
+const LISTING_DEADLINE_MS = 5_000;
+
 const CACHE_HINTS = {
   'tools/list': { ttlMs: 300_000, cacheScope: 'private' },
   'prompts/list': { ttlMs: 300_000, cacheScope: 'private' },
@@ -1545,21 +1552,26 @@ export class CoolifyMcpServer extends McpServer {
      * applications, and resources/list is a discovery surface, not a health
      * check.
      *
-     * Known cost, deliberately unpaid for now (#393): this runs on every
-     * `resources/list`, uncached, one call per instance. On a large estate that
-     * is the whole summary payload built and discarded per listing, and a fleet
-     * with one instance down makes every listing wait out that instance's
-     * timeout before the others can return — slow as well as incomplete. A
-     * server-side TTL cache would fix the second call onwards but not the
-     * first, and it buys staleness on a surface whose entire job is to be
-     * current, so it wants measuring before it is built rather than guessing
-     * here. The one-minute `CACHE_HINTS` entry is different in kind: advisory,
-     * client-side, 2026-07-28 only, and it costs the server nothing (#337).
+     * The listing has a deadline (#393). Nothing else bounds a Coolify call:
+     * measured on Node 22, a refused port fails in milliseconds, an unroutable
+     * host takes fetch's 10 s connect timeout, and a host that accepts the
+     * connection and never answers holds the call for fetch's 300 s headers
+     * timeout. Every instance shares one `LISTING_DEADLINE_MS` signal, so one
+     * hung instance costs the listing that long and no more, and its request is
+     * aborted rather than left running. An instance that misses the deadline is
+     * left out like an unreachable one.
+     *
+     * Still uncached, one call per instance per listing. A server-side TTL
+     * cache would help the second call onwards but not the first, and it buys
+     * staleness on a surface whose entire job is to be current. The one-minute
+     * `CACHE_HINTS` entry is different in kind: advisory, client-side,
+     * 2026-07-28 only, and it costs the server nothing (#337).
      */
     const listApplications = async (): Promise<ListResourcesResult> => {
+      const signal = AbortSignal.timeout(LISTING_DEADLINE_MS);
       const perInstance = await Promise.allSettled(
         this.registry.all.map(async (instance) => {
-          const apps = await this.clientFor(instance).listApplications({ summary: true });
+          const apps = await this.clientFor(instance).listApplications({ summary: true, signal });
           return apps.map((app) => ({
             uri: fleet
               ? `coolify://${instance.name}/application/${app.uuid}`
