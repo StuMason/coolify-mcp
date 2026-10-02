@@ -89,7 +89,7 @@ export function troubleshootApplicationPrompt(query: string, ctx: PromptBuildCon
     // double quote would otherwise produce mis-quoted text in the tool call the
     // model is being asked to make.
     `Start with \`diagnose_app\` (query: ${JSON.stringify(query)}${instanceArg(ctx)}). One call returns the application's status, its last deployment and a log tail, which is usually enough to name the fault.`,
-    `If the tail is not enough, read the container output with \`logs\` (resource: "application", uuid: the application uuid from step 1${instanceArg(ctx)}) and raise \`lines\` until you can see the failure start.`,
+    `If the tail is not enough, read the container output with \`logs\` (resource: "application", uuid: the application uuid from step 1${instanceArg(ctx)}) and raise \`lines\` (up to 10000) until you can see the failure start.`,
   ];
   // `env_vars` is a read on the list action but rides a destructive tool, so a
   // read-only server does not have it. Drop the step rather than send the

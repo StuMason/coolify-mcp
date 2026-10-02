@@ -63,6 +63,11 @@ instance — `coolify://staging/overview`,
 `coolify://staging/application/{uuid}` — because reading production's overview
 while believing it is staging's is the mistake a second instance invents.
 
+The listing asks each instance for its applications and waits at most ten
+seconds for them. An instance that is down or too slow to answer is left out
+of that listing rather than holding it up; the others are still returned, and
+the server writes which instance it left out, and why, to stderr.
+
 ### Resources cannot bypass masking
 
 Every resource read goes through the same client as every tool call, so the
