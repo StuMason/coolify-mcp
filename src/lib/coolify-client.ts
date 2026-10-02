@@ -136,6 +136,12 @@ export interface ListOptions {
   page?: number;
   per_page?: number;
   summary?: boolean;
+  /**
+   * Aborts the request. Without one a call waits as long as fetch does, which
+   * against a host that accepts the connection and never answers is minutes
+   * (#393).
+   */
+  signal?: AbortSignal;
 }
 
 export interface PaginatedResponse<T> {
@@ -1041,7 +1047,7 @@ export class CoolifyClient {
       page: options?.page,
       per_page: options?.per_page,
     });
-    const servers = await this.request<Server[]>(`/servers${query}`);
+    const servers = await this.request<Server[]>(`/servers${query}`, { signal: options?.signal });
     return options?.summary && Array.isArray(servers) ? servers.map(toServerSummary) : servers;
   }
 
@@ -1106,7 +1112,9 @@ export class CoolifyClient {
       page: options?.page,
       per_page: options?.per_page,
     });
-    const projects = await this.request<Project[]>(`/projects${query}`);
+    const projects = await this.request<Project[]>(`/projects${query}`, {
+      signal: options?.signal,
+    });
     return options?.summary && Array.isArray(projects) ? projects.map(toProjectSummary) : projects;
   }
 
@@ -1351,7 +1359,9 @@ export class CoolifyClient {
       page: options?.page,
       per_page: options?.per_page,
     });
-    const apps = await this.request<Application[]>(`/applications${query}`);
+    const apps = await this.request<Application[]>(`/applications${query}`, {
+      signal: options?.signal,
+    });
     return options?.summary && Array.isArray(apps) ? apps.map(toApplicationSummary) : apps;
   }
 
@@ -1744,8 +1754,8 @@ export class CoolifyClient {
       per_page: options?.per_page,
     });
     const [dbsResult, resourcesResult] = await Promise.allSettled([
-      this.request<Database[]>(`/databases${query}`),
-      this.request<ResourceListItemFull[]>('/resources'),
+      this.request<Database[]>(`/databases${query}`, { signal: options?.signal }),
+      this.request<ResourceListItemFull[]>('/resources', { signal: options?.signal }),
     ]);
     if (dbsResult.status === 'rejected') throw dbsResult.reason;
     let dbs = dbsResult.value;
@@ -1879,7 +1889,9 @@ export class CoolifyClient {
       page: options?.page,
       per_page: options?.per_page,
     });
-    const services = await this.request<Service[]>(`/services${query}`);
+    const services = await this.request<Service[]>(`/services${query}`, {
+      signal: options?.signal,
+    });
     return options?.summary && Array.isArray(services) ? services.map(toServiceSummary) : services;
   }
 
@@ -2041,7 +2053,9 @@ export class CoolifyClient {
       page: options?.page,
       per_page: options?.per_page,
     });
-    const deployments = await this.request<Deployment[]>(`/deployments${query}`);
+    const deployments = await this.request<Deployment[]>(`/deployments${query}`, {
+      signal: options?.signal,
+    });
     return options?.summary && Array.isArray(deployments)
       ? deployments.map(toDeploymentSummary)
       : deployments;
@@ -2262,7 +2276,7 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listGitHubApps(options?: ListOptions): Promise<GitHubApp[] | GitHubAppSummary[]> {
-    const apps = await this.request<GitHubApp[]>('/github-apps');
+    const apps = await this.request<GitHubApp[]>('/github-apps', { signal: options?.signal });
     return options?.summary && Array.isArray(apps) ? apps.map(toGitHubAppSummary) : apps;
   }
 
