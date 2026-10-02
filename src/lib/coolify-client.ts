@@ -326,6 +326,15 @@ const LEGACY_GET_ENDPOINTS = {
 type LegacyGetEndpointKey = (typeof LEGACY_GET_ENDPOINTS)[keyof typeof LEGACY_GET_ENDPOINTS];
 
 /**
+ * Ends a tool error whose cause `doctor` diagnoses (#384): a connection that
+ * failed and a token Coolify refused. "This server's environment" because in
+ * HTTP mode the reader of the error is not who configured the server, and
+ * doctor checks the variables it runs with, not the reader's.
+ */
+export const DOCTOR_POINTER =
+  "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment.";
+
+/**
  * Map a failed response's status/path to an actionable hint for known Coolify quirks.
  * Coolify sometimes returns bodyless errors (e.g. bare `HTTP 500: Internal Server Error`)
  * that leave the caller guessing at the cause — this appends a short, testable hint for
@@ -339,7 +348,7 @@ export function errorHint(status: number, path: string): string | undefined {
     return 'Coolify v4.2 moved state-changing endpoints from GET to POST; older versions accept GET only. This client retries automatically, so a 405 reaching you means both methods were rejected — check the endpoint path against your Coolify version.';
   }
   if (status === 401 || status === 403) {
-    return 'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources.';
+    return `Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources. ${DOCTOR_POINTER}`;
   }
   // Covers /applications AND /databases: `list_containers` calls both in
   // parallel, and whichever 404 loses the race is the one the user sees — on
@@ -890,13 +899,7 @@ export class CoolifyClient {
       // the rules and the history of doing this per-endpoint instead.
       return deepSanitize(data, sanitize?.reveal === true) as T;
     } catch (error) {
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error(
-          `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible.`,
-          { cause: error },
-        );
-      }
-      throw error;
+      throw this.connectionError(error);
     }
   }
 
@@ -1004,18 +1007,26 @@ export class CoolifyClient {
     }
     // The /version endpoint returns plain text, not JSON
     const url = `${this.baseUrl}/api/v1/version`;
-    const response = await fetch(url, {
-      headers: {
-        // Current token, but no 401 retry: this path calls fetch() directly
-        // rather than through request(), because /version answers in plain
-        // text. A version probe is not worth a second round trip.
-        Authorization: `Bearer ${this.tokens.current()}`,
-        ...this.customHeaders,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          // Current token, but no 401 retry: this path calls fetch() directly
+          // rather than through request(), because /version answers in plain
+          // text. A version probe is not worth a second round trip.
+          Authorization: `Bearer ${this.tokens.current()}`,
+          ...this.customHeaders,
+        },
+      });
+    } catch (error) {
+      throw this.connectionError(error);
+    }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // The same hint request() gives, so `get_version` (often a model's first
+      // call on a misconfigured server) points at doctor too (#384).
+      const hint = errorHint(response.status, '/version');
+      throw new Error(`HTTP ${response.status}: ${response.statusText}${hint ? ` (${hint})` : ''}`);
     }
 
     const version = await response.text();
@@ -1027,15 +1038,18 @@ export class CoolifyClient {
     return this.cachedVersion;
   }
 
-  async validateConnection(): Promise<void> {
-    try {
-      await this.getVersion();
-    } catch (error) {
-      throw new Error(
-        `Failed to connect to Coolify server: ${error instanceof Error ? error.message : 'Unknown error'}`,
+  /**
+   * A fetch that never reached Coolify, as the message every caller shows.
+   * Anything else (an abort, a thrown CoolifyApiError) passes through as is.
+   */
+  private connectionError(error: unknown): unknown {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return new Error(
+        `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible. ${DOCTOR_POINTER}`,
         { cause: error },
       );
     }
+    return error;
   }
 
   // ===========================================================================

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tool errors point at `doctor` when it can diagnose them** (#384). A failed connection to Coolify and a 401 or 403 now end with "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment." The wording names the server's environment because in HTTP mode the person reading the error is not the one who configured it. `get_version`, which reads the plain-text `/version` outside the usual request path, gets the same pointer on the same two failures. Other errors are unchanged. The unused `CoolifyClient#validateConnection`, which built its own copy of the connection message, is removed.
+
 ### Fixed
 
 - **`resources/list` no longer waits out a hung instance** (#393). Nothing bounded a Coolify call, so in a fleet with one instance that accepts connections but never answers, every listing waited for fetch's own timeout (300 s for a missing response, 10 s for an unroutable host) before returning the others. The listing now gives each instance ten seconds (the same as HTTP mode's token probe), aborts the request at that point, and leaves the instance out as it already did for one that refused the connection; stderr names each instance left out and why. The `list*` client methods take an optional `signal` for this. The listing stays uncached on purpose: it is meant to be current.
