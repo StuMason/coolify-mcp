@@ -2399,7 +2399,13 @@ export class CoolifyMcpServer extends McpServer {
           .describe(
             "Sub-service name, required when resource='service'. Get valid names from `service` action=list_containers.",
           ),
-        lines: z.number().optional().describe('Number of log lines to return (default 100)'),
+        lines: z
+          .number()
+          .int()
+          .min(1)
+          .max(10_000)
+          .optional()
+          .describe('Number of log lines to return (default 100, at most 10000)'),
         show_timestamps: z
           .boolean()
           .optional()
@@ -2437,7 +2443,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'application_logs',
       'Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.',
-      { uuid: z.string(), lines: z.number().optional() },
+      { uuid: z.string(), lines: z.number().int().min(1).max(10_000).optional() },
       async ({ uuid, lines }) =>
         wrap(async () => asUntrustedLogs(await this.client.getApplicationLogs(uuid, lines))),
     );

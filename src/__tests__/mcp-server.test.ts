@@ -2907,6 +2907,32 @@ describe('logs tool (#300)', () => {
     return tool.handler(args, {});
   };
 
+  it('refuses a lines value Coolify would read as every line, before calling it (#386)', async () => {
+    const spy = jest.spyOn(server['client'], 'getApplicationLogs').mockResolvedValue('app logs');
+    const client = new Client({ name: 'test', version: '0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    // -1 is Coolify's alias for `all`; 10001 is past its silent cap.
+    for (const [name, lines] of [
+      ['logs', -1],
+      ['logs', 10_001],
+      ['logs', 2.5],
+      ['application_logs', -1],
+    ] as const) {
+      const args =
+        name === 'logs' ? { resource: 'application', uuid: 'a', lines } : { uuid: 'a', lines };
+      const result = (await client.callTool({ name, arguments: args })) as { isError?: boolean };
+      expect(result.isError).toBe(true);
+    }
+    expect(spy).not.toHaveBeenCalled();
+    await client.callTool({
+      name: 'logs',
+      arguments: { resource: 'application', uuid: 'a', lines: 10_000 },
+    });
+    expect(spy).toHaveBeenCalledWith('a', 10_000, undefined);
+    await client.close();
+  });
+
   it('routes to the application endpoint', async () => {
     const spy = jest.spyOn(server['client'], 'getApplicationLogs').mockResolvedValue('app logs');
     await callLogs({ resource: 'application', uuid: 'app-uuid', lines: 20 });

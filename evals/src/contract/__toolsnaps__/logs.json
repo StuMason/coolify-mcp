@@ -24,8 +24,10 @@
         "type": "string"
       },
       "lines": {
-        "description": "Number of log lines to return (default 100)",
-        "type": "number"
+        "description": "Number of log lines to return (default 100, at most 10000)",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
       },
       "show_timestamps": {
         "description": "Prefix each line with its timestamp. Not supported for service containers.",
