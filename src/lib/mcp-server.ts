@@ -742,6 +742,16 @@ export interface CoolifyMcpServerOptions {
 const INSTANCE_ARG = z.string().optional().describe('Instance name');
 
 /**
+ * How long `resources/list` waits for each instance's applications (#393).
+ * `GET /applications` returns full objects for the whole estate (the summary is
+ * projected here, after the response), so this is generous on purpose: too low
+ * and an instance that works goes missing from the list while
+ * `list_applications` still shows it. 10 s matches the only other outbound
+ * deadline, HTTP mode's token probe (`validateCoolifyToken`).
+ */
+const LISTING_DEADLINE_MS = 10_000;
+
+/**
  * Cache hints for the 2026-07-28 cacheable results (#337); 2025-era responses
  * never carry them. Without these the SDK emits `ttlMs: 0`, which tells a
  * client to re-list on every use.
@@ -1545,21 +1555,28 @@ export class CoolifyMcpServer extends McpServer {
      * applications, and resources/list is a discovery surface, not a health
      * check.
      *
-     * Known cost, deliberately unpaid for now (#393): this runs on every
-     * `resources/list`, uncached, one call per instance. On a large estate that
-     * is the whole summary payload built and discarded per listing, and a fleet
-     * with one instance down makes every listing wait out that instance's
-     * timeout before the others can return — slow as well as incomplete. A
-     * server-side TTL cache would fix the second call onwards but not the
-     * first, and it buys staleness on a surface whose entire job is to be
-     * current, so it wants measuring before it is built rather than guessing
-     * here. The one-minute `CACHE_HINTS` entry is different in kind: advisory,
-     * client-side, 2026-07-28 only, and it costs the server nothing (#337).
+     * The listing has a deadline (#393). Nothing else bounds a Coolify call:
+     * measured on Node 22, a refused port fails in milliseconds, an unroutable
+     * host takes fetch's 10 s connect timeout, and a host that accepts the
+     * connection and never answers holds the call for fetch's 300 s headers
+     * timeout. Every instance shares one `LISTING_DEADLINE_MS` signal, so one
+     * hung instance costs the listing that long and no more, and its request is
+     * aborted rather than left running. An instance that misses the deadline is
+     * left out like an unreachable one, and either way stderr says which and
+     * why: a client may keep the listing for the minute `CACHE_HINTS` allows,
+     * and a short list should be explainable.
+     *
+     * Still uncached, one call per instance per listing. A server-side TTL
+     * cache would help the second call onwards but not the first, and it buys
+     * staleness on a surface whose entire job is to be current. The one-minute
+     * `CACHE_HINTS` entry is different in kind: advisory, client-side,
+     * 2026-07-28 only, and it costs the server nothing (#337).
      */
     const listApplications = async (): Promise<ListResourcesResult> => {
+      const signal = AbortSignal.timeout(LISTING_DEADLINE_MS);
       const perInstance = await Promise.allSettled(
         this.registry.all.map(async (instance) => {
-          const apps = await this.clientFor(instance).listApplications({ summary: true });
+          const apps = await this.clientFor(instance).listApplications({ summary: true, signal });
           return apps.map((app) => ({
             uri: fleet
               ? `coolify://${instance.name}/application/${app.uuid}`
@@ -1581,6 +1598,17 @@ export class CoolifyMcpServer extends McpServer {
           }));
         }),
       );
+      perInstance.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          // Duck-typed: an abort rejects with a DOMException, which is not an
+          // `instanceof Error` across realms.
+          const message = (result.reason as { message?: unknown } | undefined)?.message;
+          const reason = typeof message === 'string' ? message : String(result.reason);
+          console.error(
+            `resources/list: left out instance "${this.registry.all[index].name}": ${reason}`,
+          );
+        }
+      });
       return {
         resources: perInstance.flatMap((result) =>
           result.status === 'fulfilled' ? result.value : [],
