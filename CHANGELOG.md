@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-10-02
+
 ### Added
 
 - **Tool errors point at `doctor` when it can diagnose them** (#384). A failed connection to Coolify and a 401 or 403 now end with "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment." The wording names the server's environment because in HTTP mode the person reading the error is not the one who configured it. `get_version`, which reads the plain-text `/version` outside the usual request path, gets the same pointer on the same two failures. Other errors are unchanged. The unused `CoolifyClient#validateConnection`, which built its own copy of the connection message, is removed.
