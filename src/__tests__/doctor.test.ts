@@ -250,7 +250,7 @@ describe('runDoctor', () => {
     expect(check(report, 'token').status).toBe('skipped');
   });
 
-  it('treats a non-Cloudflare redirect as a warning and keeps probing', async () => {
+  it('fails a non-Cloudflare redirect, which tool calls refuse (#453)', async () => {
     const fetchMock = healthyFetch();
     const base = fetchMock.getMockImplementation()!;
     let first = true;
@@ -267,9 +267,10 @@ describe('runDoctor', () => {
     });
     const report = await runDoctor(cleanEnv(), fetchMock as unknown as FetchLike);
     const reach = check(report, 'reachability');
-    expect(reach.status).toBe('warn');
-    expect(reach.fix).toContain('final URL');
-    expect(check(report, 'token').status).toBe('pass');
+    expect(reach.status).toBe('fail');
+    expect(reach.fix).toContain('answers directly');
+    expect(check(report, 'token').status).toBe('skipped');
+    expect(report.ok).toBe(false);
   });
 
   it('skips reachability when the base URL is set but unusable', async () => {

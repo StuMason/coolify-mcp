@@ -99,6 +99,12 @@ authorize page's token validation alike — and on nothing else. Setting one
 variable without the other is a startup error. The secret is treated as a
 credential: never logged, never echoed.
 
+Requests to Coolify never follow a redirect. If Access (or anything else in
+front of Coolify) answers with one, the tool call fails with an error naming
+the host it pointed at, rather than returning the login page as a result or
+sending the service token on to another host. An `http://` base URL that
+redirects to `https://` fails the same way; use the `https://` address.
+
 One more Cloudflare Access warning while you are here: Access in front of
 the Coolify **dashboard** breaks Coolify's own websockets unless you exempt
 them, and with Livewire down the UI's env-var Save can silently store

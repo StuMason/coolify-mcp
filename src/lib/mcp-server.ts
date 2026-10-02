@@ -1662,9 +1662,14 @@ export class CoolifyMcpServer extends McpServer {
         'list_instances',
         "The configured Coolify instances. Every tool takes an optional `instance` (one of these names); omitted means the default. Reports each instance's live Coolify version, or the error reaching it. Tokens are never shown.",
         {},
+        // One deadline for the whole fan-out (#454), as resources/list has: an
+        // instance that accepts the connection and never answers would
+        // otherwise hold this tool, whose job is saying which instances are
+        // reachable, for fetch's 300 s headers timeout.
         async () =>
-          wrap(async () =>
-            Promise.all(
+          wrap(async () => {
+            const signal = AbortSignal.timeout(LISTING_DEADLINE_MS);
+            return Promise.all(
               this.registry.all.map(async (instance) => {
                 const base = {
                   name: instance.name,
@@ -1672,14 +1677,14 @@ export class CoolifyMcpServer extends McpServer {
                   default: instance.name === this.registry.default.name,
                 };
                 try {
-                  const { version } = await this.clientFor(instance).getVersion();
+                  const { version } = await this.clientFor(instance).getVersion({ signal });
                   return { ...base, version };
                 } catch (error) {
                   return { ...base, error: error instanceof Error ? error.message : String(error) };
                 }
               }),
-            ),
-          ),
+            );
+          }),
       );
     }
 

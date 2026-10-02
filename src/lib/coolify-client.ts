@@ -335,6 +335,49 @@ export const DOCTOR_POINTER =
   "To diagnose, run `npx @masonator/coolify-mcp doctor` with this server's environment.";
 
 /**
+ * A Coolify API call that was redirected instead of answered (#453).
+ *
+ * Coolify's API never redirects, so a 3xx came from something in front of it.
+ * Requests are sent with `redirect: 'manual'` for two reasons: following a
+ * Cloudflare Access redirect lands on its login page, a 200 `text/html` that
+ * used to come back as the endpoint's result; and following any redirect to
+ * another host sends our custom headers (the Access service token among them)
+ * to that host, since fetch strips only `Authorization`. Names the target's
+ * host, never the whole `Location`, which can carry query parameters.
+ */
+export function redirectError(
+  status: number,
+  location: string | null,
+  baseUrl: string,
+): CoolifyApiError {
+  let target: URL | undefined;
+  try {
+    target = location ? new URL(location, baseUrl) : undefined;
+  } catch {
+    target = undefined;
+  }
+  const base = new URL(baseUrl);
+  let message: string;
+  if (target && /(^|\.)cloudflareaccess\.com$/i.test(target.hostname)) {
+    message =
+      `Cloudflare Access intercepted the request before it reached Coolify (HTTP ${status} to its login page at ${target.host}). ` +
+      'Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET to an Access service token (for a COOLIFY_INSTANCES entry, put them in its headers), or use an address Access does not guard.';
+  } else if (
+    target &&
+    target.hostname === base.hostname &&
+    base.protocol === 'http:' &&
+    target.protocol === 'https:'
+  ) {
+    message = `Coolify redirects http:// to https:// (HTTP ${status}). Use https://${target.host} as the base URL.`;
+  } else {
+    message =
+      `Coolify did not answer: HTTP ${status} redirect to ${target ? target.host : 'an unstated address'}. ` +
+      "Coolify's API never redirects, so something in front of it did. Set the base URL to the address that answers directly.";
+  }
+  return new CoolifyApiError(`${message} ${DOCTOR_POINTER}`, status);
+}
+
+/**
  * Map a failed response's status/path to an actionable hint for known Coolify quirks.
  * Coolify sometimes returns bodyless errors (e.g. bare `HTTP 500: Internal Server Error`)
  * that leave the caller guessing at the cause — this appends a short, testable hint for
@@ -849,6 +892,7 @@ export class CoolifyClient {
     try {
       const response = await fetch(url, {
         ...options,
+        redirect: 'manual',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.tokens.current()}`,
@@ -856,6 +900,9 @@ export class CoolifyClient {
           ...options.headers,
         },
       });
+      if (response.status >= 300 && response.status < 400) {
+        throw redirectError(response.status, response.headers.get('location'), this.baseUrl);
+      }
 
       // Handle empty responses (204 No Content, etc.)
       const text = await response.text();
@@ -1001,7 +1048,7 @@ export class CoolifyClient {
   // Health & Version
   // ===========================================================================
 
-  async getVersion(): Promise<Version> {
+  async getVersion(options?: { signal?: AbortSignal }): Promise<Version> {
     if (this.cachedVersion) {
       return { version: this.cachedVersion };
     }
@@ -1010,6 +1057,8 @@ export class CoolifyClient {
     let response: Response;
     try {
       response = await fetch(url, {
+        redirect: 'manual',
+        signal: options?.signal,
         headers: {
           // Current token, but no 401 retry: this path calls fetch() directly
           // rather than through request(), because /version answers in plain
@@ -1022,6 +1071,9 @@ export class CoolifyClient {
       throw this.connectionError(error);
     }
 
+    if (response.status >= 300 && response.status < 400) {
+      throw redirectError(response.status, response.headers.get('location'), this.baseUrl);
+    }
     if (!response.ok) {
       // The same hint request() gives, so `get_version` (often a model's first
       // call on a misconfigured server) points at doctor too (#384).

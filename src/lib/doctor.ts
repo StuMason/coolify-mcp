@@ -271,13 +271,13 @@ async function checkInstance(
             fix: 'Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET (an Access service token), or point COOLIFY_BASE_URL at the internal address — see docs/http-mode.md',
           });
         } else {
+          // Tool calls refuse redirects (#453), so this is a failure, not a hop.
           checks.push({
             check: 'reachability',
-            status: 'warn',
-            detail: `COOLIFY_BASE_URL answers with a redirect (HTTP ${response.status})`,
-            fix: 'Set COOLIFY_BASE_URL to the final URL so every API call skips the hop',
+            status: 'fail',
+            detail: `COOLIFY_BASE_URL answers with a redirect (HTTP ${response.status}), and tool calls refuse redirects`,
+            fix: 'Set COOLIFY_BASE_URL to the address that answers directly (https:// if it redirects from http://)',
           });
-          reachable = true;
         }
       } else {
         reachable = true;

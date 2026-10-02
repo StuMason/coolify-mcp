@@ -4,6 +4,7 @@ import {
   CoolifyClient,
   errorHint,
   DOCTOR_POINTER,
+  redirectError,
   isRunningStatus,
 } from '../lib/coolify-client.js';
 import type { ServiceType, CreateServiceRequest, EnvironmentVariable } from '../types/coolify.js';
@@ -1311,6 +1312,55 @@ describe('CoolifyClient', () => {
         'Check that COOLIFY_ACCESS_TOKEN is valid and has the required scopes for this operation. On Coolify v4.2+, tokens belonging to a Member-role user are read-only and cannot deploy, start, stop, or modify resources. ' +
           DOCTOR_POINTER,
       );
+    });
+
+    it('refuses a redirect instead of following it, on both fetch paths (#453)', async () => {
+      const redirect = (location: string): Response =>
+        ({
+          ok: false,
+          status: 302,
+          statusText: 'Found',
+          headers: new Headers({ location }),
+          text: async () => '',
+        }) as Response;
+      mockFetch.mockResolvedValueOnce(
+        redirect('https://team.cloudflareaccess.com/cdn-cgi/access/login/x?kid=secret-ish'),
+      );
+      const error = (await client.listServers().catch((e: unknown) => e)) as CoolifyApiError;
+      expect(error).toBeInstanceOf(CoolifyApiError);
+      expect(error.status).toBe(302);
+      expect(error.message).toContain('Cloudflare Access intercepted the request');
+      expect(error.message).toContain('team.cloudflareaccess.com');
+      expect(error.message).toContain(DOCTOR_POINTER);
+      // The host only: a Location's query can carry anything.
+      expect(error.message).not.toContain('kid=');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+      mockFetch.mockResolvedValueOnce(redirect('https://team.cloudflareaccess.com/login'));
+      await expect(client.getVersion()).rejects.toThrow('Cloudflare Access intercepted');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ redirect: 'manual' }),
+      );
+    });
+
+    it('names the fix for each kind of redirect (#453)', () => {
+      const base = 'http://coolify.example.com';
+      expect(
+        redirectError(301, 'https://coolify.example.com/api/v1/servers', base).message,
+      ).toContain(
+        'Coolify redirects http:// to https:// (HTTP 301). Use https://coolify.example.com as the base URL.',
+      );
+      expect(redirectError(302, 'https://sso.example.net/login', base).message).toContain(
+        'Coolify did not answer: HTTP 302 redirect to sso.example.net.',
+      );
+      expect(redirectError(302, null, base).message).toContain('redirect to an unstated address');
+      expect(redirectError(302, 'http://[bad', base).message).toContain('an unstated address');
+      expect(
+        redirectError(307, '/api/v1/elsewhere', 'https://coolify.example.com').message,
+      ).toContain('redirect to coolify.example.com');
     });
 
     it('get_version, which bypasses request(), points at doctor on the same two failures (#384)', async () => {

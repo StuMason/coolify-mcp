@@ -296,6 +296,49 @@ describe('fleet mode (#367)', () => {
     await h.close();
   });
 
+  it('list_instances gives every instance one deadline, so a hung one cannot hold it (#454)', async () => {
+    const deadline = new AbortController();
+    const timeout = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const healthy = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) => {
+      if (!String(url).startsWith(STAGING)) return healthy(url, init);
+      const signal = (init as RequestInit).signal as AbortSignal;
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason));
+        deadline.abort(new DOMException('deadline', 'TimeoutError'));
+      });
+    });
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    try {
+      const rows = JSON.parse(await h.call('list_instances', {})) as Array<Record<string, unknown>>;
+      expect(timeout).toHaveBeenCalledWith(10_000);
+      expect(rows[0]).toMatchObject({ name: 'prod' });
+      expect(rows[0].version).toBeDefined();
+      expect(rows[1]).toMatchObject({ name: 'staging' });
+      expect(String(rows[1].error)).toContain('deadline');
+    } finally {
+      timeout.mockRestore();
+      await h.close();
+    }
+  });
+
+  it('list_instances names Cloudflare Access when it intercepts one instance (#453)', async () => {
+    const healthy = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: unknown, init?: unknown) =>
+      String(url).startsWith(STAGING)
+        ? new Response(null, {
+            status: 302,
+            headers: { location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' },
+          })
+        : healthy(url, init),
+    );
+    const h = await connect(new CoolifyMcpServer(fleetRegistry()));
+    const rows = JSON.parse(await h.call('list_instances', {})) as Array<Record<string, unknown>>;
+    expect(rows[0].version).toBeDefined();
+    expect(String(rows[1].error)).toContain('Cloudflare Access intercepted the request');
+    await h.close();
+  });
+
   it('names the instance in every destructive confirmation', async () => {
     const h = await connect(new CoolifyMcpServer(fleetRegistry()), true);
     await h.call('stop_all_apps', { instance: 'staging', confirm: true });
