@@ -27,7 +27,10 @@ jobs:
         run: npm ci
 
       - name: Security audit
-        run: npm audit --audit-level=high
+        # Shipped dependencies only. Dev tooling never reaches users, and a dev-only
+        # advisory with no upstream fix (GHSA-vfj7-8cjw-p6xm in braces) would
+        # otherwise block every PR. Dependabot still raises dev updates.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Format check
         run: npx prettier --check .
