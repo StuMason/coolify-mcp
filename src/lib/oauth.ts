@@ -422,7 +422,7 @@ export class OAuthProvider {
     validateRedirectUris(redirectUris as string[], this.redirectHosts);
 
     const name = metadata.client_name;
-    if (name !== undefined && (typeof name !== 'string' || name.length > MAX_CLIENT_NAME_LENGTH)) {
+    if (name != null && (typeof name !== 'string' || name.length > MAX_CLIENT_NAME_LENGTH)) {
       throw new OAuthErrorResponse(
         'invalid_client_metadata',
         `client_name must be a string of at most ${MAX_CLIENT_NAME_LENGTH} characters`,
@@ -442,7 +442,7 @@ export class OAuthProvider {
 
     const client: RegisteredClient = {
       client_id: opaque('mcp_client'),
-      client_name: name,
+      client_name: name ?? undefined,
       redirect_uris: redirectUris as string[],
       token_endpoint_auth_method: method,
       created_at: Date.now(),
