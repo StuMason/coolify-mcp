@@ -1987,3 +1987,241 @@ describe('persistence when the state file cannot be written (#417)', () => {
     }
   });
 });
+
+describe('registration hardening', () => {
+  function makeLimitedProvider(redirectHosts: string[], stateFile = ''): OAuthProvider {
+    return new OAuthProvider({
+      issuer: ISSUER,
+      resource: RESOURCE,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile,
+      redirectHosts,
+    });
+  }
+
+  function authorizeParams(clientId: string, redirectUri: string): URLSearchParams {
+    return new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      code_challenge: pkcePair().challenge,
+      code_challenge_method: 'S256',
+    });
+  }
+
+  it('bounds what one registration may carry', () => {
+    const provider = makeProvider();
+    expect(() =>
+      provider.registerClient({
+        client_name: 'A'.repeat(201),
+        redirect_uris: ['https://ok.example.com/cb'],
+      }),
+    ).toThrow('client_name');
+    expect(() =>
+      provider.registerClient({ client_name: 42, redirect_uris: ['https://ok.example.com/cb'] }),
+    ).toThrow('client_name');
+    expect(() =>
+      provider.registerClient({
+        redirect_uris: Array.from({ length: 11 }, (_, i) => `https://ok.example.com/${i}`),
+      }),
+    ).toThrow('at most 10');
+    expect(() =>
+      provider.registerClient({ redirect_uris: [`https://ok.example.com/${'a'.repeat(2048)}`] }),
+    ).toThrow('too long');
+  });
+
+  it('allows only listed hosts when MCP_REDIRECT_HOSTS is set, matching the exact hostname', () => {
+    const provider = makeLimitedProvider([' Claude.ai ', 'claude.com']);
+    expect(
+      provider.registerClient({ redirect_uris: ['https://claude.ai/api/mcp/auth_callback'] })
+        .client_id,
+    ).toBeDefined();
+    for (const uri of [
+      'https://evil.example.com/cb',
+      'https://claude.ai.evil.example.com/cb',
+      'https://evil.example.com/?next=https://claude.ai/cb',
+      'https://claude.ai@evil.example.com/cb',
+      'https://sub.claude.ai/cb',
+    ]) {
+      expect(() => provider.registerClient({ redirect_uris: [uri] })).toThrow('not allowed');
+    }
+    // Loopback stays open: the code lands on the approver's own machine.
+    expect(
+      provider.registerClient({ redirect_uris: ['http://127.0.0.1:4000/cb'] }).client_id,
+    ).toBeDefined();
+  });
+
+  it('applies the allowlist at authorize time to clients registered before it was set', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-test-'));
+    const stateFile = join(dir, 'state.json');
+    try {
+      const open = makeProvider(stateFile);
+      const evil = open.registerClient({ redirect_uris: ['https://evil.example.com/cb'] })
+        .client_id as string;
+      open.flush();
+
+      const limited = makeLimitedProvider(['claude.ai'], stateFile);
+      expect(() =>
+        limited.validateAuthorizationRequest(authorizeParams(evil, 'https://evil.example.com/cb')),
+      ).toThrow('not allowed');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('prunes clients nobody approved within a day, keeps approved and pre-upgrade ones', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-test-'));
+    const stateFile = join(dir, 'state.json');
+    const day = 24 * 60 * 60 * 1000;
+    const old = Date.now() - 2 * day;
+    const client = (id: string, extra: Record<string, unknown> = {}) => ({
+      client_id: id,
+      redirect_uris: ['https://client.example.com/callback'],
+      token_endpoint_auth_method: 'none',
+      created_at: old,
+      ...extra,
+    });
+    try {
+      // A file written before approval was recorded: everything in it survives.
+      writeFileSync(
+        stateFile,
+        JSON.stringify({ clients: [client('legacy')], codes: [], tokens: [] }),
+      );
+      const upgraded = makeProvider(stateFile);
+      expect(() =>
+        upgraded.validateAuthorizationRequest(
+          authorizeParams('legacy', 'https://client.example.com/callback'),
+        ),
+      ).not.toThrow();
+
+      writeFileSync(
+        stateFile,
+        JSON.stringify({
+          version: 2,
+          clients: [client('abandoned'), client('approved', { authorized_at: old })],
+          codes: [],
+          tokens: [],
+        }),
+      );
+      const provider = makeProvider(stateFile);
+      expect(() =>
+        provider.validateAuthorizationRequest(
+          authorizeParams('abandoned', 'https://client.example.com/callback'),
+        ),
+      ).toThrow('unknown client_id');
+      expect(() =>
+        provider.validateAuthorizationRequest(
+          authorizeParams('approved', 'https://client.example.com/callback'),
+        ),
+      ).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('records approval, so an approved client outlives the unapproved window', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oauth-test-'));
+    const stateFile = join(dir, 'state.json');
+    try {
+      const provider = makeProvider(stateFile);
+      const clientId = registerTestClient(provider);
+      authorize(provider, clientId, pkcePair().challenge);
+      provider.flush();
+      const saved = JSON.parse(readFileSync(stateFile, 'utf8')) as {
+        version: number;
+        clients: Array<{ authorized_at?: number }>;
+      };
+      expect(saved.version).toBe(2);
+      expect(saved.clients[0].authorized_at).toEqual(expect.any(Number));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('registration over HTTP', () => {
+  function makeApp(overrides: Partial<HttpServerConfig> = {}): ReturnType<typeof createHttpApp> {
+    return createHttpApp({
+      coolify: { baseUrl: 'https://coolify.example.com', accessToken: 'env-token' },
+      publicUrl: ISSUER,
+      accessTokenTtl: 3600,
+      refreshTokenTtl: 28_800,
+      stateFile: '',
+      readonly: false,
+      ...overrides,
+    });
+  }
+
+  function register(
+    app: ReturnType<typeof createHttpApp>,
+    headers: Record<string, string>,
+  ): Promise<Response> {
+    return app.fetch(
+      new Request(`${ISSUER}/register`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ redirect_uris: ['https://client.example.com/cb'] }),
+      }),
+    );
+  }
+
+  it('caps registrations across all callers, so a forged X-Forwarded-For does not get round it', async () => {
+    const app = makeApp();
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      statuses.push((await register(app, { 'x-forwarded-for': `198.51.100.${i}` })).status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s === 201)).toBe(true);
+    expect(statuses[30]).toBe(429);
+  });
+
+  it('keys the per-IP limit on MCP_CLIENT_IP_HEADER when set, ignoring X-Forwarded-For', async () => {
+    const app = makeApp({ clientIpHeader: 'CF-Connecting-IP' });
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      statuses.push(
+        (
+          await register(app, {
+            'cf-connecting-ip': '203.0.113.9',
+            'x-forwarded-for': `198.51.100.${i}`,
+          })
+        ).status,
+      );
+    }
+    expect(statuses[19]).toBe(201);
+    expect(statuses[20]).toBe(429);
+  });
+
+  it('shows where access goes on the consent page, not only the self-chosen name', async () => {
+    const app = makeApp();
+    const remote = app.provider.registerClient({
+      client_name: 'Claude',
+      redirect_uris: ['https://evil.example.com/cb'],
+    }).client_id as string;
+    const local = app.provider.registerClient({
+      client_name: 'Claude Code',
+      redirect_uris: ['http://127.0.0.1:4000/cb'],
+    }).client_id as string;
+    const page = async (clientId: string, redirectUri: string): Promise<string> =>
+      (
+        await app.fetch(
+          new Request(
+            `${ISSUER}/authorize?${new URLSearchParams({
+              client_id: clientId,
+              redirect_uri: redirectUri,
+              response_type: 'code',
+              code_challenge: pkcePair().challenge,
+              code_challenge_method: 'S256',
+            })}`,
+          ),
+        )
+      ).text();
+    expect(await page(remote, 'https://evil.example.com/cb')).toContain(
+      'Approving sends access to <strong>evil.example.com</strong>',
+    );
+    expect(await page(local, 'http://127.0.0.1:4000/cb')).toContain(
+      'an app on this computer (localhost)',
+    );
+  });
+});

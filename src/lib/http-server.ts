@@ -30,6 +30,14 @@ export interface HttpServerConfig {
   refreshTokenTtl: number;
   stateFile: string;
   readonly: boolean;
+  /** MCP_REDIRECT_HOSTS: non-loopback hosts a client may redirect to. Empty = any. */
+  redirectHosts?: string[];
+  /**
+   * MCP_CLIENT_IP_HEADER: a header the proxy in front sets to the caller's
+   * address (e.g. cf-connecting-ip). Unset, the first X-Forwarded-For hop is
+   * used, which the caller can forge.
+   */
+  clientIpHeader?: string;
 }
 
 /**
@@ -195,6 +203,14 @@ function escapeHtml(value: string): string {
  * carried as hidden fields. The form posts back to the same origin; there are
  * no cookies, so there is no ambient authority for CSRF to ride on.
  */
+/** Where the code goes, in words a person can check before approving. */
+function redirectDestination(redirectUri: string): string {
+  const host = new URL(redirectUri).hostname.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+    ? 'an app on this computer (localhost)'
+    : host;
+}
+
 function authorizePage(params: URLSearchParams, clientName: string, error?: string): string {
   const hidden = [...params.entries()]
     .map(
@@ -222,6 +238,9 @@ function authorizePage(params: URLSearchParams, clientName: string, error?: stri
 <body>
   <h1>Authorize ${escapeHtml(clientName)}</h1>
   <p><strong>${escapeHtml(clientName)}</strong> wants to manage your Coolify instance through this MCP server.</p>
+  <p>Approving sends access to <strong>${escapeHtml(redirectDestination(params.get('redirect_uri') ?? ''))}</strong>.
+  The name above is whatever the client chose to call itself; this address is where access actually goes.
+  If you did not just start connecting from there, stop.</p>
   ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
   <form method="post" action="authorize">
       ${hidden}
@@ -252,6 +271,7 @@ export function createHttpApp(config: HttpServerConfig): {
     accessTokenTtl: config.accessTokenTtl,
     refreshTokenTtl: config.refreshTokenTtl,
     stateFile: config.stateFile,
+    redirectHosts: config.redirectHosts,
   });
 
   const bearer = requireBearerAuth({
@@ -275,11 +295,20 @@ export function createHttpApp(config: HttpServerConfig): {
 
   // 20 guesses a minute per IP on the credential-bearing endpoints.
   const authLimiter = new RateLimiter(20, 60_000);
+  // Registration also has a ceiling across all callers. Every registration is
+  // persisted, and a per-IP limit is only as good as the IP, which behind some
+  // proxies is forgeable or shared. One team's clients register a handful of
+  // times a day; 30 an hour is generous for that and bounds the state file.
+  const registrationLimiter = new RateLimiter(30, 60 * 60_000);
+  const ipHeader = config.clientIpHeader?.trim().toLowerCase();
 
   async function handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, '') || '/';
-    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
+    const clientIp =
+      (ipHeader
+        ? request.headers.get(ipHeader)?.trim()
+        : request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()) || 'local';
 
     if (path === '/healthz') {
       // Still "ok": the server is answering. But state that lives only in
@@ -306,7 +335,7 @@ export function createHttpApp(config: HttpServerConfig): {
     }
 
     if (path === '/register' && request.method === 'POST') {
-      if (!authLimiter.allow(`reg:${clientIp}`)) {
+      if (!authLimiter.allow(`reg:${clientIp}`) || !registrationLimiter.allow('reg')) {
         return json({ error: 'too_many_requests' }, 429);
       }
       try {
