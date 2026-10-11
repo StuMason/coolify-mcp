@@ -206,10 +206,33 @@ internet-facing service.
 | `MCP_OAUTH_STATE_FILE`    | `/data/oauth-state.json` | OAuth state persistence; set it [outside a container](#running-outside-a-container) |
 | `MCP_REQUEST_STATE_KEY`   | generated at startup     | HMAC key for confirmation state (>=32 bytes)                                        |
 | `MCP_ALLOW_INSECURE_HTTP` | unset                    | Local development only: allow a non-https public URL                                |
+| `MCP_REDIRECT_HOSTS`      | unset (any host)         | Comma-separated hosts clients may redirect to; [hardening](#hardening-registration) |
+| `MCP_CLIENT_IP_HEADER`    | `X-Forwarded-For`        | Header your proxy sets to the caller's IP, e.g. `cf-connecting-ip`                  |
 | `CF_ACCESS_CLIENT_ID`     | unset                    | Cloudflare Access service token id (pair required)                                  |
 | `CF_ACCESS_CLIENT_SECRET` | unset                    | Cloudflare Access service token secret (pair req.)                                  |
 | `COOLIFY_INSTANCES`       | unset                    | JSON array of extra instances ([fleet mode](fleet.md))                              |
 | `COOLIFY_MCP_AUDIT`       | `on` in HTTP mode        | `off` disables the [audit log](#audit-log)                                          |
+
+### Hardening registration
+
+Client registration (`POST /register`) is open by default, because MCP clients
+register themselves the first time they connect. Anyone can register a client
+with any https redirect, so the consent page shows where approving sends
+access, next to the name the client chose for itself.
+
+On a server only you use, set `MCP_REDIRECT_HOSTS` to the clients you
+actually connect from. For claude.ai and Claude Desktop that is
+`claude.ai,claude.com`. Loopback redirects (Claude Code and other local
+clients) are always allowed, because a code sent there lands on the machine of
+the person who approved it. The list is exact hostnames, and it also applies
+to clients registered before it was set.
+
+Registration is rate limited per caller and to 30 an hour in total. A
+registered client nobody approves within a day is removed. The per-caller
+limits on registration, authorization and token exchange key on the first
+`X-Forwarded-For` hop, which the caller controls unless your proxy overwrites
+it. Behind Cloudflare, set `MCP_CLIENT_IP_HEADER=cf-connecting-ip`, and only
+if the origin is not reachable except through Cloudflare.
 
 ### Running outside a container
 

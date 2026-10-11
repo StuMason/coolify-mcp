@@ -41,6 +41,8 @@ export interface RegisteredClient {
   /** Present only for confidential clients. Stored hashed. */
   client_secret_hash?: string;
   created_at: number;
+  /** Set the first time a person approves this client. Never-approved clients are pruned. */
+  authorized_at?: number;
 }
 
 interface AuthorizationCode {
@@ -71,6 +73,8 @@ interface StoredToken {
 }
 
 interface OAuthState {
+  /** 2 from when clients carry `authorized_at`. Absent in older files. */
+  version?: number;
   clients: RegisteredClient[];
   codes: AuthorizationCode[];
   tokens: StoredToken[];
@@ -133,10 +137,32 @@ export interface OAuthProviderOptions {
   fetchClientMetadata?: (url: string) => Promise<unknown>;
   /** How long a fetched metadata document is trusted, in ms. Default one hour. */
   clientMetadataTtl?: number;
+  /**
+   * Hostnames a non-loopback redirect_uri may point at (MCP_REDIRECT_HOSTS).
+   * Empty or absent keeps registration open, as the MCP spec expects. Set, it
+   * is checked at registration, on metadata documents, and again on every
+   * authorization request, so clients registered before it was set obey it too.
+   */
+  redirectHosts?: string[];
 }
 
 /** The draft recommends a 5 KB cap; 8 KB leaves room for a logo_uri and a few extra members. */
 const CLIENT_METADATA_MAX_BYTES = 8 * 1024;
+
+/**
+ * Registration is unauthenticated and every client is persisted, so what one
+ * registration may carry is bounded. Real clients send one or two redirect
+ * URIs and a short name; these leave plenty of room.
+ */
+const MAX_REDIRECT_URIS = 10;
+const MAX_REDIRECT_URI_LENGTH = 2048;
+const MAX_CLIENT_NAME_LENGTH = 200;
+
+/**
+ * A registered client nobody approved within a day is abandoned (or junk) and
+ * is dropped. Approved clients are kept: a person vouched for them.
+ */
+const UNAUTHORIZED_CLIENT_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How long the Client ID Metadata Document fetch may take (#340).
@@ -258,8 +284,17 @@ export function redirectUriMatches(registered: string, requested: string): boole
   );
 }
 
-function validateRedirectUris(redirectUris: string[]): void {
+function validateRedirectUris(redirectUris: string[], allowedHosts: string[] = []): void {
+  if (redirectUris.length > MAX_REDIRECT_URIS) {
+    throw new OAuthErrorResponse(
+      'invalid_redirect_uri',
+      `at most ${MAX_REDIRECT_URIS} redirect_uris are accepted`,
+    );
+  }
   for (const uri of redirectUris) {
+    if (uri.length > MAX_REDIRECT_URI_LENGTH) {
+      throw new OAuthErrorResponse('invalid_redirect_uri', 'redirect_uri is too long');
+    }
     let parsed: URL;
     try {
       parsed = new URL(uri);
@@ -279,7 +314,23 @@ function validateRedirectUris(redirectUris: string[]): void {
         'redirect_uris must not carry a fragment',
       );
     }
+    if (!redirectHostAllowed(parsed, allowedHosts)) {
+      throw new OAuthErrorResponse(
+        'invalid_redirect_uri',
+        `redirect_uri host ${parsed.hostname} is not allowed by this server`,
+      );
+    }
   }
+}
+
+/**
+ * Loopback is always allowed: a code sent there lands on the machine of the
+ * person who approved it, so it cannot be phished away. Anything else must be
+ * an exact hostname on the list, when there is a list.
+ */
+function redirectHostAllowed(url: URL, allowedHosts: string[]): boolean {
+  if (allowedHosts.length === 0 || isLoopbackHost(url.hostname)) return true;
+  return allowedHosts.includes(url.hostname.toLowerCase());
 }
 
 export class OAuthProvider {
@@ -310,7 +361,12 @@ export class OAuthProvider {
     return this.persistBroken;
   }
 
+  private readonly redirectHosts: string[];
+
   constructor(private readonly options: OAuthProviderOptions) {
+    this.redirectHosts = (options.redirectHosts ?? [])
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
     this.load();
   }
 
@@ -363,7 +419,15 @@ export class OAuthProvider {
     ) {
       throw new OAuthErrorResponse('invalid_client_metadata', 'redirect_uris is required');
     }
-    validateRedirectUris(redirectUris as string[]);
+    validateRedirectUris(redirectUris as string[], this.redirectHosts);
+
+    const name = metadata.client_name;
+    if (name !== undefined && (typeof name !== 'string' || name.length > MAX_CLIENT_NAME_LENGTH)) {
+      throw new OAuthErrorResponse(
+        'invalid_client_metadata',
+        `client_name must be a string of at most ${MAX_CLIENT_NAME_LENGTH} characters`,
+      );
+    }
 
     const method =
       typeof metadata.token_endpoint_auth_method === 'string'
@@ -378,7 +442,7 @@ export class OAuthProvider {
 
     const client: RegisteredClient = {
       client_id: opaque('mcp_client'),
-      client_name: typeof metadata.client_name === 'string' ? metadata.client_name : undefined,
+      client_name: name,
       redirect_uris: redirectUris as string[],
       token_endpoint_auth_method: method,
       created_at: Date.now(),
@@ -525,7 +589,7 @@ export class OAuthProvider {
       invalid('must list redirect_uris');
     }
     try {
-      validateRedirectUris(redirectUris as string[]);
+      validateRedirectUris(redirectUris as string[], this.redirectHosts);
     } catch (error) {
       // Same rules as DCR, but a document problem is a client problem: one
       // code (invalid_client) for everything wrong with the document.
@@ -590,6 +654,12 @@ export class OAuthProvider {
     if (!client.redirect_uris.some((registered) => redirectUriMatches(registered, redirectUri))) {
       throw new OAuthErrorResponse('invalid_request', 'redirect_uri not registered for client');
     }
+    if (!redirectHostAllowed(new URL(redirectUri), this.redirectHosts)) {
+      throw new OAuthErrorResponse(
+        'invalid_request',
+        'redirect_uri host is not allowed by this server',
+      );
+    }
 
     if (params.get('response_type') !== 'code') {
       throw new OAuthErrorResponse('unsupported_response_type', 'only code is supported');
@@ -628,6 +698,11 @@ export class OAuthProvider {
     redirectTo: string;
   } {
     const code = opaque('mcp_code');
+    // Metadata-document clients are not in `clients`, and are not persisted anyway.
+    const registered = this.clients.get(request.client.client_id);
+    if (registered && !registered.authorized_at) {
+      registered.authorized_at = Date.now();
+    }
     this.codes.set(sha256(code), {
       code_hash: sha256(code),
       client_id: request.client.client_id,
@@ -813,6 +888,11 @@ export class OAuthProvider {
       // reuse detection still fires; everything is dropped once expired.
       if (token.expires_at < now) this.tokens.delete(key);
     }
+    for (const [key, client] of this.clients) {
+      if (!client.authorized_at && client.created_at + UNAUTHORIZED_CLIENT_TTL_MS < now) {
+        this.clients.delete(key);
+      }
+    }
     this.evictMetadataClients();
   }
 
@@ -841,6 +921,7 @@ export class OAuthProvider {
   private writeState(): void {
     this.prune();
     const state: OAuthState = {
+      version: 2,
       clients: [...this.clients.values()],
       codes: [...this.codes.values()],
       tokens: [...this.tokens.values()],
@@ -882,7 +963,12 @@ export class OAuthProvider {
     }
     try {
       const state = JSON.parse(raw) as OAuthState;
-      for (const client of state.clients ?? []) this.clients.set(client.client_id, client);
+      for (const client of state.clients ?? []) {
+        // Older files never recorded approval, so their clients cannot be
+        // told apart. Treat them as approved rather than disconnect people.
+        if (state.version !== 2) client.authorized_at ??= client.created_at;
+        this.clients.set(client.client_id, client);
+      }
       for (const code of state.codes ?? []) this.codes.set(code.code_hash, code);
       for (const token of state.tokens ?? []) this.tokens.set(token.token_hash, token);
       this.prune();

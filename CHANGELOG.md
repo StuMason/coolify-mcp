@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Client registration in HTTP mode is bounded and can be restricted.** `client_name` is capped at 200 characters, and a client may register at most 10 redirect URIs of up to 2048 characters each. Before this, one unauthenticated request could persist megabytes. Registration has a limit of 30 an hour across all callers on top of the per-IP one, so a forged `X-Forwarded-For` no longer gets round it. A registered client nobody approves within a day is removed. Clients from state files written by earlier versions are kept.
+- **`MCP_REDIRECT_HOSTS`** restricts non-loopback redirect URIs to the listed hostnames, at registration, on client metadata documents, and on every authorization request, so clients registered before it was set obey it too. Unset, registration stays open.
+- **The consent page says where approving sends access** (the redirect host, or "an app on this computer" for loopback), not only the name the client gave itself.
+- **`MCP_CLIENT_IP_HEADER`** names a header such as `cf-connecting-ip` for the per-IP limits to key on, for deployments where the first `X-Forwarded-For` hop is forgeable or is the proxy's own address.
+
 ## [3.9.0] - 2026-10-02
 
 ### Added

@@ -165,6 +165,8 @@ function main(): void {
     refreshTokenTtl: Number(process.env.MCP_REFRESH_TOKEN_TTL || 28_800),
     stateFile,
     readonly,
+    redirectHosts: (process.env.MCP_REDIRECT_HOSTS ?? '').split(','),
+    clientIpHeader: process.env.MCP_CLIENT_IP_HEADER,
   });
 
   const server = createServer((req, res) => {
