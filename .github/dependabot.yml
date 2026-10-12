@@ -18,6 +18,10 @@ updates:
       semver-major-days: 0
     # Group minor/patch updates together to reduce PR noise
     groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
       minor-and-patch:
         patterns:
           - '*'
@@ -50,3 +54,32 @@ updates:
     labels:
       - 'dependencies'
       - 'github-actions'
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /evals
+    schedule:
+      interval: weekly
+    # security updates only; version updates stay off
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    # security updates only; version updates stay off
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
