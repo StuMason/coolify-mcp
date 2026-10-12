@@ -14,10 +14,10 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@astrojs/node": "^9.4.4",
-    "@astrojs/sitemap": "^3.6.0",
+    "@astrojs/node": "^11.1.7",
+    "@astrojs/sitemap": "^3.7.4",
     "@aws-sdk/client-sesv2": "^3.906.0",
-    "astro": "^5.16.2"
+    "astro": "^7.3.8"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
