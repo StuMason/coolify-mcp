@@ -21,7 +21,7 @@ updates:
       security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
       minor-and-patch:
         patterns:
           - '*'
@@ -58,7 +58,7 @@ updates:
       security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
 
   - package-ecosystem: npm
     directory: /evals
@@ -70,7 +70,7 @@ updates:
       security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
 
   - package-ecosystem: npm
     directory: /site
@@ -82,4 +82,4 @@ updates:
       security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
