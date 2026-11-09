@@ -84,7 +84,7 @@ Set `COOLIFY_INSTANCES` to a JSON array of `{ name, url, token }` alongside your
 
 ## Safe to point at production
 
-Destructive operations stop and ask **you**, in your own client, before anything happens, on clients that support elicitation (Claude Code, VS Code Copilot). In remote mode the guard fails closed. Secrets are masked at the API boundary, log output is wrapped as untrusted data so a poisoned log line cannot issue instructions, and an eval suite red-teams both claims on every change. [Details](docs/security.md).
+Destructive operations stop and ask **you**, in your own client, before anything happens, on clients that support elicitation (Claude Code, VS Code Copilot). In remote mode the guard fails closed. Locally, a client without elicitation gets only the `confirm` parameter, which the model sets itself; `COOLIFY_MCP_REQUIRE_HUMAN=on` refuses instead. Secrets are masked at the API boundary, log output is wrapped as untrusted data so a poisoned log line cannot issue instructions, and an eval suite red-teams both claims on every change. [Details](docs/security.md).
 
 Works against Coolify v4.0 through v4.3. The v4.2 GET-to-POST change and the v4.2 secrets and Member-role restrictions are handled; see [compatibility](docs/tools.md#coolify-version-compatibility).
 

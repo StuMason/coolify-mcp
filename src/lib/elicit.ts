@@ -83,6 +83,26 @@ export function supportsElicitation(server: Server): boolean {
   return Boolean(server.getClientCapabilities()?.elicitation);
 }
 
+/**
+ * `COOLIFY_MCP_REQUIRE_HUMAN=on` gives the stdio server the fail-closed guard
+ * HTTP mode always has (#471).
+ *
+ * The stdio default stays progressive enhancement, for the reason given above.
+ * But a stdio server is not always a person's own Claude Desktop: it also runs
+ * behind MCP proxies and agent harnesses that do not forward elicitation, and
+ * there the capability-less fallback leaves `confirm: true` — a value the model
+ * supplies itself — as the only thing between a prompt and `stop_all_apps`.
+ * This lets whoever wires the server in decide that a human must be asked or
+ * nothing runs.
+ *
+ * Opt-in only, and parsed like `COOLIFY_MCP_AUDIT`: an unrecognised value
+ * leaves the default, so this can only ever add a guard, never remove one.
+ */
+export function requireHumanFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env.COOLIFY_MCP_REQUIRE_HUMAN?.trim().toLowerCase();
+  return value === 'on' || value === 'true' || value === '1';
+}
+
 export type ConfirmOutcome =
   | { approved: true }
   /**
