@@ -42,9 +42,18 @@ const HOSTILE = [
 ];
 
 describe('pathSegment', () => {
-  it('encodes every character that would end or escape the segment', () => {
-    expect(pathSegment('a/b?c#d\\e%f')).toBe('a%2Fb%3Fc%23d%5Ce%25f');
+  it('encodes the characters that would end the path or start a query', () => {
+    expect(pathSegment('a?c#d%f')).toBe('a%3Fc%23d%25f');
   });
+
+  // Laravel decodes the path before matching a route, so an encoded separator
+  // would still select a deeper route. Refusing is the only safe answer.
+  it.each(['a/b', 'uuid/restart', 'a\\b', '/', 'production/../x'])(
+    'refuses %j, because Coolify would decode an encoded separator',
+    (value) => {
+      expect(() => pathSegment(value)).toThrow('Invalid identifier');
+    },
+  );
 
   it('passes ordinary ids and numbers through unchanged', () => {
     expect(pathSegment('xs0sgs4gog044s4k4c88kgsc')).toBe('xs0sgs4gog044s4k4c88kgsc');
