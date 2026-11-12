@@ -382,6 +382,106 @@ paths:
       security:
         -
           bearerAuth: []
+  /hostinger/catalog:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS plans and prices'
+      operationId: get-hostinger-catalog
+      responses:
+        '200':
+          description: 'List of Hostinger VPS plans and prices.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/data-centers:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS data centers'
+      operationId: get-hostinger-data-centers
+      responses:
+        '200':
+          description: 'List of Hostinger VPS data centers.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/post-install-scripts:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger post-install scripts'
+      operationId: get-hostinger-post-install-scripts
+      responses:
+        '200':
+          description: 'List of Hostinger post-install scripts.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/ssh-keys:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger account SSH keys'
+      operationId: get-hostinger-ssh-keys
+      responses:
+        '200':
+          description: 'List of Hostinger account SSH keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/templates:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS operating system templates'
+      operationId: get-hostinger-templates
+      responses:
+        '200':
+          description: 'List of Hostinger VPS templates.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
   /vultr/os:
     get:
       tags:
