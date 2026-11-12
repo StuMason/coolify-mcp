@@ -22,22 +22,25 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@ai-sdk/anthropic": "3.0.42",
-    "@ai-sdk/google": "3.0.103",
-    "@ai-sdk/openai": "3.0.90",
+    "@ai-sdk/anthropic": "3.0.142",
+    "@ai-sdk/google": "3.0.145",
+    "@ai-sdk/openai": "3.0.141",
     "@eslint/js": "10.0.1",
-    "@modelcontextprotocol/sdk": "1.23.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@types/node": "26.1.2",
     "@vitest-evals/harness-ai-sdk": "0.15.0",
-    "ai": "6.0.242",
+    "ai": "6.0.330",
     "eslint": "10.0.1",
     "globals": "16.5.0",
     "prettier": "3.9.6",
-    "promptfoo": "0.122.0",
+    "promptfoo": "0.125.1",
     "tsx": "4.23.7",
     "typescript": "5.9.3",
     "typescript-eslint": "8.66.0",
-    "vitest": "4.1.10",
+    "vitest": "4.1.12",
     "vitest-evals": "0.15.0"
+  },
+  "overrides": {
+    "basic-ftp": "6.2.6"
   }
 }
