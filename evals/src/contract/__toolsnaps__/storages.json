@@ -103,6 +103,10 @@
       },
       "is_preview_suffix_enabled": {
         "type": "boolean"
+      },
+      "resource_uuid": {
+        "description": "service create only, required: sub-resource uuid from `get_service`.",
+        "type": "string"
       }
     },
     "required": [

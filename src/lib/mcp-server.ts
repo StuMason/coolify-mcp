@@ -3942,11 +3942,23 @@ export class CoolifyMcpServer extends McpServer {
         is_directory: z.boolean().optional(),
         fs_path: z.string().optional(),
         is_preview_suffix_enabled: z.boolean().optional(),
+        resource_uuid: UUID.optional().describe(
+          'service create only, required: sub-resource uuid from `get_service`.',
+        ),
       },
       async (args, extra) => {
         const { resource, action, uuid, storage_uuid } = args;
         if (action === 'create' && (!args.type || !args.mount_path))
           return { content: [{ type: 'text' as const, text: 'Error: type, mount_path required' }] };
+        if (action === 'create' && resource === 'service' && !args.resource_uuid)
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'Error: resource_uuid required for a service storage: the uuid of the service application or database the mount belongs to. `get_service` lists them.',
+              },
+            ],
+          };
         if (action.startsWith('backup_') && !storage_uuid)
           return {
             content: [
@@ -4057,6 +4069,7 @@ export class CoolifyMcpServer extends McpServer {
               this.client.createServiceStorage(uuid, {
                 type: args.type!,
                 mount_path: args.mount_path!,
+                resource_uuid: args.resource_uuid!,
                 name: args.name,
                 host_path: args.host_path,
                 content: args.content,

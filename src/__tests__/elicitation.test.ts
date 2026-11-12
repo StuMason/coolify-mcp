@@ -1391,3 +1391,49 @@ describe('volume backup schedules (#305)', () => {
     await h.close();
   });
 });
+
+describe('service storage create (#478)', () => {
+  it('forwards resource_uuid, which Coolify requires on a service', async () => {
+    const h = await harness(accept);
+    const create = jest
+      .spyOn(h.server['client'], 'createServiceStorage')
+      .mockResolvedValue({ message: 'ok' } as never);
+
+    await h.call('storages', {
+      resource: 'service',
+      action: 'create',
+      uuid: 'svc-1',
+      resource_uuid: 'sub-app-1',
+      type: 'file',
+      mount_path: '/etc/app.conf',
+      content: 'x=1',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      'svc-1',
+      expect.objectContaining({ resource_uuid: 'sub-app-1', type: 'file' }),
+    );
+    await h.close();
+  });
+
+  it('refuses a service create without resource_uuid and says where to find it', async () => {
+    const h = await harness(accept);
+    const create = jest
+      .spyOn(h.server['client'], 'createServiceStorage')
+      .mockResolvedValue({ message: 'ok' } as never);
+
+    const text = await h.call('storages', {
+      resource: 'service',
+      action: 'create',
+      uuid: 'svc-1',
+      type: 'persistent',
+      name: 'data',
+      mount_path: '/data',
+    });
+
+    expect(text).toContain('resource_uuid required');
+    expect(text).toContain('get_service');
+    expect(create).not.toHaveBeenCalled();
+    await h.close();
+  });
+});
