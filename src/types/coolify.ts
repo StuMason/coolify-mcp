@@ -1452,6 +1452,8 @@ export interface StorageListResponse {
 export interface CreateStorageRequest {
   type: 'persistent' | 'file';
   mount_path: string;
+  /** Services only, and required there: the service application or database sub-resource. */
+  resource_uuid?: string;
   name?: string;
   host_path?: string;
   content?: string;
