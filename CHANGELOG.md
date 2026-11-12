@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.10.0] - 2026-11-12
 
+### Added
+
+- **`COOLIFY_MCP_REQUIRE_HUMAN=on` makes the stdio server fail closed like HTTP mode** (#471). Over stdio, a client without elicitation (including an MCP proxy or agent harness that does not forward it) runs destructive operations on the model's own `confirm: true`. With the opt-in they are refused unless a human can be asked; read-only tools are unaffected. Unset, stdio behaves exactly as before. The README and `docs/security.md` now say plainly what the stdio fallback is.
+
 ### Security
 
 - **Client registration in HTTP mode is bounded and can be restricted.** `client_name` is capped at 200 characters, and a client may register at most 10 redirect URIs of up to 2048 characters each. Before this, one unauthenticated request could persist megabytes. Registration has a limit of 30 an hour across all callers on top of the per-IP one, so a forged `X-Forwarded-For` no longer gets round it. A registered client nobody approves within a day is removed. Clients from state files written by earlier versions are kept.
