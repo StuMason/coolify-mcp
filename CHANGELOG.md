@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **An identifier containing `/` or `\` is refused, not encoded.** 3.10.0 percent-encoded path separators in the few free-text identifiers (an environment name, a GitHub owner or repository). Coolify decodes the path before it matches a route, so an encoded separator still selected a deeper route. No Coolify route is reachable this way today; this closes the gap before one exists. UUID arguments were already validated and are unaffected.
+
 ## [3.10.1] - 2026-11-12
 
 ### Fixed

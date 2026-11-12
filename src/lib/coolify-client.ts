@@ -289,13 +289,15 @@ export class CoolifyApiError extends Error {
  *
  * Every identifier that goes into an API path passes through here, so it can
  * only ever name one resource on the route the method meant. Encoding turns
- * `/`, `\`, `?`, `#` and `%` into literal characters of the segment, and the
- * three values encoding leaves meaningful (empty, `.` and `..`) are refused,
- * because the URL parser would otherwise collapse them into a different path.
+ * `?`, `#` and `%` into literal characters of the segment. A path separator is
+ * refused rather than encoded: Coolify is a Laravel app, and Laravel decodes
+ * the path before it matches a route, so `%2F` reaches the router as a real
+ * `/` and would select a deeper route. Empty, `.` and `..` are refused too,
+ * because the URL parser would collapse them into a different path.
  */
 export function pathSegment(value: string | number): string {
   const raw = String(value);
-  if (raw === '' || raw === '.' || raw === '..') {
+  if (raw === '' || raw === '.' || raw === '..' || /[/\\]/.test(raw)) {
     throw new Error(`Invalid identifier ${JSON.stringify(raw)}`);
   }
   return encodeURIComponent(raw);
