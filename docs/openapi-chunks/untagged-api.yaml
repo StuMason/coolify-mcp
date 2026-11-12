@@ -3,6 +3,364 @@ info:
   title: Coolify
   version: '0.1'
 paths:
+  '/{resource_type}/{uuid}/secret-manager':
+    get:
+      tags:
+        - 'Secret Managers'
+      summary: 'Get Secret Manager Source'
+      description: 'The secret manager source of an application, service, or database, and the secret manager tokens of its team that can be linked.'
+      operationId: get-secret-manager-source
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Secret manager source.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretManagerSource'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - 'Secret Managers'
+      summary: 'Remove Secret Manager Source'
+      description: 'Remove the secret manager source. Existing {{vault.*}} variables stay and fail the next deployment until they are removed.'
+      operationId: remove-secret-manager-source
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Source removed.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No write access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Secret Managers'
+      summary: 'Set Secret Manager Source'
+      description: 'Link a secret manager token of the team to an application, service, or database, or change the token or settings of the link. References resolve at the next deployment.'
+      operationId: set-secret-manager-source
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - integration_token_uuid
+              properties:
+                integration_token_uuid:
+                  type: string
+                settings:
+                  description: 'Doppler service account: project, config. Infisical: project_id, environment, secret_path. Vault: mount, path.'
+                  type: object
+              type: object
+      responses:
+        '200':
+          description: 'Secret manager configured.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No write access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
+  '/{resource_type}/{uuid}/secret-manager/import':
+    post:
+      tags:
+        - 'Secret Managers'
+      summary: 'Import Secret Manager References'
+      description: 'Add a {{vault.KEY}} environment variable for every key of the linked source that has no variable yet. Keys that are not valid variable names are skipped.'
+      operationId: import-secret-manager-references
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Import result.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  imported: { type: array, items: { type: string } }
+                  skipped: { type: array, items: { type: string } }
+                type: object
+        '400':
+          description: 'The secret manager did not return the keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No write access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/{resource_type}/{uuid}/secret-manager/keys':
+    get:
+      tags:
+        - 'Secret Managers'
+      summary: 'List Secret Manager Keys'
+      description: 'Key names of the secrets in the linked source. Values are never returned. Requires write access, like the resource page, because the stored secret is sent to the secret manager.'
+      operationId: list-secret-manager-keys
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Key names.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  keys: { type: array, items: { type: string } }
+                type: object
+        '400':
+          description: 'The secret manager did not return the keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No write access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+  '/{resource_type}/{uuid}/secret-manager/references':
+    post:
+      tags:
+        - 'Secret Managers'
+      summary: 'Add Secret Manager Reference'
+      description: 'Add a {{vault.KEY}} environment variable for one key of the linked source.'
+      operationId: add-secret-manager-reference
+      parameters:
+        -
+          name: resource_type
+          in: path
+          description: 'Resource type.'
+          required: true
+          schema:
+            type: string
+            enum:
+              - applications
+              - services
+              - databases
+        -
+          name: uuid
+          in: path
+          description: 'Resource UUID.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+                - key
+              properties:
+                key:
+                  type: string
+              type: object
+      responses:
+        '201':
+          description: 'Variable added.'
+        '400':
+          description: 'The secret manager did not return the keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'No write access to the resource.'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          description: 'Not a key of the source, not a valid variable name, or the variable exists.'
+      security:
+        -
+          bearerAuth: []
+  /audit-events:
+    get:
+      tags:
+        - 'Audit Events'
+      summary: List
+      description: 'List audit events of the team. Only team admins and owners can view audit events. Actor e-mail, token, metadata, changes, IP address, and user agent are returned only for tokens with the read:sensitive or root permission.'
+      operationId: list-audit-events
+      parameters:
+        -
+          name: per_page
+          in: query
+          description: 'Items per page.'
+          required: false
+          schema:
+            type: integer
+            default: 25
+            maximum: 100
+            minimum: 1
+        -
+          name: page
+          in: query
+          description: 'Page number.'
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        -
+          name: search
+          in: query
+          description: 'Search text.'
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        -
+          name: action
+          in: query
+          description: 'Filter by action. Use all for every action.'
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        -
+          name: source
+          in: query
+          description: 'Filter by source.'
+          required: false
+          schema:
+            type: string
+            enum:
+              - all
+              - ui
+              - api
+              - mcp
+              - webhook
+              - system
+              - scheduler
+      responses:
+        '200':
+          description: 'A page of audit events, newest first.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  current_page: { type: integer }
+                  data: { type: array, items: { type: object, properties: { id: { type: integer }, team_id: { type: integer, nullable: true }, event: { type: string }, source: { type: string }, action: { type: string }, level: { type: string }, actor_type: { type: string, nullable: true }, actor_id: { type: integer, nullable: true }, actor_name: { type: string, nullable: true }, resource_type: { type: string, nullable: true }, resource_uuid: { type: string, nullable: true }, resource_name: { type: string, nullable: true }, description: { type: string, nullable: true }, created_at: { type: string, format: date-time } } } }
+                  per_page: { type: integer }
+                  last_page: { type: integer }
+                  total: { type: integer }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can view audit logs.'
+        '422':
+          $ref: '#/components/responses/422'
+      security:
+        -
+          bearerAuth: []
   /cloud-tokens:
     get:
       tags:
@@ -18,10 +376,12 @@ paths:
               schema:
                 type: array
                 items:
-                  properties: { uuid: { type: string }, name: { type: string }, provider: { type: string, enum: [hetzner, digitalocean, vultr] }, team_id: { type: integer }, servers_count: { type: integer }, created_at: { type: string }, updated_at: { type: string } }
+                  properties: { uuid: { type: string }, name: { type: string }, provider: { type: string, enum: [hetzner, digitalocean, vultr, hostinger] }, team_id: { type: integer }, servers_count: { type: integer }, created_at: { type: string }, updated_at: { type: string } }
                   type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '400':
           $ref: '#/components/responses/400'
       security:
@@ -46,7 +406,7 @@ paths:
               properties:
                 provider:
                   type: string
-                  enum: [hetzner, digitalocean, vultr]
+                  enum: [hetzner, digitalocean, vultr, hostinger]
                   example: hetzner
                   description: 'The cloud provider.'
                 token:
@@ -69,6 +429,8 @@ paths:
                 type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '400':
           $ref: '#/components/responses/400'
         '422':
@@ -108,6 +470,8 @@ paths:
                 type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '404':
           $ref: '#/components/responses/404'
       security:
@@ -138,6 +502,8 @@ paths:
                 type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '400':
           $ref: '#/components/responses/400'
         '404':
@@ -181,6 +547,8 @@ paths:
                 type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '404':
           $ref: '#/components/responses/404'
         '422':
@@ -215,6 +583,8 @@ paths:
                 type: object
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Only team admins and owners can manage cloud provider tokens.'
         '404':
           $ref: '#/components/responses/404'
       security:
@@ -249,28 +619,47 @@ paths:
       security:
         -
           bearerAuth: []
-  /enable:
-    post:
-      summary: 'Enable API'
-      description: 'Enable API (only with root permissions).'
-      operationId: enable-api
+  /dns/zones:
+    get:
+      tags:
+        - DNS
+      summary: 'List DNS Zones'
+      description: 'List the DNS zones that the Cloudflare tokens of the team can access. Requires admin or owner.'
+      operationId: list-dns-zones
       responses:
         '200':
-          description: 'Enable API.'
+          description: 'DNS zones.'
           content:
             application/json:
               schema:
-                properties:
-                  message: { type: string, example: 'API enabled.' }
-                type: object
+                type: array
+                items:
+                  properties: { zone: { type: string }, account_name: { type: [string, 'null'] }, integration_token_uuid: { type: string }, integration_token_name: { type: string }, managed_records_count: { type: integer } }
+                  type: object
+        '401':
+          $ref: '#/components/responses/401'
         '403':
-          description: 'You are not allowed to enable the API.'
+          description: 'Not an admin or owner of the team.'
+      security:
+        -
+          bearerAuth: []
+  /gitea-apps:
+    get:
+      tags:
+        - 'Gitea Apps'
+      summary: List
+      description: 'List all Gitea apps for the current team (and system-wide sources).'
+      operationId: list-gitea-apps
+      responses:
+        '200':
+          description: 'List of Gitea apps.'
           content:
             application/json:
               schema:
-                properties:
-                  message: { type: string, example: 'You are not allowed to enable the API.' }
-                type: object
+                type: array
+                items:
+                  properties: { id: { type: integer }, uuid: { type: string }, name: { type: string }, organization: { type: string, nullable: true }, api_url: { type: string }, html_url: { type: string }, custom_user: { type: string }, custom_port: { type: integer }, client_id: { type: string, nullable: true }, redirect_uri: { type: string, nullable: true }, is_system_wide: { type: boolean }, is_public: { type: boolean }, is_connected: { type: boolean, description: 'True when the OAuth connection is complete and the source can deploy private repositories.' }, team_id: { type: integer } }
+                  type: object
         '401':
           $ref: '#/components/responses/401'
         '400':
@@ -611,6 +1000,106 @@ paths:
           $ref: '#/components/responses/401'
         '400':
           $ref: '#/components/responses/400'
+  /hostinger/catalog:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS plans and prices'
+      operationId: get-hostinger-catalog
+      responses:
+        '200':
+          description: 'List of Hostinger VPS plans and prices.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/data-centers:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS data centers'
+      operationId: get-hostinger-data-centers
+      responses:
+        '200':
+          description: 'List of Hostinger VPS data centers.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/post-install-scripts:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger post-install scripts'
+      operationId: get-hostinger-post-install-scripts
+      responses:
+        '200':
+          description: 'List of Hostinger post-install scripts.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/ssh-keys:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger account SSH keys'
+      operationId: get-hostinger-ssh-keys
+      responses:
+        '200':
+          description: 'List of Hostinger account SSH keys.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
+  /hostinger/templates:
+    get:
+      tags:
+        - Hostinger
+      summary: 'Get Hostinger VPS operating system templates'
+      operationId: get-hostinger-templates
+      responses:
+        '200':
+          description: 'List of Hostinger VPS templates.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Hostinger denied access to this resource for the cloud provider token.'
+        '422':
+          description: 'Validation failed.'
+        '429':
+          description: 'Hostinger rate limit exceeded.'
+      security:
+        -
+          bearerAuth: []
   /settings/email:
     get:
       tags:
@@ -659,6 +1148,38 @@ paths:
               schema:
                 type: string
               example: v4.0.0
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+      security:
+        -
+          bearerAuth: []
+  /vulnerabilities:
+    get:
+      tags:
+        - Vulnerabilities
+      summary: 'List vulnerabilities'
+      description: 'List the applications, services, and databases of the authenticated team with their stored security status from image scanning.'
+      operationId: list-vulnerabilities
+      parameters:
+        -
+          name: status
+          in: query
+          description: 'Comma-separated statuses to return.'
+          required: false
+          schema:
+            type: string
+            example: 'update_now,update_available'
+      responses:
+        '200':
+          description: 'Resources with their security status, worst first.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  resources: { type: array, items: { properties: { uuid: { type: string }, name: { type: string }, type: { type: string, enum: [application, service, database] }, project_uuid: { type: [string, 'null'] }, environment_uuid: { type: [string, 'null'] }, server_uuid: { type: [string, 'null'] }, images: { properties: { update: { type: integer }, total: { type: integer } }, type: object }, security: { $ref: '#/components/schemas/SecurityStatus' } }, type: object } }
+                type: object
         '401':
           $ref: '#/components/responses/401'
         '400':

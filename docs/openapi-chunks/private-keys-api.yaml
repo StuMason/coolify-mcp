@@ -4,11 +4,33 @@ info:
   version: '0.1'
 paths:
   /security/integration-tokens:
+    get:
+      tags:
+        - 'Integration Tokens'
+      summary: 'List Integration Tokens'
+      description: 'List the integration tokens (Cloudflare, Doppler, Infisical, Vault) of the team. Requires admin or owner.'
+      operationId: list-integration-tokens
+      responses:
+        '200':
+          description: 'Integration tokens.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationToken'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
+      security:
+        -
+          bearerAuth: []
     post:
       tags:
-        - 'Secret Managers'
-      summary: 'Create Secret Manager Token'
-      description: 'Create and validate a Doppler, Infisical, or Vault integration token.'
+        - 'Integration Tokens'
+      summary: 'Create Integration Token'
+      description: 'Create and validate a Cloudflare, Doppler, Infisical, or Vault integration token. A Cloudflare token also gets its DNS zones; it is not stored when the zones cannot be read. Requires admin or owner.'
       operationId: create-secret-manager-integration-token
       requestBody:
         required: true
@@ -22,23 +44,208 @@ paths:
               properties:
                 provider:
                   type: string
-                  enum: [doppler, infisical, vault]
+                  enum: [cloudflare, doppler, infisical, vault]
                 name:
                   type: string
                 token:
                   type: string
+                capabilities:
+                  description: 'Cloudflare: dns, tunnel (tunnel needs dns). Default: dns. Secret managers: secrets.'
+                  type: array
+                  items: { type: string, enum: [dns, tunnel, secrets] }
+                automatic_dns:
+                  description: 'Cloudflare only. Create DNS records when a domain is added. Default: true.'
+                  type: boolean
+                proxied_dns:
+                  description: 'Cloudflare only. Create new records proxied (orange cloud). Default: false.'
+                  type: boolean
                 metadata:
+                  description: 'Secret managers only: base_url, client_id (Infisical), namespace (Vault), timeout.'
                   type: object
               type: object
       responses:
         '201':
           description: 'Integration token created.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                type: object
         '400':
-          $ref: '#/components/responses/400'
+          description: 'The provider rejected the token, or the Cloudflare zones could not be read.'
         '401':
           $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
         '422':
           $ref: '#/components/responses/422'
+        '502':
+          description: 'Coolify could not connect to the provider API.'
+      security:
+        -
+          bearerAuth: []
+  '/security/integration-tokens/{uuid}':
+    get:
+      tags:
+        - 'Integration Tokens'
+      summary: 'Get Integration Token'
+      description: 'Get an integration token of the team by UUID. Requires admin or owner.'
+      operationId: get-integration-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Integration token UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Integration token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationToken'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
+        '404':
+          $ref: '#/components/responses/404'
+      security:
+        -
+          bearerAuth: []
+    delete:
+      tags:
+        - 'Integration Tokens'
+      summary: 'Delete Integration Token'
+      description: 'Delete an integration token. A token that a resource uses as secret manager source, or that manages DNS records, cannot be deleted. Requires admin or owner.'
+      operationId: delete-integration-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Integration token UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Integration token deleted.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  message: { type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
+        '404':
+          $ref: '#/components/responses/404'
+        '409':
+          description: 'The token is still in use.'
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Integration Tokens'
+      summary: 'Update Integration Token'
+      description: 'Rename an integration token, rotate its secret, or change its capabilities and settings. Omitted fields keep their value. The provider checks the token again when the secret, the capabilities, or the settings change. Requires admin or owner.'
+      operationId: update-integration-token-by-uuid
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Integration token UUID.'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                token:
+                  description: 'New secret. Required when base_url, client_id (Infisical), or namespace (Vault) changes.'
+                  type: string
+                capabilities:
+                  type: array
+                  items: { type: string, enum: [dns, tunnel, secrets] }
+                automatic_dns:
+                  description: 'Cloudflare only.'
+                  type: boolean
+                proxied_dns:
+                  description: 'Cloudflare only.'
+                  type: boolean
+                metadata:
+                  description: 'Secret managers only. Fields to change: base_url, client_id, namespace, timeout. An empty value removes a field.'
+                  type: object
+              type: object
+      responses:
+        '200':
+          description: 'Integration token updated.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationToken'
+        '400':
+          description: 'The provider rejected the token, or the Cloudflare zones could not be read.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          $ref: '#/components/responses/422'
+        '502':
+          description: 'Coolify could not connect to the provider API.'
+      security:
+        -
+          bearerAuth: []
+  '/security/integration-tokens/{uuid}/sync-zones':
+    post:
+      tags:
+        - 'Integration Tokens'
+      summary: 'Sync Cloudflare Zones'
+      description: 'Read the DNS zones that a Cloudflare token can access again. Requires admin or owner.'
+      operationId: sync-integration-token-zones
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Integration token UUID.'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Zones synchronized.'
+          content:
+            application/json:
+              schema:
+                properties:
+                  zones_count: { type: integer }
+                type: object
+        '400':
+          description: 'Cloudflare did not return the zones.'
+        '401':
+          $ref: '#/components/responses/401'
+        '403':
+          description: 'Not an admin or owner of the team.'
+        '404':
+          $ref: '#/components/responses/404'
+        '422':
+          description: 'The token is not a Cloudflare token.'
+        '502':
+          description: 'Coolify could not connect to the Cloudflare API.'
       security:
         -
           bearerAuth: []
@@ -90,46 +297,6 @@ paths:
       responses:
         '201':
           description: "The created private key's UUID."
-          content:
-            application/json:
-              schema:
-                properties:
-                  uuid: { type: string }
-                type: object
-        '401':
-          $ref: '#/components/responses/401'
-        '400':
-          $ref: '#/components/responses/400'
-        '422':
-          $ref: '#/components/responses/422'
-      security:
-        -
-          bearerAuth: []
-    patch:
-      tags:
-        - 'Private Keys'
-      summary: Update
-      description: 'Update a private key.'
-      operationId: update-private-key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
-                - private_key
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                private_key:
-                  type: string
-              type: object
-              additionalProperties: false
-      responses:
-        '201':
-          description: "The updated private key's UUID."
           content:
             application/json:
               schema:
@@ -213,6 +380,54 @@ paths:
                 properties:
                   message: { type: string, example: 'Private Key is in use and cannot be deleted.' }
                 type: object
+      security:
+        -
+          bearerAuth: []
+    patch:
+      tags:
+        - 'Private Keys'
+      summary: Update
+      description: 'Update a private key.'
+      operationId: update-private-key
+      parameters:
+        -
+          name: uuid
+          in: path
+          description: 'Private Key UUID'
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                private_key:
+                  type: string
+              type: object
+              additionalProperties: false
+      responses:
+        '201':
+          description: "The updated private key's UUID."
+          content:
+            application/json:
+              schema:
+                properties:
+                  uuid: { type: string }
+                type: object
+        '401':
+          $ref: '#/components/responses/401'
+        '400':
+          $ref: '#/components/responses/400'
+        '404':
+          description: 'Private Key not found.'
+        '422':
+          $ref: '#/components/responses/422'
       security:
         -
           bearerAuth: []

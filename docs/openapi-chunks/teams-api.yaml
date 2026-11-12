@@ -35,12 +35,14 @@ paths:
         content:
           application/json:
             schema:
-              required:
-                - is_build_server_fallback_enabled
+              minProperties: 1
               properties:
                 is_build_server_fallback_enabled:
                   type: boolean
                   description: 'Whether deployments can fall back to the deployment server when no usable dedicated build server is available.'
+                scan_images_on_new_servers:
+                  type: boolean
+                  description: 'Whether image scanning is turned on for servers added to the team from now on.'
               type: object
       responses:
         '200':
@@ -86,23 +88,7 @@ paths:
         content:
           application/json:
             schema:
-              required:
-                - key
-              properties:
-                key:
-                  type: string
-                value:
-                  type: [string, 'null']
-                is_literal:
-                  type: boolean
-                is_multiline:
-                  type: boolean
-                is_shown_once:
-                  description: 'If true, the saved value is hidden in the UI and API responses. MCP never returns environment variable values.'
-                  type: boolean
-                comment:
-                  type: [string, 'null']
-              type: object
+              $ref: '#/components/schemas/SharedEnvironmentVariableCreateRequest'
       responses:
         '201':
           description: 'Environment variable created.'
@@ -154,6 +140,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SharedEnvironmentVariableUpdateRequest'
       responses:
         '200':
           description: 'Environment variable updated.'
