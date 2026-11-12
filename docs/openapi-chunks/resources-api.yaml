@@ -12,12 +12,15 @@ paths:
       operationId: list-resources
       responses:
         '200':
-          description: 'Get all resources'
+          description: 'Get all applications, services and standalone databases. The other fields of each resource are the fields of the Application, Service or Database schema.'
           content:
             application/json:
               schema:
-                type: string
-              example: 'Content is very complex. Will be implemented later.'
+                type: array
+                items:
+                  properties: { uuid: { type: string }, name: { type: string }, description: { type: [string, 'null'] }, type: { description: 'application, service, or standalone-<engine> for databases (for example standalone-postgresql).', type: string }, status: { description: 'For example running:healthy or exited:unhealthy.', type: string }, environment_id: { type: integer }, created_at: { type: string, format: date-time }, updated_at: { type: string, format: date-time } }
+                  type: object
+                  additionalProperties: true
         '401':
           $ref: '#/components/responses/401'
         '400':

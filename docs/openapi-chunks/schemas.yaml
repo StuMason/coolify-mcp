@@ -31,6 +31,10 @@ components:
               description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
               type: boolean
               default: false
+            restore_mysql_users:
+              description: 'MySQL and MariaDB backups containing all databases: also restore the mysql system database (users, passwords, and privileges). By default the system databases are skipped, so the database keeps its own users and passwords.'
+              type: boolean
+              default: false
             sqlite_database:
               description: 'SQLite: the database file to restore into. Must be one of the database files. Defaults to the file named in the backup file name, else the first file.'
               type: string
@@ -62,6 +66,10 @@ components:
               description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
               type: boolean
               default: false
+            restore_mysql_users:
+              description: 'MySQL and MariaDB backups containing all databases: also restore the mysql system database (users, passwords, and privileges). By default the system databases are skipped, so the database keeps its own users and passwords.'
+              type: boolean
+              default: false
             sqlite_database:
               description: 'SQLite: the database file to restore into. Must be one of the database files. Defaults to the file named in the backup file name, else the first file.'
               type: string
@@ -89,6 +97,10 @@ components:
               default: false
             keep_owners:
               description: 'Restore object owners and privileges from a single-database PostgreSQL archive. By default they are skipped, because the roles of another server usually do not exist.'
+              type: boolean
+              default: false
+            restore_mysql_users:
+              description: 'MySQL and MariaDB backups containing all databases: also restore the mysql system database (users, passwords, and privileges). By default the system databases are skipped, so the database keeps its own users and passwords.'
               type: boolean
               default: false
             sqlite_database:
@@ -129,14 +141,781 @@ components:
             - 'null'
           format: date-time
       type: object
+    Database:
+      description: 'Standalone database. The fields that start with an engine name (for example postgres_ or redis_) are only returned for that engine. Passwords, connection URLs and init_scripts are only returned for tokens with the read:sensitive or root ability.'
+      properties:
+        uuid:
+          type: string
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - 'null'
+        database_type:
+          type: string
+          enum:
+            - standalone-postgresql
+            - standalone-redis
+            - standalone-mongodb
+            - standalone-mysql
+            - standalone-mariadb
+            - standalone-keydb
+            - standalone-dragonfly
+            - standalone-clickhouse
+            - standalone-sqlite
+        image:
+          type: string
+        status:
+          description: 'Container status and health, for example running:healthy or exited:unhealthy.'
+          type: string
+        server_status:
+          description: 'True when the server of the database is reachable and usable.'
+          type: boolean
+        environment_id:
+          type: integer
+        environment:
+          $ref: '#/components/schemas/Environment'
+          description: 'Only returned by GET /databases/{uuid}. Includes the project.'
+        destination_id:
+          type: integer
+        destination_type:
+          type: string
+        destination:
+          description: 'Docker network destination of the database, with its server.'
+          properties:
+            uuid:
+              type: string
+            name:
+              type: string
+            network:
+              type: string
+            server_id:
+              type: integer
+            server:
+              $ref: '#/components/schemas/Server'
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+          type: object
+        is_public:
+          description: 'Not returned for SQLite.'
+          type: boolean
+        public_port:
+          description: 'Not returned for SQLite.'
+          type:
+            - integer
+            - 'null'
+        public_port_timeout:
+          description: 'Proxy timeout of the public port in seconds. Not returned for SQLite.'
+          type:
+            - integer
+            - 'null'
+        ports_mappings:
+          description: 'Comma-separated host:container port mappings. Not returned for SQLite.'
+          type:
+            - string
+            - 'null'
+        enable_ssl:
+          description: 'Not returned for ClickHouse and SQLite.'
+          type: boolean
+        ssl_mode:
+          description: 'PostgreSQL, MongoDB and MySQL only.'
+          type:
+            - string
+            - 'null'
+        internal_db_url:
+          description: 'Connection URL inside the Docker network. Contains the password. Not returned for SQLite.'
+          type:
+            - string
+            - 'null'
+        external_db_url:
+          description: 'Public connection URL, when the database is public. Contains the password. Not returned for SQLite.'
+          type:
+            - string
+            - 'null'
+        init_scripts:
+          description: 'PostgreSQL only.'
+          type:
+            - array
+            - 'null'
+          items:
+            properties:
+              index:
+                type: integer
+              filename:
+                type: string
+              content:
+                type: string
+            type: object
+        custom_docker_run_options:
+          type:
+            - string
+            - 'null'
+        is_log_drain_enabled:
+          type: boolean
+        is_include_timestamps:
+          description: 'Not returned for MariaDB.'
+          type: boolean
+        include_coolify_default_variables:
+          type: boolean
+        redact_all_env_values_in_logs:
+          type: boolean
+        health_check_enabled:
+          type: boolean
+        health_check_interval:
+          type: integer
+        health_check_timeout:
+          type: integer
+        health_check_retries:
+          type: integer
+        health_check_start_period:
+          type: integer
+        limits_memory:
+          type: string
+        limits_memory_swap:
+          type: string
+        limits_memory_swappiness:
+          type: integer
+        limits_memory_reservation:
+          type: string
+        limits_cpus:
+          type: string
+        limits_cpuset:
+          type:
+            - string
+            - 'null'
+        limits_cpu_shares:
+          type: integer
+        config_hash:
+          description: 'Internal hash that Coolify uses to find configuration changes that need a restart. It changes only when the database starts, so do not use it to compare configurations.'
+          type:
+            - string
+            - 'null'
+        restart_count:
+          type: integer
+        last_restart_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        last_restart_type:
+          type:
+            - string
+            - 'null'
+        last_online_at:
+          type:
+            - string
+            - 'null'
+        started_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        backup_configs:
+          description: 'Only returned by GET /databases. The scheduled backups of the database, as returned by GET /databases/{uuid}/backups.'
+          type: array
+          items:
+            type: object
+        postgres_user:
+          type: string
+        postgres_password:
+          type: string
+          format: password
+        postgres_db:
+          type: string
+        postgres_initdb_args:
+          type:
+            - string
+            - 'null'
+        postgres_host_auth_method:
+          type:
+            - string
+            - 'null'
+        postgres_conf:
+          type:
+            - string
+            - 'null'
+        redis_password:
+          type: string
+          format: password
+        redis_conf:
+          type:
+            - string
+            - 'null'
+        mongo_initdb_root_username:
+          type: string
+        mongo_initdb_root_password:
+          type: string
+          format: password
+        mongo_initdb_database:
+          type: string
+        mongo_conf:
+          type:
+            - string
+            - 'null'
+        mysql_user:
+          type: string
+        mysql_password:
+          type: string
+          format: password
+        mysql_root_password:
+          type: string
+          format: password
+        mysql_database:
+          type: string
+        mysql_conf:
+          type:
+            - string
+            - 'null'
+        mariadb_user:
+          type: string
+        mariadb_password:
+          type: string
+          format: password
+        mariadb_root_password:
+          type: string
+          format: password
+        mariadb_database:
+          type: string
+        mariadb_conf:
+          type:
+            - string
+            - 'null'
+        keydb_password:
+          type: string
+          format: password
+        keydb_conf:
+          type:
+            - string
+            - 'null'
+        dragonfly_password:
+          type: string
+          format: password
+        clickhouse_admin_user:
+          type: string
+        clickhouse_admin_password:
+          type: string
+          format: password
+        clickhouse_db:
+          type: string
+        sqlite_databases:
+          description: 'Comma-separated SQLite database file names.'
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+      type: object
+    SecurityStatus:
+      description: 'Security status of a resource from image scanning.'
+      properties:
+        status:
+          type: string
+          enum:
+            - update_now
+            - update_available
+            - no_fix
+            - check_needed
+            - ok
+            - not_checked
+        label:
+          type: string
+        action:
+          description: 'What to do, as the UI shows it.'
+          type:
+            - string
+            - 'null'
+        check_reason:
+          type:
+            - string
+            - 'null'
+        problem_count:
+          type: integer
+        exploited_count:
+          type: integer
+        any_exploited:
+          type: boolean
+        critical_count:
+          type: integer
+        high_count:
+          type: integer
+        medium_count:
+          type: integer
+        eol:
+          description: 'The end-of-life OS of the image.'
+          type:
+            - object
+            - 'null'
+        checked_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        actions:
+          type: array
+          items:
+            properties:
+              type:
+                type: string
+              sentence:
+                type: string
+              target:
+                type:
+                  - string
+                  - 'null'
+              copy:
+                type:
+                  - string
+                  - 'null'
+              image:
+                type:
+                  - string
+                  - 'null'
+              ref:
+                type:
+                  - string
+                  - 'null'
+            type: object
+      type: object
+    ResourceVulnerabilities:
+      description: 'Image scan results of a resource.'
+      properties:
+        uuid:
+          type: string
+        type:
+          type: string
+          enum:
+            - application
+            - service
+            - database
+        off_reason:
+          description: 'Why the resource is not scanned. Null when it is scanned.'
+          type:
+            - string
+            - 'null'
+          enum:
+            - server
+            - application
+        security:
+          oneOf:
+            -
+              $ref: '#/components/schemas/SecurityStatus'
+            -
+              type: 'null'
+        images:
+          type: array
+          items:
+            properties:
+              scan_uuid:
+                type: string
+              owner_uuid:
+                description: 'The application, database, or service application or database that runs the image.'
+                type: string
+              image_ref:
+                type: string
+              scan_status:
+                type: string
+                enum:
+                  - queued
+                  - running
+                  - completed
+                  - failed
+              error_code:
+                type:
+                  - string
+                  - 'null'
+              scanned_at:
+                type:
+                  - string
+                  - 'null'
+                format: date-time
+              truncated:
+                type: boolean
+              security_status:
+                type: string
+            type: object
+        findings:
+          type: array
+          items:
+            properties:
+              id:
+                type: string
+              display_id:
+                type: string
+              aliases:
+                type: array
+                items:
+                  type: string
+              title:
+                type: string
+              severity:
+                type: string
+                enum:
+                  - critical
+                  - high
+                  - medium
+                  - low
+                  - unknown
+              package:
+                type: string
+              version:
+                type: string
+              package_type:
+                type: string
+              fixed_in:
+                type:
+                  - string
+                  - 'null'
+              state:
+                description: 'fixed: a fix is available upstream.'
+                type: string
+                enum:
+                  - fixed
+                  - no_fix
+                  - ignored
+              ignore:
+                type:
+                  - object
+                  - 'null'
+              kev:
+                description: 'Listed in the CISA Known Exploited Vulnerabilities catalog.'
+                type: boolean
+              epss:
+                type:
+                  - number
+                  - 'null'
+              risk:
+                type:
+                  - number
+                  - 'null'
+              cvss_score:
+                type:
+                  - number
+                  - 'null'
+              advisory_url:
+                type:
+                  - string
+                  - 'null'
+              image_ref:
+                type: string
+              owner_uuid:
+                type: string
+            type: object
+        pagination:
+          properties:
+            page:
+              type: integer
+            per_page:
+              type: integer
+            total:
+              type: integer
+          type: object
+      type: object
+    ApplicationPreview:
+      properties:
+        uuid:
+          type: string
+        pull_request_id:
+          type: integer
+        pull_request_html_url:
+          type:
+            - string
+            - 'null'
+        git_type:
+          type:
+            - string
+            - 'null'
+        status:
+          type: string
+        domains:
+          type:
+            - string
+            - 'null'
+        docker_compose_domains:
+          type:
+            - array
+            - 'null'
+          items:
+            properties:
+              name:
+                type: string
+              domain:
+                type:
+                  - string
+                  - 'null'
+              redirect:
+                type:
+                  - string
+                  - 'null'
+            type: object
+        domain_port_overrides:
+          type:
+            - object
+            - 'null'
+        docker_registry_image_tag:
+          type:
+            - string
+            - 'null'
+        last_online_at:
+          type:
+            - string
+            - 'null'
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      type: object
+    ApplicationPreviewDeployment:
+      properties:
+        message:
+          type: string
+        deployment_uuid:
+          type:
+            - string
+            - 'null'
+        preview:
+          $ref: '#/components/schemas/ApplicationPreview'
+      type: object
+    ManagedDnsRecord:
+      description: 'DNS record that Coolify manages at a DNS provider.'
+      properties:
+        uuid:
+          type: string
+        hostname:
+          type: string
+        type:
+          type: string
+          enum:
+            - A
+            - AAAA
+        address:
+          description: 'Server IP address that the record points to.'
+          type: string
+        owned:
+          description: 'Coolify created the record, so it can delete it.'
+          type: boolean
+        integration_token_uuid:
+          type: string
+      type: object
+    ResourceDnsStatus:
+      description: 'DNS providers and managed records for the domains of a resource.'
+      properties:
+        default_address:
+          description: 'Address of a new record when none is given: the first public server address. Null when the server has no public address.'
+          type:
+            - string
+            - 'null'
+        public_addresses:
+          type: array
+          items:
+            type: string
+        hostnames:
+          type: array
+          items:
+            properties:
+              hostname:
+                type: string
+              providers:
+                type: array
+                items:
+                  properties: { integration_token_uuid: { type: string }, integration_token_name: { type: string }, zone: { type: string }, automatic_dns: { type: boolean }, proxied_dns: { type: boolean } }
+                  type: object
+              records:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ManagedDnsRecord'
+            type: object
+      type: object
+    CreateDnsRecordRequest:
+      required:
+        - hostname
+      properties:
+        hostname:
+          description: 'A saved domain of the resource.'
+          type: string
+        integration_token_uuid:
+          description: 'Cloudflare token to use. Required when several tokens manage the zone of the hostname.'
+          type: string
+        address:
+          description: 'A public address of the server. Default: default_address of the DNS status.'
+          type: string
+      type: object
+    ReplaceDnsRecordRequest:
+      required:
+        - hostname
+        - record_id
+        - current
+      properties:
+        hostname:
+          description: 'A saved domain of the resource.'
+          type: string
+        integration_token_uuid:
+          description: 'Cloudflare token to use. Required when several tokens manage the zone of the hostname.'
+          type: string
+        record_id:
+          description: 'conflict.record_id from the 409 response of the create request.'
+          type: string
+        current:
+          description: 'conflict.current from the 409 response. The record is replaced only when it still has this value.'
+          type: string
+        address:
+          description: 'A public address of the server. Default: default_address of the DNS status.'
+          type: string
+      type: object
+    DnsRecordConflict:
+      properties:
+        message:
+          type: string
+        conflict:
+          properties:
+            record_id:
+              type: string
+            current:
+              type: string
+            proposed:
+              type: string
+          type: object
+      type: object
+    IntegrationToken:
+      description: 'Integration token. The secret is never returned.'
+      properties:
+        uuid:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+          enum:
+            - cloudflare
+            - doppler
+            - infisical
+            - vault
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - dns
+              - tunnel
+              - secrets
+        automatic_dns:
+          description: 'Cloudflare only. Create DNS records when a domain is added.'
+          type: boolean
+        proxied_dns:
+          description: 'Cloudflare only. Create new records proxied (orange cloud).'
+          type: boolean
+        dns_zones_count:
+          description: 'Cloudflare only.'
+          type: integer
+        zones_synced_at:
+          description: 'Cloudflare only.'
+          type:
+            - string
+            - 'null'
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      type: object
+    SecretManagerSource:
+      description: 'The secret manager source of an application, service, or database. Routes start with the resource type (`applications`, `services`, `databases`), so tokens limited to some resources can use them.'
+      properties:
+        linked:
+          type: boolean
+        integration_token_uuid:
+          type:
+            - string
+            - 'null'
+        provider:
+          type:
+            - string
+            - 'null'
+          enum:
+            - doppler
+            - infisical
+            - vault
+            - null
+        settings:
+          description: 'Doppler: project, config. Infisical: project_id, environment, secret_path. Vault: mount, path.'
+          type:
+            - object
+            - 'null'
+        available_tokens:
+          type: array
+          items:
+            properties:
+              uuid:
+                type: string
+              name:
+                type: string
+              provider:
+                type: string
+            type: object
+      type: object
+    SharedEnvironmentVariableCreateRequest:
+      required:
+        - key
+      properties:
+        key:
+          type: string
+        value:
+          type:
+            - string
+            - 'null'
+        is_literal:
+          type: boolean
+        is_multiline:
+          type: boolean
+        is_shown_once:
+          description: 'If true, the saved value is hidden in the UI and API responses. A lock is permanent: false does not unlock a locked variable, but a new value can still replace the locked one. MCP never returns environment variable values.'
+          type: boolean
+        comment:
+          type:
+            - string
+            - 'null'
+          maxLength: 256
+      type: object
+    SharedEnvironmentVariableUpdateRequest:
+      description: 'Send at least one field.'
+      properties:
+        key:
+          type: string
+        value:
+          type:
+            - string
+            - 'null'
+        is_literal:
+          type: boolean
+        is_multiline:
+          type: boolean
+        is_shown_once:
+          description: 'If true, the saved value is hidden in the UI and API responses. A lock is permanent: false does not unlock a locked variable, but a new value can still replace the locked one. MCP never returns environment variable values.'
+          type: boolean
+        comment:
+          type:
+            - string
+            - 'null'
+          maxLength: 256
+      type: object
     VolumeBackupScheduleRequest:
       required:
         - frequency
       properties:
         frequency:
           type: string
-          maxLength: 255
           example: '0 2 * * *'
+          maxLength: 255
         enabled:
           type: boolean
           default: true
@@ -147,12 +926,19 @@ components:
           type: boolean
           default: false
         stop_during_backup:
+          description: 'Stop the resource containers during the backup. Needs a token with the deploy permission.'
           type: boolean
           default: false
         s3_storage_uuid:
+          description: 'Primary S3 storage UUID. Sent without s3_storage_uuids, it selects this storage as the only destination.'
           type:
             - string
             - 'null'
+        s3_storage_uuids:
+          description: 'UUIDs of every S3 storage the backup is uploaded to. When s3_storage_uuid is also sent, it must be in this list and becomes the primary destination; otherwise the first entry is the primary destination. save_s3 requires at least one destination.'
+          type: array
+          items:
+            type: string
         retention_amount_locally:
           type: integer
           default: 7
@@ -190,6 +976,12 @@ components:
           default: 36000
           maximum: 36000
           minimum: 60
+        missing_backup_notification_days:
+          description: 'Alert after this many days without an execution; 0 disables alerts'
+          type: integer
+          default: 0
+          maximum: 365
+          minimum: 0
       type: object
       additionalProperties: false
     VolumeBackupScheduleResponse:
@@ -210,6 +1002,7 @@ components:
         - retention_days_s3
         - retention_max_storage_s3
         - timeout
+        - missing_backup_notification_days
       properties:
         uuid:
           type: string
@@ -233,9 +1026,15 @@ components:
         stop_during_backup:
           type: boolean
         s3_storage_uuid:
+          description: 'Primary S3 destination.'
           type:
             - string
             - 'null'
+        s3_storage_uuids:
+          description: 'Every S3 destination, primary first.'
+          type: array
+          items:
+            type: string
         retention_amount_locally:
           type: integer
         retention_days_locally:
@@ -251,6 +1050,8 @@ components:
           type: number
           format: float
         timeout:
+          type: integer
+        missing_backup_notification_days:
           type: integer
       type: object
     Application:
@@ -299,6 +1100,14 @@ components:
           type: string
           nullable: true
           description: 'Git full URL.'
+        git_ssh_known_hosts:
+          type: string
+          nullable: true
+          description: 'SSH host keys (known_hosts lines) of self-hosted Git hosts that git over SSH accepts. Saved on the first deployment.'
+        git_https_username:
+          type: string
+          nullable: true
+          description: 'Username for HTTPS access to a private repository on a custom Git host. The password or token is never returned.'
         docker_registry_image_name:
           type: string
           nullable: true
@@ -570,6 +1379,27 @@ components:
           type: string
           nullable: true
           description: 'Password for HTTP Basic Authentication'
+        http_basic_auth_hash_algorithm:
+          type: string
+          enum:
+            - bcrypt
+            - argon2id
+          description: 'Hash algorithm for the HTTP Basic Authentication password. Argon2id needs the Caddy proxy, version 2.11 or newer.'
+        http_basic_auth_bcrypt_cost:
+          type: integer
+          minimum: 4
+          maximum: 14
+          description: 'Bcrypt cost for the HTTP Basic Authentication password.'
+        http_basic_auth_argon2id_memory_cost:
+          type: integer
+          minimum: 8192
+          maximum: 262144
+          description: 'Argon2id memory cost in KiB for the HTTP Basic Authentication password.'
+        http_basic_auth_argon2id_time_cost:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: 'Argon2id time cost (iterations) for the HTTP Basic Authentication password.'
         settings:
           $ref: '#/components/schemas/ApplicationSetting'
       type: object
@@ -605,6 +1435,8 @@ components:
         is_webhook:
           type: boolean
         is_api:
+          type: boolean
+        is_mcp:
           type: boolean
         created_at:
           type: string
@@ -683,8 +1515,15 @@ components:
           type: boolean
         is_gzip_enabled:
           type: boolean
+        traefik_certificate_resolver:
+          type: string
+          nullable: true
+          description: 'Traefik certificate resolver override. Null uses the server setting, "none" uses no resolver.'
         is_stripprefix_enabled:
           type: boolean
+        is_permanent_redirect_enabled:
+          type: boolean
+          description: 'Use permanent (301/308) instead of temporary (302/307) proxy redirects.'
         connect_to_docker_network:
           type: boolean
         custom_internal_name:
@@ -696,6 +1535,8 @@ components:
         is_container_label_escape_enabled:
           type: boolean
         is_env_sorting_enabled:
+          type: boolean
+        include_coolify_default_variables:
           type: boolean
         is_container_label_readonly_enabled:
           type: boolean
@@ -711,15 +1552,24 @@ components:
           type: boolean
         use_build_secrets:
           type: boolean
+        redact_all_env_values_in_logs:
+          type: boolean
+          description: 'Hide every environment variable value in logs. When false, only locked values are hidden.'
         inject_build_args_to_dockerfile:
           type: boolean
         include_source_commit_in_build:
           type: boolean
+        include_network_hosts_in_build:
+          type: boolean
+          description: 'Add the containers of the destination network as build hosts (--add-host). Turn off to keep the build cache when resources on the network change.'
         docker_images_to_keep:
           type: integer
         stop_grace_period:
           type: integer
           nullable: true
+        rolling_update_drain_seconds:
+          type: integer
+          description: 'Seconds to wait after the new container is healthy before old containers stop during a rolling update. 0 turns the wait off.'
       type: object
     Environment:
       description: 'Environment model'
@@ -762,7 +1612,7 @@ components:
           type: boolean
         is_shown_once:
           type: boolean
-          description: 'If true, the saved value is hidden in the UI and API responses. MCP never returns environment variable values.'
+          description: 'If true, the saved value is hidden in the UI and API responses. A lock is permanent: false does not unlock a locked variable, but a new value can still replace the locked one. MCP never returns environment variable values.'
         key:
           type: string
         value:
@@ -848,11 +1698,21 @@ components:
         timeout:
           type: integer
           description: 'The timeout of the scheduled task in seconds.'
-        next_run_at:
+        use_shell:
+          type: boolean
+          description: 'Run the command with `sh -c` in the container. Set it to false for containers without a shell: the command is then split into arguments and run directly, without shell features such as variables, pipes, or redirects.'
+        consecutive_failures:
+          type: integer
+          description: 'The number of failed runs since the last successful run.'
+        failing_since:
           type: string
           format: date-time
           nullable: true
-          description: 'The next time the scheduled task runs, in UTC. Null when it is disabled or not calculated yet.'
+          description: 'The date and time of the first failed run since the last successful run.'
+        disabled_reason:
+          type: string
+          nullable: true
+          description: 'Why Coolify disabled the task automatically. It is cleared when the task is enabled again.'
         created_at:
           type: string
           format: date-time
@@ -994,9 +1854,9 @@ components:
           type: boolean
         is_logdrain_axiom_enabled:
           type: boolean
-        is_logdrain_custom_enabled:
+        is_logdrain_cloudwatch_enabled:
           type: boolean
-        is_logdrain_highlight_enabled:
+        is_logdrain_custom_enabled:
           type: boolean
         is_logdrain_newrelic_enabled:
           type: boolean
@@ -1016,8 +1876,55 @@ components:
           type: boolean
         geoip_refresh_days:
           type: integer
+        traffic_ip_mode:
+          type: string
+          enum:
+            - full
+            - anonymized
+            - 'off'
+        traefik_certificate_resolver:
+          type: string
+          nullable: true
+          description: 'Traefik certificate resolver for generated HTTPS routers. Null when the proxy uses its own certificates.'
         is_reachable:
           type: boolean
+        ssh_host_key:
+          type: string
+          nullable: true
+          description: 'Pinned SSH host key(s) of the server, one "type base64" line per key.'
+        ssh_host_key_source:
+          type: string
+          nullable: true
+          enum:
+            - tofu
+            - upgrade
+            - transfer
+            - manual
+        ssh_host_key_trusted_at:
+          type: string
+          format: date-time
+          nullable: true
+        ssh_host_key_pending:
+          type: string
+          nullable: true
+          description: 'Host key that the server sent when it did not match the pinned key.'
+        is_ssh_host_key_check_disabled:
+          type: boolean
+        is_ssh_host_key_check_enforced:
+          type: boolean
+          description: 'Refuse a changed host key on this server, also when the instance only warns.'
+        ssh_host_key_fingerprints:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: 'SHA256 fingerprints of the pinned host keys, as `ssh-keygen -lf` shows them.'
+        ssh_host_key_pending_fingerprints:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: 'SHA256 fingerprints of the host key that did not match.'
         is_sentinel_enabled:
           type: boolean
         is_swarm_manager:
@@ -1032,11 +1939,18 @@ components:
           type: string
         logdrain_axiom_dataset_name:
           type: string
+        logdrain_axiom_domain:
+          type: string
+          description: 'Base domain of the Axiom edge deployment, for example us-east-1.aws.edge.axiom.co or eu-central-1.aws.edge.axiom.co.'
+        logdrain_cloudwatch_region:
+          type: string
+        logdrain_cloudwatch_group:
+          type: string
+        logdrain_cloudwatch_stream_prefix:
+          type: string
         logdrain_custom_config:
           type: string
         logdrain_custom_config_parser:
-          type: string
-        logdrain_highlight_project_id:
           type: string
         logdrain_newrelic_base_uri:
           type: string
@@ -1125,6 +2039,9 @@ components:
         is_container_label_escape_enabled:
           type: boolean
           description: 'The flag to enable the container label escape.'
+        redact_all_env_values_in_logs:
+          type: boolean
+          description: 'Hide every environment variable value in logs. When false, only locked values are hidden.'
         is_container_label_readonly_enabled:
           type: boolean
           description: 'The flag to enable the container label readonly.'
@@ -1209,6 +2126,9 @@ components:
         is_build_server_fallback_enabled:
           type: boolean
           description: 'Whether deployments can fall back to the deployment server when no usable dedicated build server is available.'
+        scan_images_on_new_servers:
+          type: boolean
+          description: 'Whether image scanning is turned on for servers added to the team from now on.'
         members:
           description: 'The members of the team.'
           type: array
@@ -1311,6 +2231,72 @@ components:
                 type: string
                 example: 'Rate limit exceeded. Please try again later.'
             type: object
+    '502':
+      description: 'The cloud provider API rejected the request.'
+      content:
+        application/json:
+          schema:
+            properties:
+              message:
+                type: string
+                example: 'Failed to create Hetzner server. The Hetzner API token does not have permission for this request. Use a token with read and write access.'
+              provider_status:
+                description: 'The HTTP status from the cloud provider API.'
+                type: integer
+                example: 403
+              provider_error_code:
+                description: 'The error code from the cloud provider API, if it has one.'
+                type:
+                  - string
+                  - 'null'
+                example: forbidden
+            type: object
+  parameters:
+    VulnerabilityState:
+      name: state
+      in: query
+      description: 'Comma-separated finding states: fixed, no_fix, ignored. All when not sent.'
+      required: false
+      schema:
+        type: string
+    VulnerabilitySeverity:
+      name: severity
+      in: query
+      description: 'Comma-separated severities: critical, high, medium, low, unknown.'
+      required: false
+      schema:
+        type: string
+    VulnerabilityImage:
+      name: image
+      in: query
+      description: 'Only the findings of this scanned image ref.'
+      required: false
+      schema:
+        type: string
+    VulnerabilitySearch:
+      name: search
+      in: query
+      description: 'Text in the vulnerability ID, an alias, the package, or the version.'
+      required: false
+      schema:
+        type: string
+    VulnerabilityPage:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    VulnerabilityPerPage:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+        minimum: 1
   securitySchemes:
     bearerAuth:
       type: http
