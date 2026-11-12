@@ -5,6 +5,7 @@ import { CoolifyMcpServer } from './lib/mcp-server.js';
 import { parseHeaders } from './lib/parse-headers.js';
 import { checkStartupConfig } from './lib/startup-check.js';
 import { registryFromEnv } from './lib/instances.js';
+import { requireHumanFromEnv } from './lib/elicit.js';
 
 async function main(): Promise<void> {
   // `npx @masonator/coolify-mcp doctor` (#368): diagnose the environment and
@@ -88,7 +89,9 @@ async function main(): Promise<void> {
     parseHeaders(process.argv),
   );
 
-  const server = new CoolifyMcpServer(registry);
+  // Fail closed on destructive operations when the client cannot be asked,
+  // as HTTP mode always does (#471). Off unless COOLIFY_MCP_REQUIRE_HUMAN says so.
+  const server = new CoolifyMcpServer(registry, { requireElicitation: requireHumanFromEnv() });
   const transport = new StdioServerTransport();
 
   await server.connect(transport);

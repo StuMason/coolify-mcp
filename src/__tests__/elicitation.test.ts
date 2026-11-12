@@ -14,11 +14,12 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { Client, InMemoryTransport, type ElicitResult } from '@modelcontextprotocol/client';
 import type { Server } from '@modelcontextprotocol/server';
-import { CoolifyMcpServer } from '../lib/mcp-server.js';
+import { CoolifyMcpServer, type CoolifyMcpServerOptions } from '../lib/mcp-server.js';
 import {
   confirmDestructive,
   describeBlastRadius,
   sanitizeForPrompt,
+  requireHumanFromEnv,
   ELICIT_TIMEOUT_MS,
 } from '../lib/elicit.js';
 
@@ -42,11 +43,14 @@ interface Harness {
  * Passing no `answer` builds a client that never declares the elicitation
  * capability — the fallback case, and the one that must keep working.
  */
-async function harness(answer?: Answer): Promise<Harness> {
-  const server = new CoolifyMcpServer({
-    baseUrl: 'http://localhost:3000',
-    accessToken: 'test-token',
-  });
+async function harness(answer?: Answer, options?: CoolifyMcpServerOptions): Promise<Harness> {
+  const server = new CoolifyMcpServer(
+    {
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    },
+    options,
+  );
   const client = new Client(
     { name: 'test', version: '0' },
     answer ? { capabilities: { elicitation: {} } } : {},
@@ -187,6 +191,44 @@ describe('elicitation: capability gating', () => {
     } finally {
       if (previous === undefined) delete process.env.COOLIFY_MCP_ELICITATION;
       else process.env.COOLIFY_MCP_ELICITATION = previous;
+    }
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN=on refuses on a client that cannot be asked (#471)', async () => {
+    // What src/index.ts does for stdio: the env var becomes `requireElicitation`.
+    const h = await harness(undefined, {
+      requireElicitation: requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: 'on' }),
+    });
+    const { stopAllApps } = stubEstate(h.server);
+
+    // `confirm: true` is the model confirming with itself; with the opt-in it
+    // no longer counts as a human saying yes.
+    const text = await h.call('stop_all_apps', { confirm: true });
+
+    expect(stopAllApps).not.toHaveBeenCalled();
+    expect(text).toContain('requires human confirmation');
+    await h.close();
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN=on still asks, and runs, on a capable client', async () => {
+    const h = await harness(accept, {
+      requireElicitation: requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: 'on' }),
+    });
+    const { stopAllApps } = stubEstate(h.server);
+
+    await h.call('stop_all_apps', { confirm: true });
+
+    expect(h.prompts).toHaveLength(1);
+    expect(stopAllApps).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN only adds the guard: unset or unrecognised stays off', () => {
+    for (const value of ['on', 'ON', 'true', '1', ' on ']) {
+      expect(requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: value })).toBe(true);
+    }
+    for (const value of [undefined, '', 'off', 'false', '0', 'yes-please']) {
+      expect(requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: value })).toBe(false);
     }
   });
 
