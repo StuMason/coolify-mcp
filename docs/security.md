@@ -104,6 +104,12 @@ Document). That fetch goes through the SSRF guard in `src/lib/ssrf.ts`
 rate-limited per IP, and reports one generic sentence on failure so the
 authorize page cannot be used to probe other hosts.
 
+Every identifier a tool takes reaches Coolify as one path segment of the
+route that tool calls. Uuid arguments must be a Coolify uuid (letters, digits,
+`-`, `_`), and the client encodes every identifier it puts in a path, names
+included, so no argument can point a call at a different endpoint. This holds
+in read-only mode too.
+
 Secrets are masked at the API boundary. A client granted "list" access never
 sees plaintext credentials unless you explicitly opt in with `reveal: true`:
 

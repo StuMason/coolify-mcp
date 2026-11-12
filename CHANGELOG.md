@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`MCP_REDIRECT_HOSTS`** restricts non-loopback redirect URIs to the listed hostnames, at registration, on client metadata documents, and on every authorization request, so clients registered before it was set obey it too. Unset, registration stays open.
 - **The consent page says where approving sends access** (the redirect host, or "an app on this computer" for loopback), not only the name the client gave itself.
 - **`MCP_CLIENT_IP_HEADER`** names a header such as `cf-connecting-ip` for the per-IP limits to key on, for deployments where the first `X-Forwarded-For` hop is forgeable or is the proxy's own address.
+- **Identifiers can no longer change which endpoint a call reaches.** Tools passed uuids and names into Coolify request paths as given, so a crafted value could point a call, including one from a read-only tool, at a different endpoint. Every uuid argument is now checked to be a Coolify uuid (letters, digits, `-`, `_`), and the client encodes every identifier it puts in a path and refuses one that would still be read as `.` or `..`. Nothing changes on `tools/list`.
 
 ## [3.9.0] - 2026-10-02
 
