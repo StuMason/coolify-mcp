@@ -41,6 +41,7 @@ export const GROUPS = {
   digitalocean: 'cloud-providers-api',
   'gitlab-apps': 'gitlab-apps-api',
   hetzner: 'cloud-providers-api',
+  hostinger: 'cloud-providers-api',
   mcp: 'mcp-api',
   notifications: 'notifications-api',
   projects: 'projects-api',
@@ -75,13 +76,18 @@ export const DROPPED_TOP_LEVEL_KEYS = ['servers', 'tags'];
  * the dumping ground (#347 review).
  */
 export const UNTAGGED_SEGMENTS = [
+  'audit-events',
   'cloud-tokens',
   'disable',
-  'enable',
+  'dns',
+  'gitea-apps',
   'github-apps',
   'health',
   'settings',
   'version',
+  'vulnerabilities',
+  // `/{resource_type}/{uuid}/secret-manager`: shared across resource types.
+  '{resource_type}',
 ];
 
 /** Top-level keys that make up the header shared by every chunk. */
