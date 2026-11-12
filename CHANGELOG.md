@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-11-12
+
 ### Security
 
 - **Client registration in HTTP mode is bounded and can be restricted.** `client_name` is capped at 200 characters, and a client may register at most 10 redirect URIs of up to 2048 characters each. Before this, one unauthenticated request could persist megabytes. Registration has a limit of 30 an hour across all callers on top of the per-IP one, so a forged `X-Forwarded-For` no longer gets round it. A registered client nobody approves within a day is removed. Clients from state files written by earlier versions are kept.
