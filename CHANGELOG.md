@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-11-12
+
 ### Added
 
 - **`COOLIFY_MCP_REQUIRE_HUMAN=on` makes the stdio server fail closed like HTTP mode** (#471). Over stdio, a client without elicitation (including an MCP proxy or agent harness that does not forward it) runs destructive operations on the model's own `confirm: true`. With the opt-in they are refused unless a human can be asked; read-only tools are unaffected. Unset, stdio behaves exactly as before. The README and `docs/security.md` now say plainly what the stdio fallback is.
