@@ -62,6 +62,15 @@ all abort the call. In HTTP mode the guard fails closed instead: a client that
 cannot elicit gets a refusal on the dangerous tools, because a model filling
 in `confirm: true` is the model confirming with itself.
 
+Over stdio, that is exactly what the fallback is: with a client that does not
+support elicitation, the only confirmation a destructive call gets is the
+`confirm` parameter, and the model sets it. That includes clients you might not
+think of as clients: MCP proxies and agent harnesses that sit between the model
+and this server and do not forward elicitation. Set
+`COOLIFY_MCP_REQUIRE_HUMAN=on` to give the stdio server the same fail-closed
+guard as HTTP mode: destructive operations are refused unless a human can be
+asked, and read-only tools work as before.
+
 These tools also carry the MCP `destructiveHint` annotation, so on a client
 that honours annotations **and** supports elicitation you may answer two
 dialogs in a row: the client's own permission prompt, then this one. That is
@@ -94,6 +103,12 @@ Document). That fetch goes through the SSRF guard in `src/lib/ssrf.ts`
 (public addresses only, pinned DNS, no redirects, size and time caps), is
 rate-limited per IP, and reports one generic sentence on failure so the
 authorize page cannot be used to probe other hosts.
+
+Every identifier a tool takes reaches Coolify as one path segment of the
+route that tool calls. Uuid arguments must be a Coolify uuid (letters, digits,
+`-`, `_`), and the client encodes every identifier it puts in a path, names
+included, so no argument can point a call at a different endpoint. This holds
+in read-only mode too.
 
 Secrets are masked at the API boundary. A client granted "list" access never
 sees plaintext credentials unless you explicitly opt in with `reveal: true`:

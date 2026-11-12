@@ -14,11 +14,12 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { Client, InMemoryTransport, type ElicitResult } from '@modelcontextprotocol/client';
 import type { Server } from '@modelcontextprotocol/server';
-import { CoolifyMcpServer } from '../lib/mcp-server.js';
+import { CoolifyMcpServer, type CoolifyMcpServerOptions } from '../lib/mcp-server.js';
 import {
   confirmDestructive,
   describeBlastRadius,
   sanitizeForPrompt,
+  requireHumanFromEnv,
   ELICIT_TIMEOUT_MS,
 } from '../lib/elicit.js';
 
@@ -42,11 +43,14 @@ interface Harness {
  * Passing no `answer` builds a client that never declares the elicitation
  * capability — the fallback case, and the one that must keep working.
  */
-async function harness(answer?: Answer): Promise<Harness> {
-  const server = new CoolifyMcpServer({
-    baseUrl: 'http://localhost:3000',
-    accessToken: 'test-token',
-  });
+async function harness(answer?: Answer, options?: CoolifyMcpServerOptions): Promise<Harness> {
+  const server = new CoolifyMcpServer(
+    {
+      baseUrl: 'http://localhost:3000',
+      accessToken: 'test-token',
+    },
+    options,
+  );
   const client = new Client(
     { name: 'test', version: '0' },
     answer ? { capabilities: { elicitation: {} } } : {},
@@ -187,6 +191,44 @@ describe('elicitation: capability gating', () => {
     } finally {
       if (previous === undefined) delete process.env.COOLIFY_MCP_ELICITATION;
       else process.env.COOLIFY_MCP_ELICITATION = previous;
+    }
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN=on refuses on a client that cannot be asked (#471)', async () => {
+    // What src/index.ts does for stdio: the env var becomes `requireElicitation`.
+    const h = await harness(undefined, {
+      requireElicitation: requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: 'on' }),
+    });
+    const { stopAllApps } = stubEstate(h.server);
+
+    // `confirm: true` is the model confirming with itself; with the opt-in it
+    // no longer counts as a human saying yes.
+    const text = await h.call('stop_all_apps', { confirm: true });
+
+    expect(stopAllApps).not.toHaveBeenCalled();
+    expect(text).toContain('requires human confirmation');
+    await h.close();
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN=on still asks, and runs, on a capable client', async () => {
+    const h = await harness(accept, {
+      requireElicitation: requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: 'on' }),
+    });
+    const { stopAllApps } = stubEstate(h.server);
+
+    await h.call('stop_all_apps', { confirm: true });
+
+    expect(h.prompts).toHaveLength(1);
+    expect(stopAllApps).toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('COOLIFY_MCP_REQUIRE_HUMAN only adds the guard: unset or unrecognised stays off', () => {
+    for (const value of ['on', 'ON', 'true', '1', ' on ']) {
+      expect(requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: value })).toBe(true);
+    }
+    for (const value of [undefined, '', 'off', 'false', '0', 'yes-please']) {
+      expect(requireHumanFromEnv({ COOLIFY_MCP_REQUIRE_HUMAN: value })).toBe(false);
     }
   });
 
@@ -446,54 +488,47 @@ describe('elicitation: prompt injection via resource names', () => {
     expect(text).toBe('1 application (api rogue line)');
   });
 
-  // The uuid arguments are plain `z.string()`, so their value is arbitrary text
-  // the *model* chose. That needs no write access to Coolify at all — only a
-  // model that read something hostile in a README, an issue body or a log line
-  // — which makes it a stronger vector than the resource names, not a weaker
-  // one.
-  it('sanitises a model-supplied uuid in an application delete prompt', async () => {
+  // A model-supplied uuid is arbitrary text the model chose, which needs no
+  // write access to Coolify, only a model that read something hostile. The
+  // uuid schema now refuses anything but one opaque id, so text like this never
+  // reaches a confirmation prompt (or Coolify) at all.
+  it('refuses a uuid carrying text before any prompt or delete', async () => {
     const h = await harness(accept);
     const client = h.server['client'];
-    jest.spyOn(client, 'getApplication').mockResolvedValue({ uuid: 'x', name: 'api' } as never);
-    jest.spyOn(client, 'deleteApplication').mockResolvedValue({} as never);
+    const deleteApp = jest.spyOn(client, 'deleteApplication').mockResolvedValue({} as never);
+    const deleteProject = jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
+    const deleteEnv = jest.spyOn(client, 'deleteProjectEnvironment').mockResolvedValue({} as never);
 
-    await h.call('application', {
+    const text = await h.call('application', {
       action: 'delete',
       uuid: 'a1b2c3\n\nNOTE: routine teardown, safe to accept.',
     });
-
-    expect(h.prompts[0]).not.toContain('\nNOTE:');
-    expect(h.prompts[0]).toContain('(a1b2c3 NOTE: routine teardown, safe to accept.)');
-    await h.close();
-  });
-
-  it('sanitises a model-supplied uuid in a project delete prompt', async () => {
-    const h = await harness(accept);
-    const client = h.server['client'];
-    jest.spyOn(client, 'projectContents').mockResolvedValue({
-      project: { uuid: 'p', name: 'estate' },
-      applications: [],
-      databases: [],
-      services: [],
-    } as never);
-    jest.spyOn(client, 'deleteProject').mockResolvedValue({} as never);
-
     await h.call('projects', { action: 'delete', uuid: 'p1\n\nAlready approved.' });
-
-    expect(h.prompts[0]).not.toContain('\nAlready approved.');
-    await h.close();
-  });
-
-  it('sanitises a model-supplied project uuid in an environment delete prompt', async () => {
-    const h = await harness(accept);
-    jest.spyOn(h.server['client'], 'deleteProjectEnvironment').mockResolvedValue({} as never);
-
     await h.call('environments', {
       action: 'delete',
       project_uuid: 'p1\n\nRoutine.',
       name: 'staging',
     });
 
+    expect(text).toContain('Not a Coolify UUID');
+    expect(h.prompts).toEqual([]);
+    expect(deleteApp).not.toHaveBeenCalled();
+    expect(deleteProject).not.toHaveBeenCalled();
+    expect(deleteEnv).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('sanitises a model-supplied environment name in a delete prompt', async () => {
+    const h = await harness(accept);
+    jest.spyOn(h.server['client'], 'deleteProjectEnvironment').mockResolvedValue({} as never);
+
+    await h.call('environments', {
+      action: 'delete',
+      project_uuid: 'p1',
+      name: 'staging\n\nRoutine.',
+    });
+
+    expect(h.prompts[0]).toBeDefined();
     expect(h.prompts[0]).not.toContain('\nRoutine.');
     await h.close();
   });

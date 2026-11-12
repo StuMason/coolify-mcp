@@ -742,6 +742,15 @@ export interface CoolifyMcpServerOptions {
 const INSTANCE_ARG = z.string().optional().describe('Instance name');
 
 /**
+ * Any Coolify resource uuid a tool takes. Coolify generates cuid2 ids
+ * (lowercase letters and digits); `-` and `_` are accepted too, so RFC 4122
+ * uuids still pass. The property that matters is that it cannot be more than
+ * one path segment. A refinement rather than `.regex()`, so it adds nothing to
+ * tools/list; the client encodes every path segment as well (pathSegment).
+ */
+const UUID = z.string().refine((v) => /^[A-Za-z0-9_-]+$/.test(v), 'Not a Coolify UUID');
+
+/**
  * How long `resources/list` waits for each instance's applications (#393).
  * `GET /applications` returns full objects for the whole estate (the summary is
  * projected here, after the response), so this is generous on purpose: too low
@@ -1416,7 +1425,7 @@ export class CoolifyMcpServer extends McpServer {
         // honest outcome, rather than a workflow with its middle removed.
         requires: ['deployment'],
       },
-      { deployment_uuid: z.string().describe('UUID of the failed deployment') },
+      { deployment_uuid: UUID.describe('UUID of the failed deployment') },
       (args, ctx) => explainFailedDeployPrompt(args.deployment_uuid ?? '', ctx),
     );
 
@@ -1767,7 +1776,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'get_server',
       'Server details. Sentinel and log-drain credentials are always masked.',
-      { uuid: z.string() },
+      { uuid: UUID },
       async ({ uuid }) => wrap(() => this.client.getServer(uuid)),
     );
 
@@ -1776,7 +1785,7 @@ export class CoolifyMcpServer extends McpServer {
       'Dashboard URL for a resource. Never write a Coolify URL by hand.',
       {
         resource: z.enum(UI_RESOURCES),
-        uuid: z.string(),
+        uuid: UUID,
       },
       async ({ resource, uuid }) =>
         wrap(async () => {
@@ -1792,14 +1801,11 @@ export class CoolifyMcpServer extends McpServer {
         }),
     );
 
-    this.defineTool(
-      'server_resources',
-      'Resources on server',
-      { uuid: z.string() },
-      async ({ uuid }) => wrap(() => this.client.getServerResources(uuid)),
+    this.defineTool('server_resources', 'Resources on server', { uuid: UUID }, async ({ uuid }) =>
+      wrap(() => this.client.getServerResources(uuid)),
     );
 
-    this.defineTool('server_domains', 'Domains on server', { uuid: z.string() }, async ({ uuid }) =>
+    this.defineTool('server_domains', 'Domains on server', { uuid: UUID }, async ({ uuid }) =>
       wrap(() => this.client.getServerDomains(uuid)),
     );
 
@@ -1818,7 +1824,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'validate_server',
       'Validate server connection',
-      { uuid: z.string() },
+      { uuid: UUID },
       async ({ uuid }) => wrap(() => this.client.validateServer(uuid)),
     );
 
@@ -1830,7 +1836,7 @@ export class CoolifyMcpServer extends McpServer {
       'Manage projects: list/get/create/update/delete',
       {
         action: z.enum(['list', 'get', 'create', 'update', 'delete']),
-        uuid: z.string().optional(),
+        uuid: UUID.optional(),
         name: z.string().optional(),
         description: z.string().optional(),
         page: z.number().optional(),
@@ -1908,10 +1914,10 @@ export class CoolifyMcpServer extends McpServer {
       'Manage environments: list/get/create/delete/verify_app (get includes dragonfly/keydb/clickhouse DBs missing from API; when the project has exactly one environment, get may omit name; verify_app proves application_uuid is bound to environment `name` of project_uuid using only exact endpoints, a pre-mutation guard)',
       {
         action: z.enum(['list', 'get', 'create', 'delete', 'verify_app']),
-        project_uuid: z.string(),
+        project_uuid: UUID,
         name: z.string().optional(),
         description: z.string().optional(),
-        application_uuid: z.string().optional(),
+        application_uuid: UUID.optional(),
       },
       async ({ action, project_uuid, name, description, application_uuid }, extra) => {
         switch (action) {
@@ -1995,7 +2001,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'get_application',
       'App details. Credentials (webhook secrets, basic-auth password, compose bodies, labels) are masked by default; pass reveal: true when you explicitly need them.',
-      { uuid: z.string(), reveal: z.boolean().optional() },
+      { uuid: UUID, reveal: z.boolean().optional() },
       async ({ uuid, reveal }) =>
         this.wrapWithActions(
           () => this.client.getApplication(uuid, { reveal }),
@@ -2018,12 +2024,12 @@ export class CoolifyMcpServer extends McpServer {
           'delete',
           'delete_preview',
         ]),
-        uuid: z.string().optional(),
+        uuid: UUID.optional(),
         // Create fields
-        project_uuid: z.string().optional(),
-        server_uuid: z.string().optional(),
-        github_app_uuid: z.string().optional(),
-        private_key_uuid: z.string().optional(),
+        project_uuid: UUID.optional(),
+        server_uuid: UUID.optional(),
+        github_app_uuid: UUID.optional(),
+        private_key_uuid: UUID.optional(),
         destination_uuid: z
           .string()
           .optional()
@@ -2033,7 +2039,7 @@ export class CoolifyMcpServer extends McpServer {
         git_repository: z.string().optional(),
         git_branch: z.string().optional(),
         environment_name: z.string().optional(),
-        environment_uuid: z.string().optional(),
+        environment_uuid: UUID.optional(),
         build_pack: z.string().optional(),
         ports_exposes: z.string().optional(),
         // Docker image fields
@@ -2433,7 +2439,7 @@ export class CoolifyMcpServer extends McpServer {
       "Get container logs for an application, database, or service. A service is a multi-container stack, so resource='service' requires `container` — the sub-service name, which you can list with the `service` tool's `list_containers` action. Use `lines` to bound the output and `show_timestamps` when you need to correlate events across resources (not supported on service containers).",
       {
         resource: z.enum(['application', 'database', 'service']),
-        uuid: z.string(),
+        uuid: UUID,
         container: z
           .string()
           .optional()
@@ -2484,7 +2490,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'application_logs',
       'Get app logs. Superseded by `logs` (resource=application), which also covers databases and services — prefer that. Kept for compatibility and scheduled for removal in v3.',
-      { uuid: z.string(), lines: z.number().int().min(1).max(10_000).optional() },
+      { uuid: UUID, lines: z.number().int().min(1).max(10_000).optional() },
       async ({ uuid, lines }) =>
         wrap(async () => asUntrustedLogs(await this.client.getApplicationLogs(uuid, lines))),
     );
@@ -2503,7 +2509,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'get_database',
       'Database details. Credentials (passwords, connection URLs) are masked by default; pass reveal: true when you explicitly need them, e.g. to wire an app to the database.',
-      { uuid: z.string(), reveal: z.boolean().optional() },
+      { uuid: UUID, reveal: z.boolean().optional() },
       async ({ uuid, reveal }) => wrap(() => this.client.getDatabase(uuid, { reveal })),
     );
 
@@ -2524,9 +2530,9 @@ export class CoolifyMcpServer extends McpServer {
             'dragonfly',
           ])
           .optional(),
-        uuid: z.string().optional(),
-        server_uuid: z.string().optional(),
-        project_uuid: z.string().optional(),
+        uuid: UUID.optional(),
+        server_uuid: UUID.optional(),
+        project_uuid: UUID.optional(),
         environment_name: z.string().optional(),
         environment_uuid: z
           .string()
@@ -2740,7 +2746,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'get_service',
       'Service details. Credentials (compose bodies with resolved passwords, webhook secrets) are masked by default; pass reveal: true when you explicitly need them.',
-      { uuid: z.string(), reveal: z.boolean().optional() },
+      { uuid: UUID, reveal: z.boolean().optional() },
       async ({ uuid, reveal }) => wrap(() => this.client.getService(uuid, { reveal })),
     );
 
@@ -2759,7 +2765,7 @@ export class CoolifyMcpServer extends McpServer {
           'stop_application',
           'restart_application',
         ]),
-        uuid: z.string().optional(),
+        uuid: UUID.optional(),
         app_uuid: z
           .string()
           .optional()
@@ -2767,8 +2773,8 @@ export class CoolifyMcpServer extends McpServer {
             'Sub-application UUID, required for update_application, start_application, stop_application, restart_application. Get from list_containers.',
           ),
         type: z.string().optional(),
-        server_uuid: z.string().optional(),
-        project_uuid: z.string().optional(),
+        server_uuid: UUID.optional(),
+        project_uuid: UUID.optional(),
         environment_name: z.string().optional().describe('Create: this or environment_uuid'),
         environment_uuid: z
           .string()
@@ -3005,7 +3011,7 @@ export class CoolifyMcpServer extends McpServer {
       {
         resource: z.enum(['application', 'database', 'service']),
         action: z.enum(['start', 'stop', 'restart']),
-        uuid: z.string(),
+        uuid: UUID,
         pull_latest: z
           .boolean()
           .optional()
@@ -3074,10 +3080,10 @@ export class CoolifyMcpServer extends McpServer {
       {
         resource: z.enum(['application', 'service', 'database']),
         action: z.enum(['list', 'create', 'update', 'delete', 'bulk_update']),
-        uuid: z.string(),
+        uuid: UUID,
         key: z.string().optional(),
         value: z.string().optional(),
-        env_uuid: z.string().optional(),
+        env_uuid: UUID.optional(),
         is_buildtime: z.boolean().optional(),
         is_runtime: z.boolean().optional(),
         is_preview: z.boolean().optional(),
@@ -3365,7 +3371,7 @@ export class CoolifyMcpServer extends McpServer {
       'Manage deployment: get/cancel/list_for_app/rollback_images. Logs excluded by default on all actions — for get use `lines` (paginated tail), for list_for_app use `include_logs: true` to include raw build-log blobs. rollback_images takes an application uuid (Coolify 4.3+); an empty list means Coolify could not inspect the server.',
       {
         action: z.enum(['get', 'cancel', 'list_for_app', 'rollback_images']),
-        uuid: z.string(),
+        uuid: UUID,
         lines: z.number().int().positive().optional(), // Include logs truncated to last N entries (omit for no logs)
         page: z.number().int().positive().optional(), // Log page for get; deployment page for list_for_app
         per_page: z.number().int().positive().optional(), // list_for_app page size (default 10)
@@ -3465,7 +3471,7 @@ export class CoolifyMcpServer extends McpServer {
       'Manage SSH keys: list/get/create/update/delete. Key material is never returned; identify keys by name, fingerprint and public key.',
       {
         action: z.enum(['list', 'get', 'create', 'update', 'delete']),
-        uuid: z.string().optional(),
+        uuid: UUID.optional(),
         name: z.string().optional(),
         description: z.string().optional(),
         private_key: z.string().optional(),
@@ -3575,7 +3581,7 @@ export class CoolifyMcpServer extends McpServer {
         client_id: z.string().optional(),
         client_secret: z.string().optional(),
         webhook_secret: z.string().optional(),
-        private_key_uuid: z.string().optional(),
+        private_key_uuid: UUID.optional(),
         is_system_wide: z.boolean().optional(),
       },
       async (args, extra) => {
@@ -3718,14 +3724,14 @@ export class CoolifyMcpServer extends McpServer {
           'delete',
           'delete_execution',
         ]),
-        database_uuid: z.string(),
-        backup_uuid: z.string().optional(),
-        execution_uuid: z.string().optional(),
+        database_uuid: UUID,
+        backup_uuid: UUID.optional(),
+        execution_uuid: UUID.optional(),
         // Backup configuration parameters
         frequency: z.string().optional(),
         enabled: z.boolean().optional(),
         save_s3: z.boolean().optional(),
-        s3_storage_uuid: z.string().optional(),
+        s3_storage_uuid: UUID.optional(),
         databases_to_backup: z.string().optional(),
         dump_all: z.boolean().optional(),
         database_backup_retention_days_locally: z.number().optional(),
@@ -3836,7 +3842,7 @@ export class CoolifyMcpServer extends McpServer {
       'Manage cloud provider tokens (Hetzner/DigitalOcean): list/get/create/update/delete/validate',
       {
         action: z.enum(['list', 'get', 'create', 'update', 'delete', 'validate']),
-        uuid: z.string().optional(),
+        uuid: UUID.optional(),
         provider: z.enum(['hetzner', 'digitalocean']).optional(),
         token: z.string().optional(),
         name: z.string().optional(),
@@ -3906,8 +3912,8 @@ export class CoolifyMcpServer extends McpServer {
           'backup_delete',
           'backup_run',
         ]),
-        uuid: z.string(),
-        storage_uuid: z.string().optional(),
+        uuid: UUID,
+        storage_uuid: UUID.optional(),
         // Volume backup schedule (backup_set only). Names and defaults mirror
         // VolumeBackupScheduleRequest exactly; see the replace-semantics note there.
         frequency: z.string().optional().describe('backup_set: cron, e.g. `0 2 * * *`. Required.'),
@@ -3915,7 +3921,7 @@ export class CoolifyMcpServer extends McpServer {
         save_s3: z.boolean().optional(),
         disable_local_backup: z.boolean().optional(),
         stop_during_backup: z.boolean().optional().describe('Downtime: stops the container.'),
-        s3_storage_uuid: z.string().optional(),
+        s3_storage_uuid: UUID.optional(),
         retention_amount_locally: z.number().optional(),
         retention_days_locally: z.number().optional(),
         retention_max_storage_locally: z.number().optional(),
@@ -4114,8 +4120,8 @@ export class CoolifyMcpServer extends McpServer {
       {
         resource: z.enum(['application', 'service']),
         action: z.enum(['list', 'create', 'update', 'delete', 'list_executions', 'run_once']),
-        uuid: z.string(),
-        task_uuid: z.string().optional(),
+        uuid: UUID,
+        task_uuid: UUID.optional(),
         name: z.string().optional(),
         command: z
           .string()
@@ -4228,12 +4234,12 @@ export class CoolifyMcpServer extends McpServer {
           'list_ssh_keys',
           'create_server',
         ]),
-        cloud_provider_token_uuid: z.string().optional(),
+        cloud_provider_token_uuid: UUID.optional(),
         location: z.string().optional(),
         server_type: z.string().optional(),
         image: z.number().optional(),
         name: z.string().optional(),
-        private_key_uuid: z.string().optional(),
+        private_key_uuid: UUID.optional(),
         enable_ipv4: z.boolean().optional(),
         enable_ipv6: z.boolean().optional(),
         hetzner_ssh_key_ids: z.array(z.number()).optional(),
@@ -4436,7 +4442,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'restart_project_apps',
       'Restart all apps in project',
-      { project_uuid: z.string() },
+      { project_uuid: UUID },
       async ({ project_uuid }, extra) => {
         // On the happy path `approved` carries the resolved set into the
         // operation, so the restart acts on exactly what the human was shown and
@@ -4476,7 +4482,7 @@ export class CoolifyMcpServer extends McpServer {
       'bulk_env_update',
       'Update env var across multiple apps',
       {
-        app_uuids: z.array(z.string()),
+        app_uuids: z.array(UUID),
         key: z.string(),
         value: z.string(),
         is_buildtime: z.boolean().optional(),
@@ -4606,7 +4612,7 @@ export class CoolifyMcpServer extends McpServer {
     this.defineTool(
       'redeploy_project',
       'Redeploy all apps in project',
-      { project_uuid: z.string(), force: z.boolean().optional() },
+      { project_uuid: UUID, force: z.boolean().optional() },
       async ({ project_uuid, force }, extra) => {
         let approved: Application[] | undefined;
         return this.guardDestructive(

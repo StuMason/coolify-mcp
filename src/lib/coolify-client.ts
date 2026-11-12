@@ -285,6 +285,36 @@ export class CoolifyApiError extends Error {
 }
 
 /**
+ * One request-path segment built from an identifier.
+ *
+ * Every identifier that goes into an API path passes through here, so it can
+ * only ever name one resource on the route the method meant. Encoding turns
+ * `/`, `\`, `?`, `#` and `%` into literal characters of the segment, and the
+ * three values encoding leaves meaningful (empty, `.` and `..`) are refused,
+ * because the URL parser would otherwise collapse them into a different path.
+ */
+export function pathSegment(value: string | number): string {
+  const raw = String(value);
+  if (raw === '' || raw === '.' || raw === '..') {
+    throw new Error(`Invalid identifier ${JSON.stringify(raw)}`);
+  }
+  return encodeURIComponent(raw);
+}
+
+/**
+ * Backstop for {@link pathSegment}: refuse a request path the URL parser would
+ * rewrite (a dot segment, raw or percent-encoded, a backslash, or a tab or
+ * line break, which it strips), so a path built without it still cannot leave
+ * its route.
+ */
+function assertPlainPath(path: string): void {
+  const pathname = path.split(/[?#]/)[0] ?? '';
+  const rewritten =
+    /[\\\t\n\r]/.test(pathname) || pathname.split('/').some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
+  if (rewritten) throw new Error('Invalid identifier in request path');
+}
+
+/**
  * Was this 404 produced by Coolify's routing catch-all rather than a
  * controller? Body signature shared with doctor — see api-shape.ts. Only a
  * routing miss is safe and useful to retry with a different method.
@@ -898,6 +928,7 @@ export class CoolifyClient {
     options: RequestInit = {},
     sanitize?: { reveal?: boolean },
   ): Promise<T> {
+    assertPlainPath(path);
     const url = `${this.baseUrl}/api/v1${path}`;
 
     try {
@@ -1136,7 +1167,7 @@ export class CoolifyClient {
   }
 
   async getServer(uuid: string): Promise<Server> {
-    return this.request<Server>(`/servers/${uuid}`);
+    return this.request<Server>(`/servers/${pathSegment(uuid)}`);
   }
 
   async createServer(data: CreateServerRequest): Promise<UuidResponse> {
@@ -1147,7 +1178,7 @@ export class CoolifyClient {
   }
 
   async updateServer(uuid: string, data: UpdateServerRequest): Promise<Server> {
-    const server = await this.request<Server>(`/servers/${uuid}`, {
+    const server = await this.request<Server>(`/servers/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -1155,17 +1186,17 @@ export class CoolifyClient {
   }
 
   async deleteServer(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/servers/${uuid}`, {
+    return this.request<MessageResponse>(`/servers/${pathSegment(uuid)}`, {
       method: 'DELETE',
     });
   }
 
   async getServerResources(uuid: string): Promise<ServerResource[]> {
-    return this.request<ServerResource[]>(`/servers/${uuid}/resources`);
+    return this.request<ServerResource[]>(`/servers/${pathSegment(uuid)}/resources`);
   }
 
   async getServerDomains(uuid: string): Promise<ServerDomain[]> {
-    return this.request<ServerDomain[]>(`/servers/${uuid}/domains`);
+    return this.request<ServerDomain[]>(`/servers/${pathSegment(uuid)}/domains`);
   }
 
   /**
@@ -1175,7 +1206,7 @@ export class CoolifyClient {
    */
   async listDestinations(serverUuid?: string): Promise<Destination[]> {
     return this.request<Destination[]>(
-      serverUuid ? `/servers/${serverUuid}/destinations` : '/destinations',
+      serverUuid ? `/servers/${pathSegment(serverUuid)}/destinations` : '/destinations',
     );
   }
 
@@ -1183,7 +1214,7 @@ export class CoolifyClient {
     // POST from v4.2, GET only before it. See postWithLegacyGetFallback.
     return this.postWithLegacyGetFallback<ServerValidation>(
       LEGACY_GET_ENDPOINTS.serversValidate,
-      `/servers/${uuid}/validate`,
+      `/servers/${pathSegment(uuid)}/validate`,
     );
   }
 
@@ -1203,7 +1234,7 @@ export class CoolifyClient {
   }
 
   async getProject(uuid: string): Promise<Project> {
-    return this.request<Project>(`/projects/${uuid}`);
+    return this.request<Project>(`/projects/${pathSegment(uuid)}`);
   }
 
   // ===========================================================================
@@ -1344,14 +1375,14 @@ export class CoolifyClient {
   }
 
   async updateProject(uuid: string, data: UpdateProjectRequest): Promise<Project> {
-    return this.request<Project>(`/projects/${uuid}`, {
+    return this.request<Project>(`/projects/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteProject(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/projects/${uuid}`, {
+    return this.request<MessageResponse>(`/projects/${pathSegment(uuid)}`, {
       method: 'DELETE',
     });
   }
@@ -1361,14 +1392,16 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listProjectEnvironments(projectUuid: string): Promise<Environment[]> {
-    return this.request<Environment[]>(`/projects/${projectUuid}/environments`);
+    return this.request<Environment[]>(`/projects/${pathSegment(projectUuid)}/environments`);
   }
 
   async getProjectEnvironment(
     projectUuid: string,
     environmentNameOrUuid: string,
   ): Promise<Environment> {
-    return this.request<Environment>(`/projects/${projectUuid}/${environmentNameOrUuid}`);
+    return this.request<Environment>(
+      `/projects/${pathSegment(projectUuid)}/${pathSegment(environmentNameOrUuid)}`,
+    );
   }
 
   /**
@@ -1416,7 +1449,7 @@ export class CoolifyClient {
     projectUuid: string,
     data: CreateEnvironmentRequest,
   ): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/projects/${projectUuid}/environments`, {
+    return this.request<UuidResponse>(`/projects/${pathSegment(projectUuid)}/environments`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -1427,7 +1460,7 @@ export class CoolifyClient {
     environmentNameOrUuid: string,
   ): Promise<MessageResponse> {
     return this.request<MessageResponse>(
-      `/projects/${projectUuid}/environments/${environmentNameOrUuid}`,
+      `/projects/${pathSegment(projectUuid)}/environments/${pathSegment(environmentNameOrUuid)}`,
       {
         method: 'DELETE',
       },
@@ -1450,7 +1483,11 @@ export class CoolifyClient {
   }
 
   async getApplication(uuid: string, options?: { reveal?: boolean }): Promise<Application> {
-    return this.request<Application>(`/applications/${uuid}`, {}, { reveal: options?.reveal });
+    return this.request<Application>(
+      `/applications/${pathSegment(uuid)}`,
+      {},
+      { reveal: options?.reveal },
+    );
   }
 
   /**
@@ -1570,7 +1607,7 @@ export class CoolifyClient {
     if (mapped.docker_compose_raw) {
       (payload as Record<string, unknown>).docker_compose_raw = toBase64(mapped.docker_compose_raw);
     }
-    const app = await this.request<Application>(`/applications/${uuid}`, {
+    const app = await this.request<Application>(`/applications/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -1596,21 +1633,21 @@ export class CoolifyClient {
    * version message.
    */
   async moveApplication(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.request<MoveResourceResponse>(`/applications/${uuid}/move`, {
+    return this.request<MoveResourceResponse>(`/applications/${pathSegment(uuid)}/move`, {
       method: 'POST',
       body: JSON.stringify({ environment_uuid: environmentUuid }),
     });
   }
 
   async moveDatabase(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.request<MoveResourceResponse>(`/databases/${uuid}/move`, {
+    return this.request<MoveResourceResponse>(`/databases/${pathSegment(uuid)}/move`, {
       method: 'POST',
       body: JSON.stringify({ environment_uuid: environmentUuid }),
     });
   }
 
   async moveService(uuid: string, environmentUuid: string): Promise<MoveResourceResponse> {
-    return this.request<MoveResourceResponse>(`/services/${uuid}/move`, {
+    return this.request<MoveResourceResponse>(`/services/${pathSegment(uuid)}/move`, {
       method: 'POST',
       body: JSON.stringify({ environment_uuid: environmentUuid }),
     });
@@ -1623,7 +1660,7 @@ export class CoolifyClient {
       docker_cleanup: options?.dockerCleanup,
       delete_connected_networks: options?.deleteConnectedNetworks,
     });
-    return this.request<MessageResponse>(`/applications/${uuid}${query}`, {
+    return this.request<MessageResponse>(`/applications/${pathSegment(uuid)}${query}`, {
       method: 'DELETE',
     });
   }
@@ -1634,7 +1671,9 @@ export class CoolifyClient {
     showTimestamps?: boolean,
   ): Promise<string> {
     const query = this.buildQueryString({ lines, show_timestamps: showTimestamps });
-    return unwrapLogs(await this.request<unknown>(`/applications/${uuid}/logs${query}`));
+    return unwrapLogs(
+      await this.request<unknown>(`/applications/${pathSegment(uuid)}/logs${query}`),
+    );
   }
 
   async getDatabaseLogs(
@@ -1643,7 +1682,7 @@ export class CoolifyClient {
     showTimestamps?: boolean,
   ): Promise<string> {
     const query = this.buildQueryString({ lines, show_timestamps: showTimestamps });
-    return unwrapLogs(await this.request<unknown>(`/databases/${uuid}/logs${query}`));
+    return unwrapLogs(await this.request<unknown>(`/databases/${pathSegment(uuid)}/logs${query}`));
   }
 
   /**
@@ -1663,7 +1702,7 @@ export class CoolifyClient {
       lines,
       show_timestamps: showTimestamps,
     });
-    return unwrapLogs(await this.request<unknown>(`/services/${uuid}/logs${query}`));
+    return unwrapLogs(await this.request<unknown>(`/services/${pathSegment(uuid)}/logs${query}`));
   }
 
   // ===========================================================================
@@ -1679,62 +1718,71 @@ export class CoolifyClient {
   }
 
   async listApplicationTags(uuid: string): Promise<Tag[]> {
-    return this.request<Tag[]>(`/applications/${uuid}/tags`);
+    return this.request<Tag[]>(`/applications/${pathSegment(uuid)}/tags`);
   }
 
   async listDatabaseTags(uuid: string): Promise<Tag[]> {
-    return this.request<Tag[]>(`/databases/${uuid}/tags`);
+    return this.request<Tag[]>(`/databases/${pathSegment(uuid)}/tags`);
   }
 
   async listServiceTags(uuid: string): Promise<Tag[]> {
-    return this.request<Tag[]>(`/services/${uuid}/tags`);
+    return this.request<Tag[]>(`/services/${pathSegment(uuid)}/tags`);
   }
 
   async attachApplicationTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
-    return this.request<Tag[]>(`/applications/${uuid}/tags`, {
+    return this.request<Tag[]>(`/applications/${pathSegment(uuid)}/tags`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async attachDatabaseTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
-    return this.request<Tag[]>(`/databases/${uuid}/tags`, {
+    return this.request<Tag[]>(`/databases/${pathSegment(uuid)}/tags`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async attachServiceTags(uuid: string, data: AttachTagsRequest): Promise<Tag[]> {
-    return this.request<Tag[]>(`/services/${uuid}/tags`, {
+    return this.request<Tag[]>(`/services/${pathSegment(uuid)}/tags`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async detachApplicationTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/tags/${tagUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/tags/${pathSegment(tagUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async detachDatabaseTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/tags/${tagUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(uuid)}/tags/${pathSegment(tagUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async detachServiceTag(uuid: string, tagUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/tags/${tagUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/tags/${pathSegment(tagUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async listServiceApplications(uuid: string): Promise<ServiceSubResource[]> {
-    return this.request<ServiceSubResource[]>(`/services/${uuid}/applications`);
+    return this.request<ServiceSubResource[]>(`/services/${pathSegment(uuid)}/applications`);
   }
 
   async listServiceDatabases(uuid: string): Promise<ServiceSubResource[]> {
-    return this.request<ServiceSubResource[]>(`/services/${uuid}/databases`);
+    return this.request<ServiceSubResource[]>(`/services/${pathSegment(uuid)}/databases`);
   }
 
   async startApplication(
@@ -1745,19 +1793,22 @@ export class CoolifyClient {
       force: options?.force,
       instant_deploy: options?.instant_deploy,
     });
-    return this.request<ApplicationActionResponse>(`/applications/${uuid}/start${query}`, {
-      method: 'POST',
-    });
+    return this.request<ApplicationActionResponse>(
+      `/applications/${pathSegment(uuid)}/start${query}`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   async stopApplication(uuid: string): Promise<ApplicationActionResponse> {
-    return this.request<ApplicationActionResponse>(`/applications/${uuid}/stop`, {
+    return this.request<ApplicationActionResponse>(`/applications/${pathSegment(uuid)}/stop`, {
       method: 'POST',
     });
   }
 
   async restartApplication(uuid: string): Promise<ApplicationActionResponse> {
-    return this.request<ApplicationActionResponse>(`/applications/${uuid}/restart`, {
+    return this.request<ApplicationActionResponse>(`/applications/${pathSegment(uuid)}/restart`, {
       method: 'POST',
     });
   }
@@ -1777,7 +1828,9 @@ export class CoolifyClient {
     uuid: string,
     options?: { summary?: boolean; reveal?: boolean },
   ): Promise<EnvironmentVariable[] | EnvVarSummary[]> {
-    const envVars = await this.request<EnvironmentVariable[]>(`/applications/${uuid}/envs`);
+    const envVars = await this.request<EnvironmentVariable[]>(
+      `/applications/${pathSegment(uuid)}/envs`,
+    );
     const reveal = options?.reveal === true;
     if (options?.summary) {
       const summaries = envVars.map(toEnvVarSummary);
@@ -1787,14 +1840,14 @@ export class CoolifyClient {
   }
 
   async createApplicationEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/applications/${uuid}/envs`, {
+    return this.request<UuidResponse>(`/applications/${pathSegment(uuid)}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async updateApplicationEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/envs`, {
+    return this.request<MessageResponse>(`/applications/${pathSegment(uuid)}/envs`, {
       method: 'PATCH',
       body: JSON.stringify(cleanRequestData(data)),
     });
@@ -1804,16 +1857,19 @@ export class CoolifyClient {
     uuid: string,
     data: BulkUpdateEnvVarsRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/envs/bulk`, {
+    return this.request<MessageResponse>(`/applications/${pathSegment(uuid)}/envs/bulk`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteApplicationEnvVar(uuid: string, envUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/envs/${envUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/envs/${pathSegment(envUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -1866,11 +1922,15 @@ export class CoolifyClient {
   }
 
   async getDatabase(uuid: string, options?: { reveal?: boolean }): Promise<Database> {
-    return this.request<Database>(`/databases/${uuid}`, {}, { reveal: options?.reveal });
+    return this.request<Database>(
+      `/databases/${pathSegment(uuid)}`,
+      {},
+      { reveal: options?.reveal },
+    );
   }
 
   async updateDatabase(uuid: string, data: UpdateDatabaseRequest): Promise<Database> {
-    const db = await this.request<Database>(`/databases/${uuid}`, {
+    const db = await this.request<Database>(`/databases/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -1884,25 +1944,25 @@ export class CoolifyClient {
       docker_cleanup: options?.dockerCleanup,
       delete_connected_networks: options?.deleteConnectedNetworks,
     });
-    return this.request<MessageResponse>(`/databases/${uuid}${query}`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}${query}`, {
       method: 'DELETE',
     });
   }
 
   async startDatabase(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/start`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/start`, {
       method: 'POST',
     });
   }
 
   async stopDatabase(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/stop`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/stop`, {
       method: 'POST',
     });
   }
 
   async restartDatabase(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/restart`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/restart`, {
       method: 'POST',
     });
   }
@@ -1980,7 +2040,7 @@ export class CoolifyClient {
   }
 
   async getService(uuid: string, options?: { reveal?: boolean }): Promise<Service> {
-    return this.request<Service>(`/services/${uuid}`, {}, { reveal: options?.reveal });
+    return this.request<Service>(`/services/${pathSegment(uuid)}`, {}, { reveal: options?.reveal });
   }
 
   async createService(data: CreateServiceRequest): Promise<ServiceCreateResponse> {
@@ -1999,7 +2059,7 @@ export class CoolifyClient {
     if (payload.docker_compose_raw) {
       payload.docker_compose_raw = toBase64(payload.docker_compose_raw);
     }
-    const service = await this.request<Service>(`/services/${uuid}`, {
+    const service = await this.request<Service>(`/services/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     });
@@ -2015,10 +2075,13 @@ export class CoolifyClient {
     const query = this.buildQueryString({
       force_domain_override: options?.forceDomainOverride,
     });
-    return this.request<Application>(`/services/${serviceUuid}/applications/${appUuid}${query}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    return this.request<Application>(
+      `/services/${pathSegment(serviceUuid)}/applications/${pathSegment(appUuid)}${query}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async startServiceApplication(
@@ -2031,7 +2094,7 @@ export class CoolifyClient {
       latest: options?.latest,
     });
     return this.request<MessageResponse>(
-      `/services/${serviceUuid}/applications/${appUuid}/start${query}`,
+      `/services/${pathSegment(serviceUuid)}/applications/${pathSegment(appUuid)}/start${query}`,
       {
         method: 'POST',
       },
@@ -2039,14 +2102,17 @@ export class CoolifyClient {
   }
 
   async stopServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${serviceUuid}/applications/${appUuid}/stop`, {
-      method: 'POST',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(serviceUuid)}/applications/${pathSegment(appUuid)}/stop`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   async restartServiceApplication(serviceUuid: string, appUuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(
-      `/services/${serviceUuid}/applications/${appUuid}/restart`,
+      `/services/${pathSegment(serviceUuid)}/applications/${pathSegment(appUuid)}/restart`,
       {
         method: 'POST',
       },
@@ -2060,7 +2126,7 @@ export class CoolifyClient {
       docker_cleanup: options?.dockerCleanup,
       delete_connected_networks: options?.deleteConnectedNetworks,
     });
-    return this.request<MessageResponse>(`/services/${uuid}${query}`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}${query}`, {
       method: 'DELETE',
     });
   }
@@ -2069,13 +2135,13 @@ export class CoolifyClient {
   // POST since well before it (`Route::match(['get','post'])` in v4.1 and older),
   // so POST is safe unconditionally — no fallback needed.
   async startService(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/start`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/start`, {
       method: 'POST',
     });
   }
 
   async stopService(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/stop`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/stop`, {
       method: 'POST',
     });
   }
@@ -2084,7 +2150,7 @@ export class CoolifyClient {
     // `latest` stays a query param: upstream reads it via `$request->boolean('latest')`,
     // which draws from the unified input bag, so it works on POST unchanged.
     const qs = pullLatest ? '?latest=true' : '';
-    return this.request<MessageResponse>(`/services/${uuid}/restart${qs}`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/restart${qs}`, {
       method: 'POST',
     });
   }
@@ -2104,28 +2170,33 @@ export class CoolifyClient {
     uuid: string,
     options?: { reveal?: boolean },
   ): Promise<EnvironmentVariable[]> {
-    const envVars = await this.request<EnvironmentVariable[]>(`/services/${uuid}/envs`);
+    const envVars = await this.request<EnvironmentVariable[]>(
+      `/services/${pathSegment(uuid)}/envs`,
+    );
     return options?.reveal === true ? envVars : envVars.map(maskEnvVar);
   }
 
   async createServiceEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/services/${uuid}/envs`, {
+    return this.request<UuidResponse>(`/services/${pathSegment(uuid)}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async updateServiceEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/envs`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/envs`, {
       method: 'PATCH',
       body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async deleteServiceEnvVar(uuid: string, envUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/envs/${envUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/envs/${pathSegment(envUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2149,7 +2220,7 @@ export class CoolifyClient {
     uuid: string,
     options?: { includeLogs?: boolean },
   ): Promise<DeploymentEssential> {
-    const deployment = await this.request<Deployment>(`/deployments/${uuid}`);
+    const deployment = await this.request<Deployment>(`/deployments/${pathSegment(uuid)}`);
     const essential = toDeploymentEssential(deployment);
     // Attach the raw log string (never the raw upstream object, which also embeds
     // the full application/server graph and secrets) onto the essential projection.
@@ -2190,7 +2261,9 @@ export class CoolifyClient {
    * counted: a long image history is an unbounded response otherwise.
    */
   async listRollbackImages(appUuid: string): Promise<RollbackImages & { omitted?: number }> {
-    const result = await this.request<RollbackImages>(`/applications/${appUuid}/rollback-images`);
+    const result = await this.request<RollbackImages>(
+      `/applications/${pathSegment(appUuid)}/rollback-images`,
+    );
     const images = result.images ?? [];
     return images.length > 20
       ? { ...result, images: images.slice(0, 20), omitted: images.length - 20 }
@@ -2239,7 +2312,7 @@ export class CoolifyClient {
       );
     }
     const result = await this.request<{ message?: string; deployment_uuid?: string }>(
-      `/applications/${appUuid}/rollback`,
+      `/applications/${pathSegment(appUuid)}/rollback`,
       { method: 'POST', body: JSON.stringify({ commit: tag }) },
     );
     return {
@@ -2278,7 +2351,7 @@ export class CoolifyClient {
         ? `?skip=${(page - 1) * perPage}&take=${perPage}`
         : '';
     const envelope = await this.request<{ count: number; deployments: Deployment[] }>(
-      `/deployments/applications/${appUuid}${query}`,
+      `/deployments/applications/${pathSegment(appUuid)}${query}`,
     );
     const deployments = Array.isArray(envelope?.deployments) ? envelope.deployments : [];
     return {
@@ -2302,11 +2375,11 @@ export class CoolifyClient {
   }
 
   async getTeam(id: number): Promise<Team> {
-    return this.request<Team>(`/teams/${id}`);
+    return this.request<Team>(`/teams/${pathSegment(id)}`);
   }
 
   async getTeamMembers(id: number): Promise<TeamMember[]> {
-    return this.request<TeamMember[]>(`/teams/${id}/members`);
+    return this.request<TeamMember[]>(`/teams/${pathSegment(id)}/members`);
   }
 
   // `/teams/current` is gone from the vendored spec (now `/team`, 4.3+) but
@@ -2330,7 +2403,7 @@ export class CoolifyClient {
   }
 
   async getPrivateKey(uuid: string): Promise<PrivateKey> {
-    return this.request<PrivateKey>(`/security/keys/${uuid}`);
+    return this.request<PrivateKey>(`/security/keys/${pathSegment(uuid)}`);
   }
 
   async createPrivateKey(data: CreatePrivateKeyRequest): Promise<UuidResponse> {
@@ -2342,7 +2415,7 @@ export class CoolifyClient {
   }
 
   async updatePrivateKey(uuid: string, data: UpdatePrivateKeyRequest): Promise<PrivateKey> {
-    const key = await this.request<PrivateKey>(`/security/keys/${uuid}`, {
+    const key = await this.request<PrivateKey>(`/security/keys/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -2350,7 +2423,7 @@ export class CoolifyClient {
   }
 
   async deletePrivateKey(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/security/keys/${uuid}`, {
+    return this.request<MessageResponse>(`/security/keys/${pathSegment(uuid)}`, {
       method: 'DELETE',
     });
   }
@@ -2375,14 +2448,14 @@ export class CoolifyClient {
     id: number,
     data: UpdateGitHubAppRequest,
   ): Promise<GitHubAppUpdateResponse> {
-    return this.request<GitHubAppUpdateResponse>(`/github-apps/${id}`, {
+    return this.request<GitHubAppUpdateResponse>(`/github-apps/${pathSegment(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async deleteGitHubApp(id: number): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/github-apps/${id}`, {
+    return this.request<MessageResponse>(`/github-apps/${pathSegment(id)}`, {
       method: 'DELETE',
     });
   }
@@ -2396,7 +2469,7 @@ export class CoolifyClient {
   }
 
   async getCloudToken(uuid: string): Promise<CloudToken> {
-    return this.request<CloudToken>(`/cloud-tokens/${uuid}`);
+    return this.request<CloudToken>(`/cloud-tokens/${pathSegment(uuid)}`);
   }
 
   async createCloudToken(data: CreateCloudTokenRequest): Promise<UuidResponse> {
@@ -2407,20 +2480,22 @@ export class CoolifyClient {
   }
 
   async updateCloudToken(uuid: string, data: UpdateCloudTokenRequest): Promise<CloudToken> {
-    return this.request<CloudToken>(`/cloud-tokens/${uuid}`, {
+    return this.request<CloudToken>(`/cloud-tokens/${pathSegment(uuid)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteCloudToken(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/cloud-tokens/${uuid}`, {
+    return this.request<MessageResponse>(`/cloud-tokens/${pathSegment(uuid)}`, {
       method: 'DELETE',
     });
   }
 
   async validateCloudToken(uuid: string): Promise<CloudTokenValidation> {
-    return this.request<CloudTokenValidation>(`/cloud-tokens/${uuid}/validate`, { method: 'POST' });
+    return this.request<CloudTokenValidation>(`/cloud-tokens/${pathSegment(uuid)}/validate`, {
+      method: 'POST',
+    });
   }
 
   // ===========================================================================
@@ -2428,16 +2503,18 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listDatabaseBackups(databaseUuid: string): Promise<DatabaseBackup[]> {
-    return this.request<DatabaseBackup[]>(`/databases/${databaseUuid}/backups`);
+    return this.request<DatabaseBackup[]>(`/databases/${pathSegment(databaseUuid)}/backups`);
   }
 
   async getDatabaseBackup(databaseUuid: string, backupUuid: string): Promise<DatabaseBackup> {
-    return this.request<DatabaseBackup>(`/databases/${databaseUuid}/backups/${backupUuid}`);
+    return this.request<DatabaseBackup>(
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}`,
+    );
   }
 
   async listBackupExecutions(databaseUuid: string, backupUuid: string): Promise<BackupExecution[]> {
     return this.request<BackupExecution[]>(
-      `/databases/${databaseUuid}/backups/${backupUuid}/executions`,
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}/executions`,
     );
   }
 
@@ -2447,7 +2524,7 @@ export class CoolifyClient {
     executionUuid: string,
   ): Promise<BackupExecution> {
     return this.request<BackupExecution>(
-      `/databases/${databaseUuid}/backups/${backupUuid}/executions/${executionUuid}`,
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}/executions/${pathSegment(executionUuid)}`,
     );
   }
 
@@ -2455,7 +2532,7 @@ export class CoolifyClient {
     databaseUuid: string,
     data: CreateDatabaseBackupRequest,
   ): Promise<DatabaseBackup> {
-    return this.request<DatabaseBackup>(`/databases/${databaseUuid}/backups`, {
+    return this.request<DatabaseBackup>(`/databases/${pathSegment(databaseUuid)}/backups`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -2466,16 +2543,22 @@ export class CoolifyClient {
     backupUuid: string,
     data: UpdateDatabaseBackupRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${databaseUuid}/backups/${backupUuid}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async deleteDatabaseBackup(databaseUuid: string, backupUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${databaseUuid}/backups/${backupUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2483,14 +2566,14 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listApplicationStorages(uuid: string): Promise<StorageListResponse> {
-    return this.request<StorageListResponse>(`/applications/${uuid}/storages`);
+    return this.request<StorageListResponse>(`/applications/${pathSegment(uuid)}/storages`);
   }
 
   async createApplicationStorage(
     uuid: string,
     data: CreateStorageRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/applications/${pathSegment(uuid)}/storages`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -2500,7 +2583,7 @@ export class CoolifyClient {
     uuid: string,
     data: UpdateStorageRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/applications/${pathSegment(uuid)}/storages`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -2530,7 +2613,7 @@ export class CoolifyClient {
     schedule: VolumeBackupScheduleRequest,
   ): Promise<VolumeBackupScheduleResponse> {
     return this.request<VolumeBackupScheduleResponse>(
-      `/applications/${uuid}/storages/${storageUuid}/backups`,
+      `/applications/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
       { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
     );
   }
@@ -2541,7 +2624,7 @@ export class CoolifyClient {
     schedule: VolumeBackupScheduleRequest,
   ): Promise<VolumeBackupScheduleResponse> {
     return this.request<VolumeBackupScheduleResponse>(
-      `/databases/${uuid}/storages/${storageUuid}/backups`,
+      `/databases/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
       { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
     );
   }
@@ -2552,7 +2635,7 @@ export class CoolifyClient {
     schedule: VolumeBackupScheduleRequest,
   ): Promise<VolumeBackupScheduleResponse> {
     return this.request<VolumeBackupScheduleResponse>(
-      `/services/${uuid}/storages/${storageUuid}/backups`,
+      `/services/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
       { method: 'PUT', body: JSON.stringify(cleanRequestData(schedule)) },
     );
   }
@@ -2561,46 +2644,64 @@ export class CoolifyClient {
     uuid: string,
     storageUuid: string,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/storages/${storageUuid}/backups`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async deleteDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async deleteServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async runApplicationStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
     return this.request<MessageResponse>(
-      `/applications/${uuid}/storages/${storageUuid}/backups/run`,
+      `/applications/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups/run`,
       { method: 'POST' },
     );
   }
 
   async runDatabaseStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}/backups/run`, {
-      method: 'POST',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups/run`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   async runServiceStorageBackup(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}/backups/run`, {
-      method: 'POST',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}/backups/run`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   async deleteApplicationStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/storages/${storageUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2608,14 +2709,14 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listApplicationScheduledTasks(uuid: string): Promise<ScheduledTask[]> {
-    return this.request<ScheduledTask[]>(`/applications/${uuid}/scheduled-tasks`);
+    return this.request<ScheduledTask[]>(`/applications/${pathSegment(uuid)}/scheduled-tasks`);
   }
 
   async createApplicationScheduledTask(
     uuid: string,
     data: CreateScheduledTaskRequest,
   ): Promise<ScheduledTask> {
-    return this.request<ScheduledTask>(`/applications/${uuid}/scheduled-tasks`, {
+    return this.request<ScheduledTask>(`/applications/${pathSegment(uuid)}/scheduled-tasks`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -2626,16 +2727,22 @@ export class CoolifyClient {
     taskUuid: string,
     data: UpdateScheduledTaskRequest,
   ): Promise<ScheduledTask> {
-    return this.request<ScheduledTask>(`/applications/${uuid}/scheduled-tasks/${taskUuid}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    return this.request<ScheduledTask>(
+      `/applications/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async deleteApplicationScheduledTask(uuid: string, taskUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/scheduled-tasks/${taskUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async listApplicationScheduledTaskExecutions(
@@ -2643,7 +2750,7 @@ export class CoolifyClient {
     taskUuid: string,
   ): Promise<ScheduledTaskExecution[]> {
     return this.request<ScheduledTaskExecution[]>(
-      `/applications/${uuid}/scheduled-tasks/${taskUuid}/executions`,
+      `/applications/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}/executions`,
     );
   }
 
@@ -2652,9 +2759,12 @@ export class CoolifyClient {
   // ===========================================================================
 
   async deleteApplicationPreview(uuid: string, pullRequestId: number): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/applications/${uuid}/previews/${pullRequestId}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/applications/${pathSegment(uuid)}/previews/${pathSegment(pullRequestId)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2674,19 +2784,21 @@ export class CoolifyClient {
     uuid: string,
     options?: { reveal?: boolean },
   ): Promise<EnvironmentVariable[]> {
-    const envVars = await this.request<EnvironmentVariable[]>(`/databases/${uuid}/envs`);
+    const envVars = await this.request<EnvironmentVariable[]>(
+      `/databases/${pathSegment(uuid)}/envs`,
+    );
     return options?.reveal === true ? envVars : envVars.map(maskEnvVar);
   }
 
   async createDatabaseEnvVar(uuid: string, data: CreateEnvVarRequest): Promise<UuidResponse> {
-    return this.request<UuidResponse>(`/databases/${uuid}/envs`, {
+    return this.request<UuidResponse>(`/databases/${pathSegment(uuid)}/envs`, {
       method: 'POST',
       body: JSON.stringify(cleanRequestData(data)),
     });
   }
 
   async updateDatabaseEnvVar(uuid: string, data: UpdateEnvVarRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/envs`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/envs`, {
       method: 'PATCH',
       body: JSON.stringify(cleanRequestData(data)),
     });
@@ -2696,16 +2808,19 @@ export class CoolifyClient {
     uuid: string,
     data: BulkUpdateEnvVarsRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/envs/bulk`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/envs/bulk`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteDatabaseEnvVar(uuid: string, envUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/envs/${envUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(uuid)}/envs/${pathSegment(envUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2713,27 +2828,30 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listDatabaseStorages(uuid: string): Promise<StorageListResponse> {
-    return this.request<StorageListResponse>(`/databases/${uuid}/storages`);
+    return this.request<StorageListResponse>(`/databases/${pathSegment(uuid)}/storages`);
   }
 
   async createDatabaseStorage(uuid: string, data: CreateStorageRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/storages`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async updateDatabaseStorage(uuid: string, data: UpdateStorageRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/databases/${pathSegment(uuid)}/storages`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteDatabaseStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/databases/${uuid}/storages/${storageUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/databases/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2746,7 +2864,7 @@ export class CoolifyClient {
     executionUuid: string,
   ): Promise<MessageResponse> {
     return this.request<MessageResponse>(
-      `/databases/${databaseUuid}/backups/${backupUuid}/executions/${executionUuid}`,
+      `/databases/${pathSegment(databaseUuid)}/backups/${pathSegment(backupUuid)}/executions/${pathSegment(executionUuid)}`,
       { method: 'DELETE' },
     );
   }
@@ -2759,7 +2877,7 @@ export class CoolifyClient {
     uuid: string,
     data: BulkUpdateEnvVarsRequest,
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/envs/bulk`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/envs/bulk`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -2770,27 +2888,30 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listServiceStorages(uuid: string): Promise<StorageListResponse> {
-    return this.request<StorageListResponse>(`/services/${uuid}/storages`);
+    return this.request<StorageListResponse>(`/services/${pathSegment(uuid)}/storages`);
   }
 
   async createServiceStorage(uuid: string, data: CreateStorageRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/storages`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async updateServiceStorage(uuid: string, data: UpdateStorageRequest): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/storages`, {
+    return this.request<MessageResponse>(`/services/${pathSegment(uuid)}/storages`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async deleteServiceStorage(uuid: string, storageUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/storages/${storageUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/storages/${pathSegment(storageUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   // ===========================================================================
@@ -2798,14 +2919,14 @@ export class CoolifyClient {
   // ===========================================================================
 
   async listServiceScheduledTasks(uuid: string): Promise<ScheduledTask[]> {
-    return this.request<ScheduledTask[]>(`/services/${uuid}/scheduled-tasks`);
+    return this.request<ScheduledTask[]>(`/services/${pathSegment(uuid)}/scheduled-tasks`);
   }
 
   async createServiceScheduledTask(
     uuid: string,
     data: CreateScheduledTaskRequest,
   ): Promise<ScheduledTask> {
-    return this.request<ScheduledTask>(`/services/${uuid}/scheduled-tasks`, {
+    return this.request<ScheduledTask>(`/services/${pathSegment(uuid)}/scheduled-tasks`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -2816,16 +2937,22 @@ export class CoolifyClient {
     taskUuid: string,
     data: UpdateScheduledTaskRequest,
   ): Promise<ScheduledTask> {
-    return this.request<ScheduledTask>(`/services/${uuid}/scheduled-tasks/${taskUuid}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    return this.request<ScheduledTask>(
+      `/services/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      },
+    );
   }
 
   async deleteServiceScheduledTask(uuid: string, taskUuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/services/${uuid}/scheduled-tasks/${taskUuid}`, {
-      method: 'DELETE',
-    });
+    return this.request<MessageResponse>(
+      `/services/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async listServiceScheduledTaskExecutions(
@@ -2833,7 +2960,7 @@ export class CoolifyClient {
     taskUuid: string,
   ): Promise<ScheduledTaskExecution[]> {
     return this.request<ScheduledTaskExecution[]>(
-      `/services/${uuid}/scheduled-tasks/${taskUuid}/executions`,
+      `/services/${pathSegment(uuid)}/scheduled-tasks/${pathSegment(taskUuid)}/executions`,
     );
   }
 
@@ -2880,7 +3007,7 @@ export class CoolifyClient {
 
   async listGitHubAppRepositories(githubAppId: number): Promise<GitHubRepository[]> {
     const response = await this.request<{ repositories: GitHubRepository[] }>(
-      `/github-apps/${githubAppId}/repositories`,
+      `/github-apps/${pathSegment(githubAppId)}/repositories`,
     );
     return response.repositories ?? [];
   }
@@ -2891,7 +3018,7 @@ export class CoolifyClient {
     repo: string,
   ): Promise<GitHubBranch[]> {
     return this.request<GitHubBranch[]>(
-      `/github-apps/${githubAppId}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+      `/github-apps/${pathSegment(githubAppId)}/repositories/${pathSegment(owner)}/${pathSegment(repo)}/branches`,
     );
   }
 
@@ -2963,7 +3090,7 @@ export class CoolifyClient {
   // ===========================================================================
 
   async cancelDeployment(uuid: string): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/deployments/${uuid}/cancel`, {
+    return this.request<MessageResponse>(`/deployments/${pathSegment(uuid)}/cancel`, {
       method: 'POST',
     });
   }
