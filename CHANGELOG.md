@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.1] - 2026-11-12
+
 ### Fixed
 
 - **`storages` can now create a storage on a service** (#478). Coolify's `POST /services/{uuid}/storages` requires `resource_uuid`, the service application or database the mount belongs to, and the tool had no way to send it. `storages` takes `resource_uuid` and refuses a service `create` without it, pointing at `get_service` to find it. Thanks @meditatingsurgeon for the report.
