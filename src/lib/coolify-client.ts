@@ -926,6 +926,10 @@ export class CoolifyClient {
   ): Promise<T> {
     assertPlainPath(path);
     const url = `${this.baseUrl}/api/v1${path}`;
+    const isEnvMutation =
+      options.method !== undefined &&
+      options.method !== 'GET' &&
+      /^\/(applications|services|databases)\/[^/]+\/envs(?:\/|$)/.test(path);
 
     try {
       const response = await fetch(url, {
@@ -938,6 +942,14 @@ export class CoolifyClient {
           ...options.headers,
         },
       });
+      // Error bodies and redirect targets can echo submitted or resolved secrets.
+      if (isEnvMutation && !response.ok) {
+        void response.body?.cancel();
+        throw new CoolifyApiError(
+          `Coolify environment mutation failed (HTTP ${response.status}).`,
+          response.status,
+        );
+      }
       if (REDIRECT_STATUSES.has(response.status)) {
         // Unread, so release it rather than parking the socket until GC.
         void response.body?.cancel();
@@ -988,13 +1000,16 @@ export class CoolifyClient {
 
       // Every response leaves through the sanitizer — see deepSanitize for
       // the rules and the history of doing this per-endpoint instead.
-      // Env writes may return resolved rows rather than the documented UUID/message.
-      const isEnvMutation =
-        options.method !== undefined &&
-        options.method !== 'GET' &&
-        /^\/(applications|services|databases)\/[^/]+\/envs(?:\/|$)/.test(path);
+      // Opaque success bodies cannot be safely redacted by field name.
+      if (isEnvMutation && (data === null || typeof data !== 'object')) {
+        return { message: 'Environment mutation completed.' } as T;
+      }
       return deepSanitize(data, !isEnvMutation && sanitize?.reveal === true, isEnvMutation) as T;
     } catch (error) {
+      if (isEnvMutation && !(error instanceof CoolifyApiError)) {
+        // eslint-disable-next-line preserve-caught-error -- Transport errors and their causes may contain credentials.
+        throw new Error('Coolify environment mutation request failed.');
+      }
       throw this.connectionError(error);
     }
   }
