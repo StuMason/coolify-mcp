@@ -790,9 +790,9 @@ const ALWAYS_MASKED_FIELDS: ReadonlySet<string> = new Set([
   'webhook_secret',
 ]);
 
-function deepSanitize(value: unknown, reveal: boolean): unknown {
+function deepSanitize(value: unknown, reveal: boolean, maskEnvValues = false): unknown {
   if (Array.isArray(value)) {
-    return value.map((entry) => deepSanitize(entry, reveal));
+    return value.map((entry) => deepSanitize(entry, reveal, maskEnvValues));
   }
   if (value === null || typeof value !== 'object') return value;
 
@@ -810,17 +810,11 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
       out[key] = MASKED_VALUE;
       continue;
     }
-    if (!reveal && key === 'environment_variables' && Array.isArray(entry)) {
-      out[key] = entry.map((envVar) => {
-        if (envVar === null || typeof envVar !== 'object') return envVar;
-        const masked = { ...(envVar as Record<string, unknown>) };
-        if (masked.value != null) masked.value = MASKED_VALUE;
-        if (masked.real_value != null) masked.real_value = MASKED_VALUE;
-        return masked;
-      });
+    if (!reveal && maskEnvValues && entry != null && (key === 'value' || key === 'real_value')) {
+      out[key] = MASKED_VALUE;
       continue;
     }
-    out[key] = deepSanitize(entry, reveal);
+    out[key] = deepSanitize(entry, reveal, maskEnvValues || key === 'environment_variables');
   }
   return out;
 }
@@ -994,7 +988,12 @@ export class CoolifyClient {
 
       // Every response leaves through the sanitizer — see deepSanitize for
       // the rules and the history of doing this per-endpoint instead.
-      return deepSanitize(data, sanitize?.reveal === true) as T;
+      // Env writes may return resolved rows rather than the documented UUID/message.
+      const isEnvMutation =
+        options.method !== undefined &&
+        options.method !== 'GET' &&
+        /^\/(applications|services|databases)\/[^/]+\/envs(?:\/|$)/.test(path);
+      return deepSanitize(data, !isEnvMutation && sanitize?.reveal === true, isEnvMutation) as T;
     } catch (error) {
       throw this.connectionError(error);
     }

@@ -2802,6 +2802,77 @@ describe('CoolifyClient', () => {
       is_runtime: true,
     };
 
+    describe('environment mutation response masking', () => {
+      const request = { key: 'COMPOSER_AUTH', value: '{{team.COMPOSER_AUTH}}' };
+      const resolved = JSON.stringify({ 'github-oauth': { 'github.com': 'synthetic-credential' } });
+      const row = {
+        uuid: 'env-var-uuid',
+        ...request,
+        real_value: resolved,
+        is_buildtime: true,
+        is_runtime: false,
+        is_preview: false,
+      };
+      const masked = { ...row, value: '***', real_value: '***' };
+
+      it.each(['application', 'service', 'database'] as const)(
+        'preserves explicit %s environment reads',
+        async (resource) => {
+          mockFetch.mockResolvedValueOnce(mockResponse([row]));
+          const readers = {
+            application: () => client.listApplicationEnvVars('app-uuid', { reveal: true }),
+            service: () => client.listServiceEnvVars('svc-uuid', { reveal: true }),
+            database: () => client.listDatabaseEnvVars('db-uuid', { reveal: true }),
+          };
+          expect(await readers[resource]()).toEqual([row]);
+        },
+      );
+
+      it.each(['application', 'service', 'database'] as const)(
+        'masks every %s environment mutation, including nested values',
+        async (resource) => {
+          const methods = {
+            application: [
+              () => client.createApplicationEnvVar('app-uuid', request),
+              () => client.updateApplicationEnvVar('app-uuid', request),
+              () => client.bulkUpdateApplicationEnvVars('app-uuid', { data: [request] }),
+              () => client.deleteApplicationEnvVar('app-uuid', 'env-var-uuid'),
+            ],
+            service: [
+              () => client.createServiceEnvVar('svc-uuid', request),
+              () => client.updateServiceEnvVar('svc-uuid', request),
+              () => client.bulkUpdateServiceEnvVars('svc-uuid', { data: [request] }),
+              () => client.deleteServiceEnvVar('svc-uuid', 'env-var-uuid'),
+            ],
+            database: [
+              () => client.createDatabaseEnvVar('db-uuid', request),
+              () => client.updateDatabaseEnvVar('db-uuid', request),
+              () => client.bulkUpdateDatabaseEnvVars('db-uuid', { data: [request] }),
+              () => client.deleteDatabaseEnvVar('db-uuid', 'env-var-uuid'),
+            ],
+          };
+          for (const mutate of methods[resource]) {
+            for (const [response, expected] of [
+              [row, masked],
+              [[row], [masked]],
+              [
+                { data: [{ ...row, nested: { value: resolved, real_value: resolved } }] },
+                { data: [{ ...masked, nested: { value: '***', real_value: '***' } }] },
+              ],
+            ]) {
+              mockFetch.mockResolvedValueOnce(mockResponse(response));
+              expect(await mutate()).toEqual(expected);
+              const sent = mockFetch.mock.calls.at(-1)?.[1]?.body;
+              if (sent)
+                expect(JSON.parse(String(sent))).toEqual(
+                  String(sent).includes('"data"') ? { data: [request] } : request,
+                );
+            }
+          }
+        },
+      );
+    });
+
     it('should list application env vars with values masked by default (#159)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
 
