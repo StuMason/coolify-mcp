@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Environment-variable writes no longer hand the value back.** Create, update, bulk update and delete on application, service and database env vars could return the full row, including a resolved `real_value` (a shared `{{team.COMPOSER_AUTH}}` reference came back as the Composer JSON it points at). These responses now mask `value` and `real_value` at every depth, and a success body that is not JSON is replaced by a fixed acknowledgement. A failed write still reports the validation field names, Coolify's messages and the usual hint, with any submitted value of four or more characters masked; a 5xx reports only its status, since its message can be raw exception text. Explicit reads with `reveal` are unchanged. Thanks @DarryFlowE (#492).
+
 - **An identifier containing `/` or `\` is refused, not encoded.** 3.10.0 percent-encoded path separators in the few free-text identifiers (an environment name, a GitHub owner or repository). Coolify decodes the path before it matches a route, so an encoded separator still selected a deeper route. No Coolify route is reachable this way today; this closes the gap before one exists. UUID arguments were already validated and are unaffected.
 
 ## [3.10.1] - 2026-11-12

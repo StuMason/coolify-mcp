@@ -2802,6 +2802,188 @@ describe('CoolifyClient', () => {
       is_runtime: true,
     };
 
+    describe('environment mutation response masking', () => {
+      const request = { key: 'COMPOSER_AUTH', value: '{{team.COMPOSER_AUTH}}' };
+      const resolved = JSON.stringify({ 'github-oauth': { 'github.com': 'synthetic-credential' } });
+      const row = {
+        uuid: 'env-var-uuid',
+        ...request,
+        real_value: resolved,
+        is_buildtime: true,
+        is_runtime: false,
+        is_preview: false,
+      };
+      const masked = { ...row, value: '***', real_value: '***' };
+
+      const envError = async (
+        body: unknown,
+        status: number,
+        contentType = 'application/json',
+      ): Promise<string> => {
+        mockFetch.mockResolvedValueOnce(mockResponse(body, false, status, contentType));
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', request)
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(CoolifyApiError);
+        expect((error as CoolifyApiError).status).toBe(status);
+        expect((error as CoolifyApiError).body).toBeUndefined();
+        return (error as CoolifyApiError).message;
+      };
+
+      it('keeps validation field names and messages but masks the submitted value', async () => {
+        const message = await envError(
+          {
+            message: 'The given data was invalid.',
+            errors: {
+              is_build_time: ['This field is not allowed.'],
+              value: [`The value ${request.value} is invalid.`],
+            },
+          },
+          422,
+        );
+        expect(message).toBe(
+          'The given data was invalid. - is_build_time: This field is not allowed.; value: The value *** is invalid.',
+        );
+      });
+
+      it('masks submitted values in bulk requests', async () => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ message: `Bad ${request.value} and ${resolved}x` }, false, 400),
+        );
+        const error = await client
+          .bulkUpdateApplicationEnvVars('app-uuid', {
+            data: [request, { key: 'OTHER', value: `${resolved}x` }],
+          })
+          .catch((e: unknown) => e);
+        expect((error as Error).message).toBe('Bad *** and ***');
+      });
+
+      it.each([
+        ['a', 'The given data was invalid.'],
+        ['data', 'The given *** was invalid.'],
+      ])('masks a submitted value of 4+ characters only (%s)', async (value, expected) => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ message: 'The given data was invalid.' }, false, 422),
+        );
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', { key: 'K', value })
+          .catch((e: unknown) => e);
+        expect((error as Error).message).toBe(expected);
+      });
+
+      it('keeps the Member-role hint on a 403', async () => {
+        const message = await envError({ message: 'Forbidden.' }, 403);
+        expect(message).toContain('Member-role user are read-only');
+      });
+
+      it.each([
+        [
+          { message: `SQLSTATE: insert values (${request.value}, ${resolved})` },
+          'application/json',
+        ],
+        [resolved, 'text/plain'],
+        [`<html>${resolved}</html>`, 'text/html'],
+      ])('reports only the status for a 5xx (%#)', async (body, contentType) => {
+        const message = await envError(body, 500, contentType);
+        expect(message).toBe('HTTP 500: Error');
+      });
+
+      it('reports a redirect as a redirect, without its query', async () => {
+        const response = mockResponse('', false, 302, 'text/plain');
+        response.headers.set('location', `https://example.com/login?next=${resolved}`);
+        mockFetch.mockResolvedValueOnce(response);
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', request)
+          .catch((e: unknown) => e);
+        expect((error as CoolifyApiError).status).toBe(302);
+        expect((error as Error).message).not.toContain('synthetic-credential');
+      });
+
+      it.each([
+        [resolved, 'text/plain'],
+        [`<html>${resolved}</html>`, 'text/html'],
+        [`{"real_value":"${resolved}`, 'application/json'],
+        ['"synthetic-credential"', 'application/json'],
+      ])(
+        'acknowledges opaque environment success bodies without echoing them',
+        async (body, contentType) => {
+          const response = mockResponse(body, true, 200, contentType);
+          response.text = async () => body;
+          mockFetch.mockResolvedValueOnce(response);
+          expect(await client.updateApplicationEnvVar('app-uuid', request)).toEqual({
+            message: 'Environment mutation completed.',
+          });
+        },
+      );
+
+      it('reports a connection failure without the raw cause', async () => {
+        mockFetch.mockRejectedValueOnce(new TypeError(`fetch failed: ${resolved}`));
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', request)
+          .catch((e: unknown) => e);
+        expect((error as Error).message).toMatch(/^Failed to connect to Coolify server at /);
+        expect((error as Error).message).not.toContain('synthetic-credential');
+        expect((error as Error).cause).toBeUndefined();
+      });
+
+      it.each(['application', 'service', 'database'] as const)(
+        'preserves explicit %s environment reads',
+        async (resource) => {
+          mockFetch.mockResolvedValueOnce(mockResponse([row]));
+          const readers = {
+            application: () => client.listApplicationEnvVars('app-uuid', { reveal: true }),
+            service: () => client.listServiceEnvVars('svc-uuid', { reveal: true }),
+            database: () => client.listDatabaseEnvVars('db-uuid', { reveal: true }),
+          };
+          expect(await readers[resource]()).toEqual([row]);
+        },
+      );
+
+      it.each(['application', 'service', 'database'] as const)(
+        'masks every %s environment mutation, including nested values',
+        async (resource) => {
+          const methods = {
+            application: [
+              () => client.createApplicationEnvVar('app-uuid', request),
+              () => client.updateApplicationEnvVar('app-uuid', request),
+              () => client.bulkUpdateApplicationEnvVars('app-uuid', { data: [request] }),
+              () => client.deleteApplicationEnvVar('app-uuid', 'env-var-uuid'),
+            ],
+            service: [
+              () => client.createServiceEnvVar('svc-uuid', request),
+              () => client.updateServiceEnvVar('svc-uuid', request),
+              () => client.bulkUpdateServiceEnvVars('svc-uuid', { data: [request] }),
+              () => client.deleteServiceEnvVar('svc-uuid', 'env-var-uuid'),
+            ],
+            database: [
+              () => client.createDatabaseEnvVar('db-uuid', request),
+              () => client.updateDatabaseEnvVar('db-uuid', request),
+              () => client.bulkUpdateDatabaseEnvVars('db-uuid', { data: [request] }),
+              () => client.deleteDatabaseEnvVar('db-uuid', 'env-var-uuid'),
+            ],
+          };
+          for (const mutate of methods[resource]) {
+            for (const [response, expected] of [
+              [row, masked],
+              [[row], [masked]],
+              [
+                { data: [{ ...row, nested: { value: resolved, real_value: resolved } }] },
+                { data: [{ ...masked, nested: { value: '***', real_value: '***' } }] },
+              ],
+            ]) {
+              mockFetch.mockResolvedValueOnce(mockResponse(response));
+              expect(await mutate()).toEqual(expected);
+              const sent = mockFetch.mock.calls.at(-1)?.[1]?.body;
+              if (sent)
+                expect(JSON.parse(String(sent))).toEqual(
+                  String(sent).includes('"data"') ? { data: [request] } : request,
+                );
+            }
+          }
+        },
+      );
+    });
+
     it('should list application env vars with values masked by default (#159)', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse([mockEnvVar]));
 

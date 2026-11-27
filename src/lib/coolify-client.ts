@@ -790,9 +790,48 @@ const ALWAYS_MASKED_FIELDS: ReadonlySet<string> = new Set([
   'webhook_secret',
 ]);
 
-function deepSanitize(value: unknown, reveal: boolean): unknown {
+/**
+ * Shorter submitted values are left in error messages. Masking `a` or `1`
+ * everywhere would shred the message, and a value that short is not a secret.
+ */
+const MIN_SCRUBBED_LENGTH = 4;
+
+/** Every string of scrubbable length sent under a `value` key, at any depth. */
+function submittedValues(node: unknown, found: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const entry of node) submittedValues(entry, found);
+  } else if (node !== null && typeof node === 'object') {
+    for (const [key, entry] of Object.entries(node)) {
+      if (key === 'value' && typeof entry === 'string' && entry.length >= MIN_SCRUBBED_LENGTH)
+        found.push(entry);
+      else submittedValues(entry, found);
+    }
+  }
+  return found;
+}
+
+/**
+ * The message with every submitted env value replaced by the mask. A
+ * validation message can quote the input (`The value "…" is invalid`), and
+ * the input is the secret.
+ */
+function scrubSubmittedValues(message: string, body: RequestInit['body']): string {
+  if (typeof body !== 'string') return message;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return message;
+  }
+  // Longest first, so a value that contains another is masked whole.
+  return submittedValues(parsed)
+    .sort((a, b) => b.length - a.length)
+    .reduce((text, secret) => text.split(secret).join(MASKED_VALUE), message);
+}
+
+function deepSanitize(value: unknown, reveal: boolean, maskEnvValues = false): unknown {
   if (Array.isArray(value)) {
-    return value.map((entry) => deepSanitize(entry, reveal));
+    return value.map((entry) => deepSanitize(entry, reveal, maskEnvValues));
   }
   if (value === null || typeof value !== 'object') return value;
 
@@ -810,17 +849,11 @@ function deepSanitize(value: unknown, reveal: boolean): unknown {
       out[key] = MASKED_VALUE;
       continue;
     }
-    if (!reveal && key === 'environment_variables' && Array.isArray(entry)) {
-      out[key] = entry.map((envVar) => {
-        if (envVar === null || typeof envVar !== 'object') return envVar;
-        const masked = { ...(envVar as Record<string, unknown>) };
-        if (masked.value != null) masked.value = MASKED_VALUE;
-        if (masked.real_value != null) masked.real_value = MASKED_VALUE;
-        return masked;
-      });
+    if (!reveal && maskEnvValues && entry != null && (key === 'value' || key === 'real_value')) {
+      out[key] = MASKED_VALUE;
       continue;
     }
-    out[key] = deepSanitize(entry, reveal);
+    out[key] = deepSanitize(entry, reveal, maskEnvValues || key === 'environment_variables');
   }
   return out;
 }
@@ -932,6 +965,10 @@ export class CoolifyClient {
   ): Promise<T> {
     assertPlainPath(path);
     const url = `${this.baseUrl}/api/v1${path}`;
+    const isEnvMutation =
+      options.method !== undefined &&
+      options.method !== 'GET' &&
+      /^\/(applications|services|databases)\/[^/]+\/envs(?:\/|$)/.test(path);
 
     try {
       const response = await fetch(url, {
@@ -974,8 +1011,11 @@ export class CoolifyClient {
 
       if (!response.ok) {
         const error = data as ErrorResponse;
+        // On an env write, a 5xx message is exception text of unknown content
+        // (a SQL error carries its bound values), so only the status is kept.
+        const upstreamMessage = isEnvMutation && response.status >= 500 ? undefined : error.message;
         // Include validation errors if present
-        let errorMessage = error.message || `HTTP ${response.status}: ${response.statusText}`;
+        let errorMessage = upstreamMessage || `HTTP ${response.status}: ${response.statusText}`;
         if (error.errors && Object.keys(error.errors).length > 0) {
           const validationDetails = Object.entries(error.errors)
             .map(
@@ -985,18 +1025,27 @@ export class CoolifyClient {
             .join('; ');
           errorMessage = `${errorMessage} - ${validationDetails}`;
         }
+        if (isEnvMutation) {
+          // Field names, Coolify's messages and the hint are how the model
+          // fixes its request; the submitted values are not needed for that.
+          errorMessage = scrubSubmittedValues(errorMessage, options.body);
+        }
         const hint = errorHint(response.status, path);
         if (hint) {
           errorMessage = `${errorMessage} (${hint})`;
         }
-        throw new CoolifyApiError(errorMessage, response.status, data);
+        throw new CoolifyApiError(errorMessage, response.status, isEnvMutation ? undefined : data);
       }
 
       // Every response leaves through the sanitizer — see deepSanitize for
       // the rules and the history of doing this per-endpoint instead.
-      return deepSanitize(data, sanitize?.reveal === true) as T;
+      // Opaque success bodies cannot be safely redacted by field name.
+      if (isEnvMutation && (data === null || typeof data !== 'object')) {
+        return { message: 'Environment mutation completed.' } as T;
+      }
+      return deepSanitize(data, !isEnvMutation && sanitize?.reveal === true, isEnvMutation) as T;
     } catch (error) {
-      throw this.connectionError(error);
+      throw this.connectionError(error, !isEnvMutation);
     }
   }
 
@@ -1145,11 +1194,11 @@ export class CoolifyClient {
    * A fetch that never reached Coolify, as the message every caller shows.
    * Anything else (an abort, a thrown CoolifyApiError) passes through as is.
    */
-  private connectionError(error: unknown): unknown {
+  private connectionError(error: unknown, keepCause = true): unknown {
     if (error instanceof TypeError && error.message.includes('fetch')) {
       return new Error(
         `Failed to connect to Coolify server at ${this.baseUrl}. Please check if the server is running and accessible. ${DOCTOR_POINTER}`,
-        { cause: error },
+        keepCause ? { cause: error } : undefined,
       );
     }
     return error;
