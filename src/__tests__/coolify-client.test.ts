@@ -2815,29 +2815,88 @@ describe('CoolifyClient', () => {
       };
       const masked = { ...row, value: '***', real_value: '***' };
 
-      it.each([
-        [
-          422,
-          { message: resolved, errors: { value: [resolved], real_value: resolved }, data: row },
-          'application/json',
-        ],
-        [500, resolved, 'text/plain'],
-        [502, `<html>${resolved}</html>`, 'text/html'],
-        [302, resolved, 'text/plain'],
-      ])('omits environment error payloads for HTTP %s', async (status, body, contentType) => {
-        mockFetch.mockResolvedValueOnce(
-          mockResponse(body, false, Number(status), String(contentType)),
-        );
+      const envError = async (
+        body: unknown,
+        status: number,
+        contentType = 'application/json',
+      ): Promise<string> => {
+        mockFetch.mockResolvedValueOnce(mockResponse(body, false, status, contentType));
         const error = await client
           .updateApplicationEnvVar('app-uuid', request)
           .catch((e: unknown) => e);
         expect(error).toBeInstanceOf(CoolifyApiError);
-        expect(error).toMatchObject({
-          message: `Coolify environment mutation failed (HTTP ${status}).`,
-          status,
-        });
+        expect((error as CoolifyApiError).status).toBe(status);
         expect((error as CoolifyApiError).body).toBeUndefined();
-        expect((error as Error).cause).toBeUndefined();
+        return (error as CoolifyApiError).message;
+      };
+
+      it('keeps validation field names and messages but masks the submitted value', async () => {
+        const message = await envError(
+          {
+            message: 'The given data was invalid.',
+            errors: {
+              is_build_time: ['This field is not allowed.'],
+              value: [`The value ${request.value} is invalid.`],
+            },
+          },
+          422,
+        );
+        expect(message).toBe(
+          'The given data was invalid. - is_build_time: This field is not allowed.; value: The value *** is invalid.',
+        );
+      });
+
+      it('masks submitted values in bulk requests', async () => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ message: `Bad ${request.value} and ${resolved}x` }, false, 400),
+        );
+        const error = await client
+          .bulkUpdateApplicationEnvVars('app-uuid', {
+            data: [request, { key: 'OTHER', value: `${resolved}x` }],
+          })
+          .catch((e: unknown) => e);
+        expect((error as Error).message).toBe('Bad *** and ***');
+      });
+
+      it.each([
+        ['a', 'The given data was invalid.'],
+        ['data', 'The given *** was invalid.'],
+      ])('masks a submitted value of 4+ characters only (%s)', async (value, expected) => {
+        mockFetch.mockResolvedValueOnce(
+          mockResponse({ message: 'The given data was invalid.' }, false, 422),
+        );
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', { key: 'K', value })
+          .catch((e: unknown) => e);
+        expect((error as Error).message).toBe(expected);
+      });
+
+      it('keeps the Member-role hint on a 403', async () => {
+        const message = await envError({ message: 'Forbidden.' }, 403);
+        expect(message).toContain('Member-role user are read-only');
+      });
+
+      it.each([
+        [
+          { message: `SQLSTATE: insert values (${request.value}, ${resolved})` },
+          'application/json',
+        ],
+        [resolved, 'text/plain'],
+        [`<html>${resolved}</html>`, 'text/html'],
+      ])('reports only the status for a 5xx (%#)', async (body, contentType) => {
+        const message = await envError(body, 500, contentType);
+        expect(message).toBe('HTTP 500: Error');
+      });
+
+      it('reports a redirect as a redirect, without its query', async () => {
+        const response = mockResponse('', false, 302, 'text/plain');
+        response.headers.set('location', `https://example.com/login?next=${resolved}`);
+        mockFetch.mockResolvedValueOnce(response);
+        const error = await client
+          .updateApplicationEnvVar('app-uuid', request)
+          .catch((e: unknown) => e);
+        expect((error as CoolifyApiError).status).toBe(302);
+        expect((error as Error).message).not.toContain('synthetic-credential');
       });
 
       it.each([
@@ -2857,17 +2916,13 @@ describe('CoolifyClient', () => {
         },
       );
 
-      it('omits transport errors and credential-bearing request URLs', async () => {
-        const credentialClient = new CoolifyClient({
-          baseUrl: 'https://synthetic-user:synthetic-password@example.com',
-          accessToken: 'synthetic-token',
-        });
+      it('reports a connection failure without the raw cause', async () => {
         mockFetch.mockRejectedValueOnce(new TypeError(`fetch failed: ${resolved}`));
-        const error = await credentialClient
+        const error = await client
           .updateApplicationEnvVar('app-uuid', request)
           .catch((e: unknown) => e);
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toBe('Coolify environment mutation request failed.');
+        expect((error as Error).message).toMatch(/^Failed to connect to Coolify server at /);
+        expect((error as Error).message).not.toContain('synthetic-credential');
         expect((error as Error).cause).toBeUndefined();
       });
 
@@ -5616,22 +5671,20 @@ describe('CoolifyClient', () => {
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Updated' }))
-          .mockRejectedValueOnce(new Error('App not found: synthetic-credential'));
+          .mockRejectedValueOnce(new Error('App not found'));
 
         const result = await client.bulkEnvUpdate(['app-1', 'app-2'], 'API_KEY', 'new-value');
 
         expect(result.summary.succeeded).toBe(1);
         expect(result.summary.failed).toBe(1);
-        expect(result.failed[0].error).toBe('Coolify environment mutation request failed.');
+        expect(result.failed[0].error).toBe('App not found');
       });
 
       it('should handle unknown app UUIDs gracefully', async () => {
         mockFetch
           .mockResolvedValueOnce(mockResponse(mockApps))
           .mockResolvedValueOnce(mockResponse({ message: 'Updated' }))
-          .mockResolvedValueOnce(
-            mockResponse({ message: 'Application not found: synthetic-credential' }, false, 404),
-          );
+          .mockRejectedValueOnce(new Error('Application not found'));
 
         const result = await client.bulkEnvUpdate(['app-1', 'unknown-app'], 'API_KEY', 'new-value');
 
@@ -5640,7 +5693,7 @@ describe('CoolifyClient', () => {
         expect(result.summary.failed).toBe(1);
         expect(result.succeeded[0].uuid).toBe('app-1');
         expect(result.failed[0].uuid).toBe('unknown-app');
-        expect(result.failed[0].error).toBe('Coolify environment mutation failed (HTTP 404).');
+        expect(result.failed[0].error).toBe('Application not found');
       });
 
       it('should return empty result for empty app UUIDs array', async () => {
